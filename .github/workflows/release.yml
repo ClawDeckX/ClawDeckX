@@ -18,19 +18,19 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
-            output_name: openclawdeck-linux-amd64
+            output_name: clawdeckx-linux-amd64
           - goos: linux
             goarch: arm64
-            output_name: openclawdeck-linux-arm64
+            output_name: clawdeckx-linux-arm64
           - goos: windows
             goarch: amd64
-            output_name: openclawdeck-windows-amd64.exe
+            output_name: clawdeckx-windows-amd64.exe
           - goos: darwin
             goarch: amd64
-            output_name: openclawdeck-darwin-amd64
+            output_name: clawdeckx-darwin-amd64
           - goos: darwin
             goarch: arm64
-            output_name: openclawdeck-darwin-arm64
+            output_name: clawdeckx-darwin-arm64
 
     steps:
       - name: Checkout code
@@ -65,8 +65,8 @@ jobs:
           VERSION=$(cat VERSION 2>/dev/null || echo "0.0.0")
           VERSION="${VERSION%"${VERSION##*[![:space:]]}"}"
           BUILD_NUM="${{ github.run_number }}"
-          LDFLAGS="-s -w -X openclawdeck/internal/version.Version=${VERSION} -X openclawdeck/internal/version.Build=${BUILD_NUM}"
-          go build -ldflags="${LDFLAGS}" -o dist/${{ matrix.output_name }} ./cmd/openclawdeck
+          LDFLAGS="-s -w -X ClawDeckX/internal/version.Version=${VERSION} -X ClawDeckX/internal/version.Build=${BUILD_NUM}"
+          go build -ldflags="${LDFLAGS}" -o dist/${{ matrix.output_name }} ./cmd/clawdeckx
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
