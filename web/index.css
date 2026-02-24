@@ -1,0 +1,220 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #007bff;
+  --color-background-dark: #0f1923;
+  --color-mac-red: #ff5f57;
+  --color-mac-yellow: #febc2e;
+  --color-mac-green: #28c840;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+body {
+  margin: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease;
+}
+
+.mac-glass {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .mac-glass {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mac-window-shadow {
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.dark .mac-window-shadow {
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── 全局滚动条美化 ── */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.25s ease-out;
+}
+
+@keyframes mac-toast-in {
+  from {
+    transform: translateY(-20px) scale(0.96);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes mac-toast-out {
+  from {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(-20px) scale(0.96);
+    opacity: 0;
+  }
+}
+
+.animate-mac-toast-in {
+  animation: mac-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-mac-toast-out {
+  animation: mac-toast-out 0.25s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+}
+
+/* ── macOS Window Animations ── */
+@keyframes win-open {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes win-close {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+}
+
+.animate-win-open {
+  animation: win-open 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-win-close {
+  animation: win-close 0.2s cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+
+/* Minimize genie — scale down + slide to bottom */
+@keyframes win-minimize {
+  from {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.15) translateY(60vh);
+    opacity: 0;
+  }
+}
+
+.animate-win-minimize {
+  animation: win-minimize 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+/* Dock bounce notification */
+@keyframes dock-bounce {
+  0%, 100% { transform: translateY(0); }
+  20% { transform: translateY(-14px); }
+  40% { transform: translateY(0); }
+  55% { transform: translateY(-8px); }
+  70% { transform: translateY(0); }
+  82% { transform: translateY(-3px); }
+  92% { transform: translateY(0); }
+}
+
+.animate-dock-bounce {
+  animation: dock-bounce 0.8s cubic-bezier(0.28, 0.84, 0.42, 1);
+}
+
+/* Window drag shadow enhancement */
+.mac-window-shadow-drag {
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s ease;
+}
+
+.dark .mac-window-shadow-drag {
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* Window inactive state — dimmed title bar */
+.mac-window-inactive header {
+  opacity: 0.6;
+}
+
+.mac-window-shadow-inactive {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.dark .mac-window-shadow-inactive {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}

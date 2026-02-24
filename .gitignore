@@ -1,0 +1,59 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Editor / IDE
+.vscode/
+.idea/
+.windsurf/
+.DS_Store
+
+# Node
+node_modules/
+npm-debug.log
+
+# Go
+go.work
+
+# Temp
+tmp/
+
+# Docs
+docs/
+
+# Design assets
+stitch/
+
+# Data (runtime config, db, logs)
+data/*.db
+data/*.json
+data/*.log
+
+# OpenClaw config (contains secrets)
+openclaw.json
+
+# Build artifacts
+internal/web/dist/
+web/dist/
+
+# Binaries
+/openclawdeck
+/openclawdeck.exe
+openclawmanager-*
+
+# Build counter
+build.txt
+
+# Local scripts
+scripts/
