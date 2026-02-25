@@ -32,7 +32,7 @@ export const NPM_REGISTRY_MIRRORS: MirrorSource[] = [
 
 // Cache for best mirrors
 const mirrorCache: Map<string, { source: MirrorSource; timestamp: number }> = new Map();
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours - host network environment rarely changes
 
 /**
  * Test a single mirror source

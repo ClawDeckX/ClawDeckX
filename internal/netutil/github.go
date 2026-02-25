@@ -35,25 +35,26 @@ var (
 
 func init() {
 	// Initialize selectors with appropriate test paths and timeouts
+	// Cache duration is 24 hours since host network environment rarely changes
 	githubAPISelector = NewMirrorSelector(
 		GitHubAPIMirrors,
 		"/repos/ClawDeckX/ClawDeckX",
 		3*time.Second,
-		10*time.Minute,
+		24*time.Hour,
 	)
 
 	githubReleaseSelector = NewMirrorSelector(
 		GitHubReleaseMirrors,
 		"/ClawDeckX/ClawDeckX/releases",
 		3*time.Second,
-		10*time.Minute,
+		24*time.Hour,
 	)
 
 	npmRegistrySelector = NewMirrorSelector(
 		NPMRegistryMirrors,
 		"/-/ping",
 		3*time.Second,
-		10*time.Minute,
+		24*time.Hour,
 	)
 }
 
@@ -66,7 +67,7 @@ func GetGitHubAPIURL(ctx context.Context) string {
 // GetGitHubReleaseURL transforms a GitHub release URL to use the best mirror
 func GetGitHubReleaseURL(ctx context.Context, originalURL string) string {
 	best := githubReleaseSelector.GetBest(ctx)
-	
+
 	// If using official, return as-is
 	if best.Priority == 1 {
 		return originalURL
