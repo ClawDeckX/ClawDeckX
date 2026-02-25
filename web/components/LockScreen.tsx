@@ -141,7 +141,7 @@ const LockScreen: React.FC<LockScreenProps> = ({
       <div className={`relative z-10 flex flex-col items-center w-full max-w-sm transition-all duration-300 mb-24 ${error ? 'animate-shake' : ''}`}>
         {!needsSetup && (
           <div className="w-[112px] h-[112px] rounded-full overflow-hidden border border-white/30 shadow-2xl mac-glass mb-6 flex items-center justify-center bg-gradient-to-br from-primary/20 to-orange-500/20">
-            <span className="text-[56px] leading-none select-none drop-shadow-lg" role="img" aria-label="OpenClaw Logo">🦀</span>
+            <span className="text-[56px] leading-none select-none drop-shadow-lg" role="img" aria-label="ClawDeckX">🦀</span>
           </div>
         )}
 

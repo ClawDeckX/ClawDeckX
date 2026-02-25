@@ -48,8 +48,8 @@ internal/web/dist/
 web/dist/
 
 # Binaries
-/openclawdeck
-/openclawdeck.exe
+/ClawDeckX
+/ClawDeckX.exe
 openclawmanager-*
 
 # Build counter
