@@ -6,6 +6,7 @@ import { authApi, backupApi, auditApi, hostInfoApi, notifyApi, selfUpdateApi, se
 import type { ServerConfig } from '../services/api';
 import { useToast } from '../components/Toast';
 import CustomSelect from '../components/CustomSelect';
+import { SmartLink } from '../components/SmartLink';
 
 type SettingsTab = 'account' | 'notify' | 'backup' | 'audit' | 'donate' | 'about';
 
@@ -964,8 +965,12 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
               <div className={rowCls}>
                 <div className="px-4 py-4">
                   <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-gradient-to-b from-[#FF5E5B]/5 to-[#FF5E5B]/10 dark:from-[#FF5E5B]/10 dark:to-[#FF5E5B]/20 border border-[#FF5E5B]/20 hover:border-[#FF5E5B]/40 transition-colors">
-                    <a href="https://ko-fi.com/T6T71UDKMB" target="_blank" rel="noopener noreferrer">
-                      <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Ko-fi" className="h-9 hover:opacity-80 transition-opacity" />
+                    <a href="https://ko-fi.com/T6T71UDKMB" target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 bg-[#FF5E5B] hover:bg-[#FF5E5B]/90 rounded-lg transition-colors">
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="white">
+                        <path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z"/>
+                      </svg>
+                      <span className="text-white font-bold text-sm">Support on Ko-fi</span>
                     </a>
                   </div>
                 </div>
@@ -1011,21 +1016,21 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                     <h3 className="text-[13px] font-bold text-slate-700 dark:text-white/70">{s.donateOtherWays}</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <a href="https://github.com/ClawDeckX/ClawDeckX" target="_blank" rel="noopener noreferrer"
+                    <SmartLink href="https://github.com/ClawDeckX/ClawDeckX"
                       className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
                       <span className="material-symbols-outlined text-[16px] text-amber-500">star</span>
                       <span className="text-[11px] text-slate-600 dark:text-white/60">{s.donateStarGithub}</span>
-                    </a>
-                    <a href="https://github.com/ClawDeckX/ClawDeckX/issues" target="_blank" rel="noopener noreferrer"
+                    </SmartLink>
+                    <SmartLink href="https://github.com/ClawDeckX/ClawDeckX/issues"
                       className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
                       <span className="material-symbols-outlined text-[16px] text-blue-500">bug_report</span>
                       <span className="text-[11px] text-slate-600 dark:text-white/60">{s.donateFeedback}</span>
-                    </a>
-                    <a href="https://github.com/ClawDeckX/ClawDeckX" target="_blank" rel="noopener noreferrer"
+                    </SmartLink>
+                    <SmartLink href="https://github.com/ClawDeckX/ClawDeckX"
                       className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
                       <span className="material-symbols-outlined text-[16px] text-emerald-500">edit_document</span>
                       <span className="text-[11px] text-slate-600 dark:text-white/60">{s.donateDocs}</span>
-                    </a>
+                    </SmartLink>
                     <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
                       <span className="material-symbols-outlined text-[16px] text-pink-500">share</span>
                       <span className="text-[11px] text-slate-600 dark:text-white/60">{s.donateShare}</span>
@@ -1146,11 +1151,11 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                                 <span className="material-symbols-outlined text-[14px]">download</span>
                                 {selfUpdateInfo.downloadUrl ? s.selfUpdateDownload : s.selfUpdateNoAsset}
                               </button>
-                              <a href="https://github.com/ClawDeckX/ClawDeckX/releases" target="_blank" rel="noopener noreferrer"
+                              <SmartLink href="https://github.com/ClawDeckX/ClawDeckX/releases"
                                 className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/60 text-[11px] font-bold hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
                                 <span className="material-symbols-outlined text-[14px]">open_in_new</span>
                                 {s.viewReleases || '查看更新'}
-                              </a>
+                              </SmartLink>
                             </div>
                           )}
                           {selfUpdateProgress && !selfUpdateProgress.done && !selfUpdateProgress.error && (
@@ -1237,11 +1242,11 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                               <span className={`material-symbols-outlined text-[14px] ${ocUpdating ? 'animate-spin' : ''}`}>{ocUpdating ? 'progress_activity' : 'download'}</span>
                               {ocUpdating ? s.openclawUpdateRunning : s.openclawUpdateRun}
                             </button>
-                            <a href="https://github.com/openclaw/openclaw/releases" target="_blank" rel="noopener noreferrer"
+                            <SmartLink href="https://github.com/openclaw/openclaw/releases"
                               className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/60 text-[11px] font-bold hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
                               <span className="material-symbols-outlined text-[14px]">open_in_new</span>
                               {s.viewReleases || '查看更新'}
-                            </a>
+                            </SmartLink>
                           </div>
                         </div>
                       )}
@@ -1300,7 +1305,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                     <h4 className="text-[13px] font-bold text-slate-700 dark:text-white/70">{s.aboutLinks}</h4>
                   </div>
                   <div className="space-y-2">
-                    <a href="https://github.com/openclaw/openclaw" target="_blank" rel="noopener noreferrer"
+                    <SmartLink href="https://github.com/openclaw/openclaw"
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
                       <span className="text-[20px]">🦞</span>
                       <div className="flex-1 min-w-0">
@@ -1308,8 +1313,8 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                         <p className="text-[10px] text-slate-400 dark:text-white/20 truncate">github.com/openclaw/openclaw</p>
                       </div>
                       <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-white/15 group-hover:text-primary">open_in_new</span>
-                    </a>
-                    <a href="https://github.com/ClawDeckX/ClawDeckX" target="_blank" rel="noopener noreferrer"
+                    </SmartLink>
+                    <SmartLink href="https://github.com/ClawDeckX/ClawDeckX"
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
                       <span className="text-[20px]">🦀</span>
                       <div className="flex-1 min-w-0">
@@ -1317,7 +1322,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                         <p className="text-[10px] text-slate-400 dark:text-white/20 truncate">github.com/ClawDeckX/ClawDeckX</p>
                       </div>
                       <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-white/15 group-hover:text-primary">open_in_new</span>
-                    </a>
+                    </SmartLink>
                   </div>
                 </div>
               </div>

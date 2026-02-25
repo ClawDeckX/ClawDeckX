@@ -3,6 +3,7 @@ import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { get, post } from '../services/request';
 import { useConfirm } from '../components/ConfirmDialog';
+import { getNPMRegistryURL, isLikelyInChina, NPM_REGISTRY_MIRRORS } from '../services/network';
 
 interface SetupWizardProps {
   language: Language;
@@ -89,6 +90,8 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
 
   // 安装选项
   const [selectedRegistry, setSelectedRegistry] = useState(''); // '' | 'https://registry.npmmirror.com'
+  const [autoDetectedRegistry, setAutoDetectedRegistry] = useState<string | null>(null);
+  const [isDetectingRegistry, setIsDetectingRegistry] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [installZeroTier, setInstallZeroTier] = useState(false);
   const [zerotierNetworkId, setZerotierNetworkId] = useState('');
@@ -128,6 +131,27 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
   useEffect(() => {
     scanEnvironment();
   }, [scanEnvironment]);
+
+  // 自动检测最快的 npm registry
+  useEffect(() => {
+    if (isLikelyInChina()) {
+      setIsDetectingRegistry(true);
+      getNPMRegistryURL()
+        .then(url => {
+          setAutoDetectedRegistry(url);
+          // 如果用户没有手动选择，自动使用检测到的最快源
+          if (selectedRegistry === '') {
+            setSelectedRegistry(url);
+          }
+        })
+        .catch(() => {
+          // 检测失败，保持默认
+        })
+        .finally(() => {
+          setIsDetectingRegistry(false);
+        });
+    }
+  }, []);
 
   // 一键安装
   const startAutoInstall = useCallback(async () => {

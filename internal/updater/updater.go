@@ -15,13 +15,13 @@ import (
 	"time"
 
 	"ClawDeckX/internal/logger"
+	"ClawDeckX/internal/netutil"
 	"ClawDeckX/internal/version"
 )
 
 const (
 	GitHubOwner = "ClawDeckX"
 	GitHubRepo  = "ClawDeckX"
-	GitHubAPI   = "https://api.github.com"
 )
 
 // ReleaseInfo holds GitHub release metadata.
@@ -64,10 +64,15 @@ type ApplyProgress struct {
 }
 
 // CheckForUpdate queries GitHub Releases for a newer version.
+// Uses intelligent mirror selection for better accessibility in China.
 func CheckForUpdate(ctx context.Context) (*CheckResult, error) {
 	currentVersion := version.Version
 
-	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", GitHubAPI, GitHubOwner, GitHubRepo)
+	// Use smart mirror selection for GitHub API
+	apiBase := netutil.GetGitHubAPIURL(ctx)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", apiBase, GitHubOwner, GitHubRepo)
+	logger.Config.Debug().Str("api_url", url).Msg("[Updater] Checking for updates")
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return &CheckResult{Available: false, CurrentVersion: currentVersion, Error: err.Error()}, nil
@@ -110,7 +115,9 @@ func CheckForUpdate(ctx context.Context) (*CheckResult, error) {
 		if strings.EqualFold(a.Name, assetName) {
 			result.AssetName = a.Name
 			result.AssetSize = a.Size
-			result.DownloadURL = a.BrowserDownloadURL
+			// Use smart mirror selection for download URL
+			result.DownloadURL = netutil.GetGitHubReleaseURL(ctx, a.BrowserDownloadURL)
+			logger.Config.Debug().Str("download_url", result.DownloadURL).Msg("[Updater] Selected download mirror")
 			break
 		}
 	}
