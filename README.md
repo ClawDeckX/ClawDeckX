@@ -142,6 +142,34 @@ Download the binary from [Releases](https://github.com/ClawDeckX/ClawDeckX/relea
 
 <br>
 
+## 🤝 Contributing | 参与贡献
+
+We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
+
+欢迎参与贡献！无论是修复 Bug、添加功能还是改进文档，我们都非常感谢。
+
+### For Developers | 开发者指南
+
+- 📖 **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in 5 minutes | 5 分钟快速上手
+- 📚 **[Development Workflow](docs/development-workflow.md)** - Step-by-step guide for beginners | 新手开发流程详解
+- 📋 **[Contributing Guidelines](CONTRIBUTING.md)** - Branch strategy and commit conventions | 分支策略与提交规范
+- 🔧 **[Git Cheatsheet](docs/git-cheatsheet.md)** - Common Git commands reference | Git 命令速查表
+
+### Development Scripts | 开发脚本
+
+```powershell
+# Create a new feature branch
+.\scripts\dev-new-feature.ps1 "feature-name"
+
+# Pre-commit checks
+.\scripts\dev-commit.ps1
+
+# Start release process
+.\scripts\dev-release.ps1 "0.1.0"
+```
+
+<br>
+
 ## 💬 A Note from the Author | 作者寄语
 
 This is my first open-source project, built almost entirely with the help of AI. There are certainly rough edges, bugs, and things that could be done better. If you find any issues or have suggestions, please don't hesitate to open an [Issue](https://github.com/ClawDeckX/ClawDeckX/issues) or submit a [Pull Request](https://github.com/ClawDeckX/ClawDeckX/pulls). Your patience, feedback, and contributions mean the world to me.
