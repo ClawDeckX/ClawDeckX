@@ -19,8 +19,8 @@ const Alerts = React.lazy(() => import('./windows/Alerts'));
 const Usage = React.lazy(() => import('./windows/Usage'));
 const Editor = React.lazy(() => import('./windows/Editor/index'));
 const Skills = React.lazy(() => import('./windows/Skills'));
-// const Security = React.lazy(() => import('./windows/Security')); // hidden: audit-only, no real interception
 const Agents = React.lazy(() => import('./windows/Agents'));
+const Doctor = React.lazy(() => import('./windows/Doctor'));
 const Scheduler = React.lazy(() => import('./windows/Scheduler'));
 const Settings = React.lazy(() => import('./windows/Settings'));
 const Nodes = React.lazy(() => import('./windows/Nodes'));
@@ -36,8 +36,8 @@ const WINDOW_IDS: { id: WindowID; openByDefault?: boolean }[] = [
   { id: 'config_mgmt' },
   { id: 'editor' },
   { id: 'skills' },
-  // { id: 'security' }, // hidden: audit-only
   { id: 'agents' },
+  { id: 'maintenance' },
   { id: 'scheduler' },
   { id: 'settings' },
   { id: 'nodes' },
@@ -49,6 +49,7 @@ const DEFAULT_W = 960;
 const DEFAULT_H = 680;
 const CASCADE_OFFSET = 30;
 const MENU_BAR_H = 25;
+const SETUP_WIZARD_AUTO_OPEN_DISABLED_KEY = 'setup_wizard_disable_auto_open';
 
 function centeredBounds(): WindowBounds {
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1440;
@@ -148,6 +149,7 @@ const App: React.FC = () => {
   // 自动检查OpenClaw 安装状态，未安装则自动打开安装向导
   useEffect(() => {
     if (isLocked) return;
+    if (localStorage.getItem(SETUP_WIZARD_AUTO_OPEN_DISABLED_KEY) === '1') return;
 
     const checkOpenClawStatus = async () => {
       // 延迟 500ms，确保登录流程完成
@@ -190,6 +192,17 @@ const App: React.FC = () => {
     });
     setMaxZ(p => p + 1);
   }, [maxZ]);
+
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      const ce = evt as CustomEvent<{ id?: WindowID }>;
+      const id = ce?.detail?.id;
+      if (!id) return;
+      openWindow(id);
+    };
+    window.addEventListener('clawdeck:open-window', handler as EventListener);
+    return () => window.removeEventListener('clawdeck:open-window', handler as EventListener);
+  }, [openWindow]);
 
   // Navigate to Sessions window and select a specific session
   const navigateToSession = useCallback((sessionKey: string) => {
@@ -287,8 +300,8 @@ const App: React.FC = () => {
                 {w.id === 'config_mgmt' && <Usage language={language} onNavigateToSession={navigateToSession} />}
                 {w.id === 'editor' && <Editor language={language} />}
                 {w.id === 'skills' && <Skills language={language} />}
-                {/* {w.id === 'security' && <Security language={language} />} */}
                 {w.id === 'agents' && <Agents language={language} />}
+                {w.id === 'maintenance' && <Doctor language={language} />}
                 {w.id === 'scheduler' && <Scheduler language={language} />}
                 {w.id === 'settings' && <Settings language={language} />}
                 {w.id === 'nodes' && <Nodes language={language} />}

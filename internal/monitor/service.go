@@ -5,7 +5,6 @@ import (
 
 	"ClawDeckX/internal/database"
 	"ClawDeckX/internal/logger"
-	"ClawDeckX/internal/security"
 	"ClawDeckX/internal/web"
 )
 
@@ -14,18 +13,16 @@ type Service struct {
 	parser       *SessionParser
 	activityRepo *database.ActivityRepo
 	wsHub        *web.WSHub
-	engine       *security.Engine
 	interval     time.Duration
 	stopCh       chan struct{}
 	running      bool
 }
 
-func NewService(openclawDir string, wsHub *web.WSHub, engine *security.Engine, intervalSec int) *Service {
+func NewService(openclawDir string, wsHub *web.WSHub, intervalSec int) *Service {
 	return &Service{
 		parser:       NewSessionParser(openclawDir),
 		activityRepo: database.NewActivityRepo(),
 		wsHub:        wsHub,
-		engine:       engine,
 		interval:     time.Duration(intervalSec) * time.Second,
 		stopCh:       make(chan struct{}),
 	}
@@ -87,20 +84,6 @@ func (s *Service) scan() {
 		actionTaken := "allow"
 		risk := evt.Risk
 
-		// 通过安全引擎评估事件（引擎可能为 nil）
-		if s.engine != nil {
-			actionTaken = s.engine.ProcessEvent(evt.Category, evt.Source, evt.Summary, evt.Detail, evt.SessionID)
-
-			// 如果引擎提升了风险等级，使用引擎的判定
-			result := s.engine.Evaluate(evt.Category, evt.Source, evt.Summary)
-			if result != nil && result.Matched {
-				engineRisk := result.Rule.Risk
-				if riskToInt(engineRisk) > riskToInt(risk) {
-					risk = engineRisk
-				}
-			}
-		}
-
 		// 写入数据库
 		activity := &database.Activity{
 			EventID:     evt.EventID,
@@ -129,21 +112,5 @@ func (s *Service) scan() {
 			"source":       evt.Source,
 			"action_taken": actionTaken,
 		})
-	}
-}
-
-// riskToInt 风险等级数值化（用于比较）
-func riskToInt(risk string) int {
-	switch risk {
-	case "critical":
-		return 4
-	case "high":
-		return 3
-	case "medium":
-		return 2
-	case "low":
-		return 1
-	default:
-		return 0
 	}
 }

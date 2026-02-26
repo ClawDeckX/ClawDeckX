@@ -48,8 +48,8 @@ const Editor: React.FC<EditorProps> = ({ language }) => {
       <header className="h-12 border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5 flex items-center justify-between px-3 md:px-4 shrink-0 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-3 md:gap-4">
           <div className="flex bg-slate-200 dark:bg-black/20 p-0.5 rounded-lg border border-slate-300 dark:border-white/5 shrink-0">
-            <button onClick={() => setTab('models')} className={`px-3 md:px-4 py-1 rounded-md text-[10px] md:text-[11px] font-bold transition-all ${tab === 'models' ? 'bg-white dark:bg-primary shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700'}`}>{edit.modelMgmt}</button>
-            <button onClick={() => setTab('json')} className={`px-3 md:px-4 py-1 rounded-md text-[10px] md:text-[11px] font-bold transition-all ${tab === 'json' ? 'bg-white dark:bg-primary shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700'}`}>{edit.jsonEdit}</button>
+            <button onClick={() => setTab('models')} aria-pressed={tab === 'models'} className={`px-3 md:px-4 py-1 rounded-md text-[10px] md:text-[11px] font-bold transition-all ${tab === 'models' ? 'bg-white dark:bg-primary shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700'}`}>{edit.modelMgmt}</button>
+            <button onClick={() => setTab('json')} aria-pressed={tab === 'json'} className={`px-3 md:px-4 py-1 rounded-md text-[10px] md:text-[11px] font-bold transition-all ${tab === 'json' ? 'bg-white dark:bg-primary shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700'}`}>{edit.jsonEdit}</button>
           </div>
           <span className="hidden sm:inline text-[11px] font-mono text-slate-400">openclaw.json</span>
         </div>

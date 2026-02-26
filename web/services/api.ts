@@ -63,7 +63,6 @@ export const dashboardApi = {
     };
     monitor_summary: { total_events: number; events_24h: number; risk_counts: Record<string, number> };
     recent_alerts: any[];
-    security_score: number;
     ws_clients: number;
   }>('/api/v1/dashboard'),
 };
@@ -117,6 +116,31 @@ export const activityApi = {
   },
 };
 
+// ==================== 统一事件流 ====================
+export const eventsApi = {
+  list: (params?: {
+    page?: number;
+    page_size?: number;
+    risk?: string;
+    type?: 'all' | 'activity' | 'alert';
+    source?: string;
+    keyword?: string;
+    start_time?: string;
+    end_time?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.page_size) qs.set('page_size', String(params.page_size));
+    if (params?.risk) qs.set('risk', params.risk);
+    if (params?.type) qs.set('type', params.type);
+    if (params?.source) qs.set('source', params.source);
+    if (params?.keyword) qs.set('keyword', params.keyword);
+    if (params?.start_time) qs.set('start_time', params.start_time);
+    if (params?.end_time) qs.set('end_time', params.end_time);
+    return get<{ list: any[]; total: number; page: number; page_size: number }>(`/api/v1/events?${qs.toString()}`);
+  },
+};
+
 // ==================== 监控统计 ====================
 export const monitorApi = {
   stats: () => get('/api/v1/monitor/stats'),
@@ -124,14 +148,6 @@ export const monitorApi = {
   updateConfig: (data: any) => put('/api/v1/monitor/config', data),
   start: () => post('/api/v1/monitor/start'),
   stop: () => post('/api/v1/monitor/stop'),
-};
-
-// ==================== 安全策略 ====================
-export const securityApi = {
-  listRules: () => get<any[]>('/api/v1/security/rules'),
-  createRule: (rule: any) => post('/api/v1/security/rules', rule),
-  updateRule: (id: string, rule: any) => put(`/api/v1/security/rules/${id}`, rule),
-  deleteRule: (id: string) => del(`/api/v1/security/rules/${id}`),
 };
 
 // ==================== 系统设置 ====================
@@ -203,7 +219,27 @@ export const backupApi = {
 // ==================== 诊断修复 ====================
 export const doctorApi = {
   run: () => get('/api/v1/doctor'),
-  fix: () => post('/api/v1/doctor/fix'),
+  overview: () => get<{
+    score: number;
+    status: 'ok' | 'warn' | 'error';
+    summary: string;
+    updatedAt: string;
+    cards: Array<{ id: string; label: string; value: number; unit?: string; trend?: number; status: 'ok' | 'warn' | 'error' }>;
+    riskCounts: Record<string, number>;
+    trend24h: Array<{
+      timestamp: string;
+      label: string;
+      healthScore: number;
+      low: number;
+      medium: number;
+      high: number;
+      critical: number;
+      errors: number;
+    }>;
+    topIssues: Array<{ id: string; source: string; category: string; risk: string; title: string; detail?: string; timestamp: string }>;
+    actions: Array<{ id: string; title: string; target: string; priority: 'high' | 'medium' | 'low' }>;
+  }>('/api/v1/doctor/overview'),
+  fix: (checks?: string[]) => post('/api/v1/doctor/fix', checks && checks.length > 0 ? { checks } : {}),
 };
 
 // ==================== 用户管理 ====================

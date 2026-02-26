@@ -17,12 +17,12 @@ export const PluginsSection: React.FC<SectionProps> = ({ setField, getField, del
     <div className="space-y-4">
       <ConfigSection title={es.pluginSettings} icon="power" iconColor="text-rose-500">
         <SwitchField label={es.enablePlugins} tooltip={tip('plugins.enabled')} value={g(['enabled']) !== false} onChange={v => s(['enabled'], v)} />
-        <ArrayField label={es.allowList} tooltip={tip('plugins.allow')} value={g(['allow']) || []} onChange={v => s(['allow'], v)} placeholder="plugin_name" />
-        <ArrayField label={es.denyList} tooltip={tip('plugins.deny')} value={g(['deny']) || []} onChange={v => s(['deny'], v)} placeholder="plugin_name" />
+        <ArrayField label={es.allowList} tooltip={tip('plugins.allow')} value={g(['allow']) || []} onChange={v => s(['allow'], v)} placeholder={es.phPluginName} />
+        <ArrayField label={es.denyList} tooltip={tip('plugins.deny')} value={g(['deny']) || []} onChange={v => s(['deny'], v)} placeholder={es.phPluginName} />
       </ConfigSection>
 
       <ConfigSection title={es.pluginSlots} icon="widgets" iconColor="text-rose-500" defaultOpen={false}>
-        <TextField label={es.memoryPlugin} tooltip={tip('plugins.slots.memory')} value={g(['slots', 'memory']) || ''} onChange={v => s(['slots', 'memory'], v)} placeholder="plugin_name" />
+        <TextField label={es.memoryPlugin} tooltip={tip('plugins.slots.memory')} value={g(['slots', 'memory']) || ''} onChange={v => s(['slots', 'memory'], v)} placeholder={es.phPluginName} />
       </ConfigSection>
 
       <ConfigSection

@@ -29,7 +29,6 @@ func SetupTestDB(t *testing.T) func() {
 		&database.Activity{},
 		&database.Alert{},
 		&database.AuditLog{},
-		&database.RiskRule{},
 		&database.MonitorState{},
 		&database.BackupRecord{},
 		&database.Setting{},

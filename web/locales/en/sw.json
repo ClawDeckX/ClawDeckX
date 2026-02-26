@@ -1,6 +1,8 @@
 ﻿{
   "title": "Setup Wizard",
   "subtitle": "Automatically detect environment and install OpenClaw",
+  "disableAutoOpen": "Do not auto-open setup wizard on startup",
+  "disableAutoOpenHint": "You can still open it manually from the desktop icon.",
   "scanning": "Scanning environment...",
   "sysInfo": "System Info",
   "pkgMgr": "Package Manager",

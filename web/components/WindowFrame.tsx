@@ -47,6 +47,8 @@ const WindowFrame: React.FC<WindowFrameProps> = ({
   const [snapPreview, setSnapPreview] = useState<SnapZone>(null);
   const [animState, setAnimState] = useState<'opening' | 'idle' | 'minimizing'>('opening');
   const [isDragging, setIsDragging] = useState(false);
+  const minimizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevMinimizedRef = useRef(win.isMinimized);
   const isMobile = typeof globalThis.window !== 'undefined' && globalThis.window.innerWidth < 768;
   const boundsRef = useRef(win.bounds);
   boundsRef.current = win.bounds;
@@ -88,9 +90,39 @@ const WindowFrame: React.FC<WindowFrameProps> = ({
 
   // #3 Minimize genie — play animation then hide
   const handleMinimize = useCallback(() => {
+    if (minimizeTimerRef.current) {
+      clearTimeout(minimizeTimerRef.current);
+      minimizeTimerRef.current = null;
+    }
     setAnimState('minimizing');
-    setTimeout(() => onMinimize(), 340);
+    minimizeTimerRef.current = setTimeout(() => {
+      minimizeTimerRef.current = null;
+      onMinimize();
+    }, 340);
   }, [onMinimize]);
+
+  useEffect(() => {
+    return () => {
+      if (minimizeTimerRef.current) {
+        clearTimeout(minimizeTimerRef.current);
+        minimizeTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const wasMinimized = prevMinimizedRef.current;
+    const isRestored = wasMinimized && !win.isMinimized;
+    // Restore path: only after state actually transitioned minimized -> restored.
+    if (isRestored && animState === 'minimizing') {
+      if (minimizeTimerRef.current) {
+        clearTimeout(minimizeTimerRef.current);
+        minimizeTimerRef.current = null;
+      }
+      setAnimState('idle');
+    }
+    prevMinimizedRef.current = win.isMinimized;
+  }, [win.isMinimized, animState]);
 
   if (win.isMinimized) return null;
 

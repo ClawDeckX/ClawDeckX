@@ -61,6 +61,7 @@ function fmtTime(ts?: number): string {
 const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSessionKeyConsumed }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const c = t.chat as any;
+  const sessionDefault = (t as any).dash?.sessionDefault || c.sessionKey;
 
   // WebSocket connection (Manager's /api/v1/ws for chat streaming events)
   const wsRef = useRef<WebSocket | null>(null);
@@ -72,6 +73,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
   // Sessions
   const [sessions, setSessions] = useState<GwSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionKey, setSessionKey] = useState('main');
   const sessionKeyRef = useRef(sessionKey);
   sessionKeyRef.current = sessionKey;
@@ -92,7 +94,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setDrawerOpen(false);
       if (!exists && sessions.length > 0) {
         // Session not found - show notice to user
-        setSessionNotice(c?.sessionHistoryCleared || '该会话的聊天记录已被清理，用量统计中仍保留历史数据');
+        setSessionNotice(c.sessionHistoryCleared);
       }
       onSessionKeyConsumed?.();
     }
@@ -176,6 +178,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = runId !== null;
+  const renderedMessages = useMemo(() => messages.slice(-200), [messages]);
+  const omittedMessageCount = Math.max(0, messages.length - renderedMessages.length);
 
   // Check GW proxy connectivity + connect Manager WS for chat streaming events
   useEffect(() => {
@@ -294,6 +298,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   // Load sessions list (via REST proxy)
   const loadSessions = useCallback(async () => {
     if (!gwReady) return;
+    setSessionsLoading(true);
     try {
       const res = await gwApi.proxy('sessions.list', {
         activeMinutes: 1440,
@@ -311,6 +316,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         totalTokens: s.totalTokens || 0,
       })));
     } catch { /* ignore */ }
+    finally { setSessionsLoading(false); }
   }, [gwReady]);
 
   // Load chat history (via REST proxy)
@@ -332,17 +338,25 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     }
   }, [gwReady, sessionKey]);
 
-  // On ready: load sessions + history
+  // On ready: load sessions list and refresh it periodically.
   useEffect(() => {
     if (gwReady && wsConnected) {
       loadSessions();
+      const timer = setInterval(loadSessions, 30000);
+      return () => clearInterval(timer);
+    }
+  }, [gwReady, wsConnected, loadSessions]);
+
+  // Load chat history only when selected session changes.
+  useEffect(() => {
+    if (gwReady && wsConnected) {
       loadHistory();
     }
-  }, [gwReady, wsConnected, loadSessions, loadHistory]);
+  }, [gwReady, wsConnected, sessionKey, loadHistory]);
 
   // Auto-scroll
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    chatEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
   }, [messages, stream]);
 
   // Send message (via REST proxy; streaming events come via Manager WS)
@@ -416,7 +430,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       }]);
       setTimeout(() => { setInjectOpen(false); setInjectResult(null); }, 1200);
     } catch (err: any) {
-      setInjectResult({ ok: false, text: (c.injectFailed || 'Inject failed') + ': ' + (err?.message || '') });
+      setInjectResult({ ok: false, text: `${c.injectFailed}: ${err?.message || ''}` });
     }
     setInjecting(false);
   }, [gwReady, sessionKey, injectMsg, injectLabel, injecting]);
@@ -444,7 +458,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setCompactResult({ ok: true, text: c.compactOk });
       setTimeout(() => setCompactResult(null), 3000);
     } catch (err: any) {
-      setCompactResult({ ok: false, text: (c.compactFailed || 'Failed') + ': ' + (err?.message || '') });
+      setCompactResult({ ok: false, text: `${c.compactFailed}: ${err?.message || ''}` });
     }
     setCompacting(false);
   }, [gwReady, sessionKey, compacting, c]);
@@ -620,7 +634,13 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
         {/* Sessions List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-          {sessions.length === 0 && !wsConnecting && (
+          {sessionsLoading && sessions.length === 0 && !wsConnecting && (
+            <div className="text-center py-8 text-slate-400 dark:text-white/20">
+              <span className="material-symbols-outlined text-[20px] block mb-1 animate-spin">progress_activity</span>
+              <span className="text-[10px]">{c.loading}</span>
+            </div>
+          )}
+          {sessions.length === 0 && !sessionsLoading && !wsConnecting && (
             <div className="text-center py-8 text-slate-400 dark:text-white/20">
               <span className="material-symbols-outlined text-[24px] block mb-1">chat_bubble_outline</span>
               <span className="text-[10px]">{c.noSessions}</span>
@@ -637,7 +657,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                   <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${s.kind === 'direct' ? 'bg-blue-500/10 text-blue-500' :
                     s.kind === 'group' ? 'bg-purple-500/10 text-purple-500' :
                       'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-white/40'
-                    }`}>{s.kind || 'chat'}</span>
+                    }`}>{s.kind || sessionDefault}</span>
                   {s.totalTokens ? <span className="text-[10px] text-slate-400 dark:text-white/20 font-mono">{(s.totalTokens / 1000).toFixed(1)}k</span> : null}
                 </div>
                 <h4 className={`text-[11px] font-bold truncate pr-12 ${sessionKey === s.key ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-white/50'}`}>
@@ -781,7 +801,14 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
             )}
 
             {/* Message List */}
-            {messages.map((msg, idx) => {
+            {omittedMessageCount > 0 && (
+              <div className="flex justify-center">
+                <div className="px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 text-[10px] text-slate-500 dark:text-white/35">
+                  +{omittedMessageCount}
+                </div>
+              </div>
+            )}
+            {renderedMessages.map((msg, idx) => {
               const text = extractText(msg.content);
               const tools = extractToolCalls(msg.content);
               const isUser = msg.role === 'user';

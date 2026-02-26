@@ -1,6 +1,8 @@
 ﻿{
   "title": "安装向导",
   "subtitle": "自动检测环境并安装 OpenClaw",
+  "disableAutoOpen": "以后不再自动弹出安装向导",
+  "disableAutoOpenHint": "仍可通过桌面图标手工打开安装向导。",
   "scanning": "正在扫描环境...",
   "sysInfo": "系统信息",
   "pkgMgr": "包管理器",

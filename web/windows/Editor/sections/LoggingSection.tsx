@@ -22,7 +22,7 @@ export const LoggingSection: React.FC<SectionProps> = ({ setField, getField, lan
     <div className="space-y-4">
       <ConfigSection title={es.loggingConfig} icon="description" iconColor="text-yellow-500">
         <SelectField label={es.logLevel} tooltip={tip('logging.level')} value={getField(['logging', 'level']) || 'info'} onChange={v => setField(['logging', 'level'], v)} options={LOG_LEVEL_OPTIONS} />
-        <TextField label={es.logFile} tooltip={tip('logging.file')} value={getField(['logging', 'file']) || ''} onChange={v => setField(['logging', 'file'], v)} placeholder="~/.openclaw/logs/gateway.log" />
+        <TextField label={es.logFile} tooltip={tip('logging.file')} value={getField(['logging', 'file']) || ''} onChange={v => setField(['logging', 'file'], v)} placeholder={es.phGatewayLogPath} />
         <SelectField label={es.consoleLevel} tooltip={tip('logging.consoleLevel')} value={getField(['logging', 'consoleLevel']) || 'info'} onChange={v => setField(['logging', 'consoleLevel'], v)} options={LOG_LEVEL_OPTIONS} />
         <SelectField label={es.consoleStyle} tooltip={tip('logging.consoleStyle')} value={getField(['logging', 'consoleStyle']) || 'pretty'} onChange={v => setField(['logging', 'consoleStyle'], v)} options={CONSOLE_STYLE_OPTIONS} />
       </ConfigSection>
@@ -30,7 +30,7 @@ export const LoggingSection: React.FC<SectionProps> = ({ setField, getField, lan
       <ConfigSection title={es.diagnostics} icon="bug_report" iconColor="text-yellow-500" defaultOpen={false}>
         <SwitchField label={es.enableDiag} tooltip={tip('diagnostics.enabled')} value={getField(['diagnostics', 'enabled']) === true} onChange={v => setField(['diagnostics', 'enabled'], v)} />
         <SwitchField label={es.openTelemetry} tooltip={tip('diagnostics.otel.enabled')} value={getField(['diagnostics', 'otel', 'enabled']) === true} onChange={v => setField(['diagnostics', 'otel', 'enabled'], v)} />
-        <TextField label={es.otelEndpoint} tooltip={tip('diagnostics.otel.endpoint')} value={getField(['diagnostics', 'otel', 'endpoint']) || ''} onChange={v => setField(['diagnostics', 'otel', 'endpoint'], v)} placeholder="http://localhost:4318" />
+        <TextField label={es.otelEndpoint} tooltip={tip('diagnostics.otel.endpoint')} value={getField(['diagnostics', 'otel', 'endpoint']) || ''} onChange={v => setField(['diagnostics', 'otel', 'endpoint'], v)} placeholder={es.phOtelEndpoint} />
       </ConfigSection>
     </div>
   );

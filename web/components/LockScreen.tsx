@@ -22,6 +22,7 @@ const LockScreen: React.FC<LockScreenProps> = ({
   onChangeLanguage
 }) => {
   const t = useMemo(() => getTranslation(language), [language]) as any;
+  const dateLocale = useMemo(() => ({ zh: 'zh-CN', en: 'en-US' } as Record<string, string>)[language] || 'en-US', [language]);
   const [username, setUsername] = useState('');
   const [editingUsername, setEditingUsername] = useState(false);
   const [password, setPassword] = useState('');
@@ -99,9 +100,9 @@ const LockScreen: React.FC<LockScreenProps> = ({
   const handleSystemReset = async () => {
     const confirmMsg = m.resetConfirm;
     if (await confirm({
-      title: t.resetLabel || 'System Reset',
+      title: t.resetLabel,
       message: confirmMsg,
-      confirmText: t.resetLabel || 'Reset',
+      confirmText: t.resetLabel,
       cancelText: t.cancel,
       danger: true,
     })) {
@@ -133,7 +134,7 @@ const LockScreen: React.FC<LockScreenProps> = ({
           {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
         </h1>
         <h2 className="text-white text-xl font-medium mt-2 opacity-90 select-none">
-          {new Date().toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          {new Date().toLocaleDateString(dateLocale, { weekday: 'long', month: 'long', day: 'numeric' })}
         </h2>
       </div>
 
@@ -186,7 +187,7 @@ const LockScreen: React.FC<LockScreenProps> = ({
                 onChange={e => setUsername(e.target.value)}
                 onBlur={() => setEditingUsername(false)}
                 onKeyDown={e => { if (e.key === 'Enter') setEditingUsername(false); }}
-                placeholder={t.usernamePlaceholder || 'username'}
+                placeholder={t.usernamePlaceholder}
               />
             ) : (
               <h3
@@ -194,7 +195,7 @@ const LockScreen: React.FC<LockScreenProps> = ({
                 onClick={() => setEditingUsername(true)}
                 title={t.clickToChangeUser}
               >
-                {username || 'Admin'}
+                {username || t.adminPlaceholder}
                 <span className="material-symbols-outlined text-[14px] text-white/0 group-hover:text-white/50 transition-colors">edit</span>
               </h3>
             )}

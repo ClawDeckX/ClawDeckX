@@ -84,11 +84,11 @@ const GatewaySection: React.FC<SectionProps> = ({ setField, getField, language }
       </ConfigSection>
 
       <ConfigSection title={es.remoteConn} icon="cloud" iconColor="text-purple-500" defaultOpen={false}>
-        <TextField label={es.remoteUrl} tooltip={tip('gateway.remote.url')} value={g(['remote', 'url']) || ''} onChange={v => s(['remote', 'url'], v)} placeholder="ws://..." />
+        <TextField label={es.remoteUrl} tooltip={tip('gateway.remote.url')} value={g(['remote', 'url']) || ''} onChange={v => s(['remote', 'url'], v)} placeholder={es.phWsUrl} />
         <SelectField label={es.transport} tooltip={tip('gateway.remote.transport')} value={g(['remote', 'transport']) || 'direct'} onChange={v => s(['remote', 'transport'], v)} options={transportOptions} />
         <PasswordField label={es.authToken} tooltip={tip('gateway.remote.token')} value={g(['remote', 'token']) || ''} onChange={v => s(['remote', 'token'], v)} />
-        <TextField label={es.sshTarget} tooltip={tip('gateway.remote.sshTarget')} value={g(['remote', 'sshTarget']) || ''} onChange={v => s(['remote', 'sshTarget'], v)} placeholder="user@host" />
-        <TextField label={es.sshIdentity} tooltip={tip('gateway.remote.sshIdentity')} value={g(['remote', 'sshIdentity']) || ''} onChange={v => s(['remote', 'sshIdentity'], v)} placeholder="~/.ssh/id_ed25519" />
+        <TextField label={es.sshTarget} tooltip={tip('gateway.remote.sshTarget')} value={g(['remote', 'sshTarget']) || ''} onChange={v => s(['remote', 'sshTarget'], v)} placeholder={es.phSshTarget} />
+        <TextField label={es.sshIdentity} tooltip={tip('gateway.remote.sshIdentity')} value={g(['remote', 'sshIdentity']) || ''} onChange={v => s(['remote', 'sshIdentity'], v)} placeholder={es.phSshIdentity} />
       </ConfigSection>
 
       <ConfigSection title={es.reload} icon="refresh" iconColor="text-amber-500" defaultOpen={false}>
@@ -98,8 +98,8 @@ const GatewaySection: React.FC<SectionProps> = ({ setField, getField, language }
 
       <ConfigSection title={es.controlUi} icon="dashboard" iconColor="text-indigo-500" defaultOpen={false}>
         <SwitchField label={es.enabled} tooltip={tip('gateway.controlUi.enabled')} value={g(['controlUi', 'enabled']) !== false} onChange={v => s(['controlUi', 'enabled'], v)} />
-        <TextField label={es.basePath} tooltip={tip('gateway.controlUi.basePath')} value={g(['controlUi', 'basePath']) || ''} onChange={v => s(['controlUi', 'basePath'], v)} placeholder="/" />
-        <ArrayField label={es.allowedOrigins} tooltip={tip('gateway.controlUi.allowedOrigins')} value={g(['controlUi', 'allowedOrigins']) || []} onChange={v => s(['controlUi', 'allowedOrigins'], v)} placeholder="https://..." />
+        <TextField label={es.basePath} tooltip={tip('gateway.controlUi.basePath')} value={g(['controlUi', 'basePath']) || ''} onChange={v => s(['controlUi', 'basePath'], v)} placeholder={es.phRootPath} />
+        <ArrayField label={es.allowedOrigins} tooltip={tip('gateway.controlUi.allowedOrigins')} value={g(['controlUi', 'allowedOrigins']) || []} onChange={v => s(['controlUi', 'allowedOrigins'], v)} placeholder={es.phHttps} />
       </ConfigSection>
 
       <ConfigSection title={es.httpConfig} icon="http" iconColor="text-sky-500" defaultOpen={false}>
@@ -108,12 +108,12 @@ const GatewaySection: React.FC<SectionProps> = ({ setField, getField, language }
       </ConfigSection>
 
       <ConfigSection title={es.trustedProxies} icon="verified_user" iconColor="text-emerald-500" defaultOpen={false}>
-        <ArrayField label={es.proxyIps} tooltip={tip('gateway.trustedProxies')} value={g(['trustedProxies']) || []} onChange={v => s(['trustedProxies'], v)} placeholder="10.0.0.0/8" />
+        <ArrayField label={es.proxyIps} tooltip={tip('gateway.trustedProxies')} value={g(['trustedProxies']) || []} onChange={v => s(['trustedProxies'], v)} placeholder={es.phCidr} />
       </ConfigSection>
 
       <ConfigSection title={es.discovery} icon="explore" iconColor="text-green-500" defaultOpen={false}>
         <SwitchField label={es.wideArea} tooltip={tip('discovery.wideArea.enabled')} value={getField(['discovery', 'wideArea', 'enabled']) === true} onChange={v => setField(['discovery', 'wideArea', 'enabled'], v)} />
-        <SelectField label="mDNS" tooltip={tip('discovery.mdns.mode')} value={getField(['discovery', 'mdns', 'mode']) || 'off'} onChange={v => setField(['discovery', 'mdns', 'mode'], v)} options={mdnsModeOptions} />
+        <SelectField label={es.mdns} tooltip={tip('discovery.mdns.mode')} value={getField(['discovery', 'mdns', 'mode']) || 'off'} onChange={v => setField(['discovery', 'mdns', 'mode'], v)} options={mdnsModeOptions} />
       </ConfigSection>
 
       <ConfigSection title={es.webConfig} icon="public" iconColor="text-cyan-500" defaultOpen={false}>

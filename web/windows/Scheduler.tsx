@@ -30,34 +30,34 @@ const DEFAULT_FORM: CronForm = {
 
 // i18n-aware relative time formatting
 function fmtRelative(ms?: number, s?: any) {
-  if (!ms || !Number.isFinite(ms)) return '-';
+  if (!ms || !Number.isFinite(ms)) return s?.na || '-';
   const diff = ms - Date.now();
-  if (Math.abs(diff) < 60_000) return s?.justNow || (diff > 0 ? 'in <1m' : '<1m ago');
+  if (Math.abs(diff) < 60_000) return s?.justNow;
   const mins = Math.abs(Math.round(diff / 60_000));
-  if (mins < 60) return diff > 0 ? `${mins} ${s?.inMinutes || 'min'}` : `${mins} ${s?.minutesAgo || 'min ago'}`;
+  if (mins < 60) return diff > 0 ? `${mins} ${s?.inMinutes}` : `${mins} ${s?.minutesAgo}`;
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return diff > 0 ? `${hrs} ${s?.inHours || 'hr'}` : `${hrs} ${s?.hoursAgo || 'hr ago'}`;
+  if (hrs < 24) return diff > 0 ? `${hrs} ${s?.inHours}` : `${hrs} ${s?.hoursAgo}`;
   return new Date(ms).toLocaleString();
 }
 
-function fmtSchedule(job: any) {
-  const s = job.schedule;
-  if (!s) return '-';
-  if (s.kind === 'at') return `At ${s.at ? new Date(s.at).toLocaleString() : '-'}`;
-  if (s.kind === 'every') {
-    const ms = s.everyMs || 0;
-    if (ms >= 86400000) return `Every ${Math.round(ms / 86400000)}d`;
-    if (ms >= 3600000) return `Every ${Math.round(ms / 3600000)}h`;
-    return `Every ${Math.round(ms / 60000)}m`;
+function fmtSchedule(job: any, l?: any) {
+  const schedule = job.schedule;
+  if (!schedule) return l?.na || '-';
+  if (schedule.kind === 'at') return `${l?.at} ${schedule.at ? new Date(schedule.at).toLocaleString() : (l?.na || '-')}`;
+  if (schedule.kind === 'every') {
+    const ms = schedule.everyMs || 0;
+    if (ms >= 86400000) return `${l?.every} ${Math.round(ms / 86400000)}d`;
+    if (ms >= 3600000) return `${l?.every} ${Math.round(ms / 3600000)}h`;
+    return `${l?.every} ${Math.round(ms / 60000)}m`;
   }
-  return `${s.expr || '-'}${s.tz ? ` (${s.tz})` : ''}`;
+  return `${schedule.expr || (l?.na || '-')}${schedule.tz ? ` (${schedule.tz})` : ''}`;
 }
 
-function fmtPayload(job: any) {
+function fmtPayload(job: any, s?: any) {
   const p = job.payload;
-  if (!p) return '-';
-  if (p.kind === 'systemEvent') return `System: ${p.text || '-'}`;
-  return `Agent: ${p.message || '-'}`;
+  if (!p) return s?.na || '-';
+  if (p.kind === 'systemEvent') return `${s?.systemEvent}: ${p.text || (s?.na || '-')}`;
+  return `${s?.agentTurn}: ${p.message || (s?.na || '-')}`;
 }
 
 const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
@@ -74,6 +74,18 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   const [showForm, setShowForm] = useState(false);
   const [runsJobId, setRunsJobId] = useState<string | null>(null);
   const [runs, setRuns] = useState<any[]>([]);
+  const na = s?.na || '-';
+
+  const toErrorText = useCallback((e: any) => {
+    const raw = String(e?.message || e || '');
+    if (raw === 'errInvalidTime') return s.errInvalidTime;
+    if (raw === 'errInvalidInterval') return s.errInvalidInterval;
+    if (raw === 'errCronRequired') return s.errCronRequired;
+    if (raw === 'errSystemTextRequired') return s.errSystemTextRequired;
+    if (raw === 'errAgentMessageRequired') return s.errAgentMessageRequired;
+    if (raw === 'errNameRequired') return s.errNameRequired;
+    return raw;
+  }, [s]);
 
   const loadAll = useCallback(async () => {
     setLoading(true); setError(null);
@@ -100,23 +112,23 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
       let schedule: any;
       if (f.scheduleKind === 'at') {
         const ms = Date.parse(f.scheduleAt);
-        if (!Number.isFinite(ms)) throw new Error('Invalid time');
+        if (!Number.isFinite(ms)) throw new Error('errInvalidTime');
         schedule = { kind: 'at', at: new Date(ms).toISOString() };
       } else if (f.scheduleKind === 'every') {
         const amt = parseInt(f.everyAmount) || 0;
-        if (amt <= 0) throw new Error('Invalid interval');
+        if (amt <= 0) throw new Error('errInvalidInterval');
         const mult = f.everyUnit === 'minutes' ? 60000 : f.everyUnit === 'hours' ? 3600000 : 86400000;
         schedule = { kind: 'every', everyMs: amt * mult };
       } else {
-        if (!f.cronExpr.trim()) throw new Error('Cron expression required');
+        if (!f.cronExpr.trim()) throw new Error('errCronRequired');
         schedule = { kind: 'cron', expr: f.cronExpr.trim(), tz: f.cronTz.trim() || undefined };
       }
       let payload: any;
       if (f.payloadKind === 'systemEvent') {
-        if (!f.payloadText.trim()) throw new Error('System text required');
+        if (!f.payloadText.trim()) throw new Error('errSystemTextRequired');
         payload = { kind: 'systemEvent', text: f.payloadText.trim() };
       } else {
-        if (!f.payloadText.trim()) throw new Error('Agent message required');
+        if (!f.payloadText.trim()) throw new Error('errAgentMessageRequired');
         payload = { kind: 'agentTurn', message: f.payloadText.trim() } as any;
         const timeout = parseInt(f.timeoutSeconds) || 0;
         if (timeout > 0) payload.timeoutSeconds = timeout;
@@ -129,18 +141,19 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
         agentId: f.agentId.trim() || undefined, enabled: f.enabled,
         schedule, sessionTarget: f.sessionTarget, wakeMode: f.wakeMode, payload, delivery,
       };
-      if (!job.name) throw new Error('Name required');
+      if (!job.name) throw new Error('errNameRequired');
       await gwApi.cronAdd(job);
       setForm({ ...DEFAULT_FORM });
       setShowForm(false);
       await loadAll();
       toast('success', s.jobAdded);
-    } catch (e: any) { 
-      setError(String(e)); 
-      toast('error', String(e));
+    } catch (e: any) {
+      const msg = toErrorText(e);
+      setError(msg);
+      toast('error', msg);
     }
     setBusy(false);
-  }, [busy, form, loadAll, toast, s]);
+  }, [busy, form, loadAll, toast, s, toErrorText]);
 
   const toggleJob = useCallback(async (job: any) => {
     if (busy) return;
@@ -150,12 +163,13 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
       await loadAll(); 
       toast('success', s.jobToggled);
     }
-    catch (e: any) { 
-      setError(String(e)); 
-      toast('error', String(e));
+    catch (e: any) {
+      const msg = toErrorText(e);
+      setError(msg);
+      toast('error', msg);
     }
     setBusy(false);
-  }, [busy, loadAll, toast, s]);
+  }, [busy, loadAll, toast, s, toErrorText]);
 
   const runJob = useCallback(async (job: any) => {
     if (busy) return;
@@ -165,12 +179,13 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
       await loadRuns(job.id); 
       toast('success', s.jobRunning);
     }
-    catch (e: any) { 
-      setError(String(e)); 
-      toast('error', String(e));
+    catch (e: any) {
+      const msg = toErrorText(e);
+      setError(msg);
+      toast('error', msg);
     }
     setBusy(false);
-  }, [busy, toast, s]);
+  }, [busy, toast, s, toErrorText]);
 
   const removeJob = useCallback(async (job: any) => {
     if (busy) return;
@@ -181,12 +196,13 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
       if (runsJobId === job.id) { setRunsJobId(null); setRuns([]); }
       await loadAll();
       toast('success', s.jobRemoved);
-    } catch (e: any) { 
-      setError(String(e)); 
-      toast('error', String(e));
+    } catch (e: any) {
+      const msg = toErrorText(e);
+      setError(msg);
+      toast('error', msg);
     }
     setBusy(false);
-  }, [busy, runsJobId, loadAll, toast, s]);
+  }, [busy, runsJobId, loadAll, toast, s, toErrorText]);
 
   const loadRuns = useCallback(async (jobId: string) => {
     try {
@@ -236,7 +252,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
               </div>
               <div className="rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 p-3 text-center">
                 <p className="text-[11px] font-bold text-slate-400 dark:text-white/40 uppercase">{s.jobs}</p>
-                <p className="text-sm font-bold text-slate-700 dark:text-white/70 mt-0.5">{status?.jobs ?? '-'}</p>
+                <p className="text-sm font-bold text-slate-700 dark:text-white/70 mt-0.5">{status?.jobs ?? na}</p>
               </div>
               <div className="rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 p-3 text-center">
                 <p className="text-[11px] font-bold text-slate-400 dark:text-white/40 uppercase">{s.nextWake}</p>
@@ -408,9 +424,9 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                         </div>
                         {job.description && <p className="text-[11px] text-slate-400 dark:text-white/35 mt-0.5 truncate">{job.description}</p>}
                         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-[11px]">
-                          <span className="text-slate-500 dark:text-white/40 font-mono">{fmtSchedule(job)}</span>
-                          <span className="text-slate-400 dark:text-white/35">{fmtPayload(job)}</span>
-                          {job.agentId && <span className="text-slate-400 dark:text-white/35">Agent: {job.agentId}</span>}
+                          <span className="text-slate-500 dark:text-white/40 font-mono">{fmtSchedule(job, s)}</span>
+                          <span className="text-slate-400 dark:text-white/35">{fmtPayload(job, s)}</span>
+                          {job.agentId && <span className="text-slate-400 dark:text-white/35">{s.agentId}: {job.agentId}</span>}
                         </div>
                         <div className="flex gap-2 mt-1.5">
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">{job.sessionTarget}</span>
@@ -471,13 +487,13 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                   <div className={`w-2 h-2 rounded-full shrink-0 ${run.status === 'ok' ? 'bg-mac-green' : run.status === 'error' ? 'bg-mac-red' : 'bg-mac-yellow'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold ${run.status === 'ok' ? 'text-mac-green' : run.status === 'error' ? 'text-mac-red' : 'text-mac-yellow'}`}>{run.status}</span>
+                      <span className={`text-[10px] font-bold ${run.status === 'ok' ? 'text-mac-green' : run.status === 'error' ? 'text-mac-red' : 'text-mac-yellow'}`}>{run.status === 'ok' ? s.ok : run.status === 'error' ? s.error : s.skipped}</span>
                       {run.durationMs != null && <span className="text-[11px] text-slate-400 dark:text-white/35">{run.durationMs}ms</span>}
                     </div>
                     {run.summary && <p className="text-[11px] text-slate-500 dark:text-white/40 truncate mt-0.5">{run.summary}</p>}
                     {run.error && <p className="text-[11px] text-mac-red truncate mt-0.5">{run.error}</p>}
                   </div>
-                  <span className="text-[11px] text-slate-400 dark:text-white/20 shrink-0">{run.ts ? new Date(run.ts).toLocaleString() : '-'}</span>
+                  <span className="text-[11px] text-slate-400 dark:text-white/20 shrink-0">{run.ts ? new Date(run.ts).toLocaleString() : na}</span>
                 </div>
               ))}
             </div>

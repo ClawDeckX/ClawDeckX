@@ -201,8 +201,11 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
       authApi.me().then(setCurrentUser).catch(() => { });
     }
     if (activeTab === 'about') {
-      selfUpdateApi.info().then(d => setSelfUpdateVersion(d)).catch(() => { });
-      if (!ocUpdateInfo) hostInfoApi.checkUpdate().then(res => setOcUpdateInfo(res)).catch(() => { });
+      const raf = requestAnimationFrame(() => {
+        selfUpdateApi.info().then(d => setSelfUpdateVersion(d)).catch(() => { });
+        if (!ocUpdateInfo) hostInfoApi.checkUpdate().then(res => setOcUpdateInfo(res)).catch(() => { });
+      });
+      return () => cancelAnimationFrame(raf);
     }
   }, [activeTab, fetchBackups, fetchAuditLogs, fetchNotifyConfig, fetchServerConfig]);
 
@@ -214,7 +217,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
     try {
       const res = await selfUpdateApi.check();
       setSelfUpdateInfo(res);
-    } catch { setSelfUpdateInfo({ available: false, error: 'Network error' }); }
+    } catch { setSelfUpdateInfo({ available: false, error: s.networkError }); }
     setSelfUpdateChecking(false);
   }, []);
 
@@ -257,7 +260,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
         }
       }
     } catch (err: any) {
-      setSelfUpdateProgress({ stage: 'error', percent: 0, error: err?.message || 'Unknown error' });
+      setSelfUpdateProgress({ stage: 'error', percent: 0, error: err?.message || s.unknownError });
       toast('error', s.selfUpdateFailed);
     }
     setSelfUpdating(false);
@@ -270,7 +273,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
     try {
       const res = await hostInfoApi.checkUpdate();
       setOcUpdateInfo(res);
-    } catch { setOcUpdateInfo({ available: false, error: 'Network error' }); }
+    } catch { setOcUpdateInfo({ available: false, error: s.networkError }); }
     setOcUpdateChecking(false);
   }, []);
 
@@ -382,7 +385,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
   };
 
   const handleDeleteBackup = async (id: string) => {
-    try { await backupApi.remove(id); fetchBackups(); } catch (err: any) { toast('error', err?.message || s.deleteFailed || 'Delete failed'); }
+    try { await backupApi.remove(id); fetchBackups(); } catch (err: any) { toast('error', err?.message || s.deleteFailed); }
   };
 
   const inputCls = "w-full h-9 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 text-[13px] text-slate-800 dark:text-white focus:ring-2 focus:ring-primary/30 outline-none transition-all";
@@ -402,10 +405,10 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
         {/* 用户头像区 */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-200/70 dark:border-white/[0.06]">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold shadow-md">
-            {(currentUser?.username || 'A').charAt(0).toUpperCase()}
+                  {(currentUser?.username || s.adminDefault).charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-slate-800 dark:text-white truncate">{currentUser?.username || 'Admin'}</p>
+            <p className="text-[13px] font-semibold text-slate-800 dark:text-white truncate">{currentUser?.username || s.adminDefault}</p>
             <p className="text-[10px] text-slate-400 dark:text-white/40">ClawDeckX</p>
           </div>
         </div>
@@ -1084,7 +1087,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                 <div className="px-5 py-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="material-symbols-outlined text-[16px] text-amber-500">emoji_objects</span>
-                    <h4 className="text-[13px] font-bold text-slate-700 dark:text-white/70">Note</h4>
+                    <h4 className="text-[13px] font-bold text-slate-700 dark:text-white/70">{s.noteTitle}</h4>
                   </div>
                   <p className="text-[12px] text-slate-500 dark:text-white/45 leading-relaxed">{s.aboutNote}</p>
                 </div>
@@ -1154,7 +1157,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                               <SmartLink href="https://github.com/ClawDeckX/ClawDeckX/releases"
                                 className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/60 text-[11px] font-bold hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
                                 <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                                {s.viewReleases || '查看更新'}
+                                {s.viewReleases}
                               </SmartLink>
                             </div>
                           )}
@@ -1245,7 +1248,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                             <SmartLink href="https://github.com/openclaw/openclaw/releases"
                               className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/60 text-[11px] font-bold hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
                               <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                              {s.viewReleases || '查看更新'}
+                              {s.viewReleases}
                             </SmartLink>
                           </div>
                         </div>

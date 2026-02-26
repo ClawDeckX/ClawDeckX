@@ -28,7 +28,7 @@ type SkillMessage = { kind: 'success' | 'error'; message: string };
 type SkillMessageMap = Record<string, SkillMessage>;
 
 // 可展开描述组件
-const ExpandableDesc: React.FC<{ text: string }> = ({ text }) => {
+const ExpandableDesc: React.FC<{ text: string; moreLabel: string }> = ({ text, moreLabel }) => {
   const [expanded, setExpanded] = useState(false);
   if (!text) return null;
   const needsExpand = text.length > 80;
@@ -39,7 +39,7 @@ const ExpandableDesc: React.FC<{ text: string }> = ({ text }) => {
         {text}
       </p>
       {needsExpand && !expanded && (
-        <button onClick={() => setExpanded(true)} className="text-[11px] text-primary/70 hover:text-primary font-medium mt-0.5">...more</button>
+        <button onClick={() => setExpanded(true)} className="text-[11px] text-primary/70 hover:text-primary font-medium mt-0.5">...{moreLabel}</button>
       )}
     </div>
   );
@@ -55,7 +55,7 @@ const SOURCE_GROUPS = [
 function groupSkills(skills: SkillStatus[], sk: any): { id: string; label: string; skills: SkillStatus[] }[] {
   const groups = new Map<string, { id: string; label: string; skills: SkillStatus[] }>();
   for (const def of SOURCE_GROUPS) groups.set(def.id, { id: def.id, label: sk[def.id] || def.id, skills: [] });
-  const other = { id: 'other', label: sk.other || 'Other', skills: [] as SkillStatus[] };
+  const other = { id: 'other', label: sk.other, skills: [] as SkillStatus[] };
   const builtInDef = SOURCE_GROUPS.find(g => g.id === 'builtIn');
   for (const skill of skills) {
     const match = skill.bundled ? builtInDef : SOURCE_GROUPS.find(g => g.sources.includes(skill.source));
@@ -160,22 +160,22 @@ const ConfigModal: React.FC<{
             <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider mb-1 block">{sk.envVars}</label>
             {envPairs.map(([k, v], i) => (
               <div key={i} className="flex gap-1.5 mb-1.5">
-                <input value={k} onChange={e => { const n = [...envPairs]; n[i] = [e.target.value, v]; setEnvPairs(n); }} placeholder="KEY"
+                <input value={k} onChange={e => { const n = [...envPairs]; n[i] = [e.target.value, v]; setEnvPairs(n); }} placeholder={sk.key}
                   className="flex-1 h-8 px-2 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded text-[10px] font-mono text-slate-800 dark:text-white outline-none focus:border-primary" />
-                <input value={v} onChange={e => { const n = [...envPairs]; n[i] = [k, e.target.value]; setEnvPairs(n); }} placeholder="value"
+                <input value={v} onChange={e => { const n = [...envPairs]; n[i] = [k, e.target.value]; setEnvPairs(n); }} placeholder={sk.value}
                   className="flex-1 h-8 px-2 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded text-[10px] font-mono text-slate-800 dark:text-white outline-none focus:border-primary" />
                 <button onClick={() => setEnvPairs(envPairs.filter((_, j) => j !== i))} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-mac-red">
                   <span className="material-symbols-outlined text-[14px]">remove_circle</span>
                 </button>
               </div>
             ))}
-            <button onClick={() => setEnvPairs([...envPairs, ['', '']])} className="text-[10px] text-primary font-bold hover:underline">+ Add</button>
+            <button onClick={() => setEnvPairs([...envPairs, ['', '']])} className="text-[10px] text-primary font-bold hover:underline">+ {sk.addEnv}</button>
           </div>
         </div>
         <div className="px-5 py-3 border-t border-slate-200 dark:border-white/5 flex justify-end gap-2">
           <button onClick={onClose} className="h-8 px-4 text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-white/50 dark:hover:text-white">{sk.cancel}</button>
           <button onClick={handleSave} disabled={saving} className="h-8 px-5 bg-primary text-white text-xs font-bold rounded-lg disabled:opacity-50">
-            {saving ? '...' : sk.save}
+            {saving ? sk.loading : sk.save}
           </button>
         </div>
       </div>
@@ -249,7 +249,7 @@ const SkillCard: React.FC<{
       </div>
 
       {/* 描述 */}
-      <ExpandableDesc text={showTranslated && translation?.description ? translation.description : skill.description} />
+      <ExpandableDesc text={showTranslated && translation?.description ? translation.description : skill.description} moreLabel={sk.expandMore} />
 
       {/* 缺失依赖提示 */}
       {hasMissing && !isDisabled && (
@@ -330,6 +330,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
 
   const [activeTab, setActiveTab] = useState<TabId>('all');
   const [filter, setFilter] = useState<FilterId>('all');
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [skills, setSkills] = useState<SkillStatus[]>([]);
   const [skillsConfig, setSkillsConfig] = useState<SkillsConfig>({});
@@ -362,8 +363,12 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
   const [marketLoaded, setMarketLoaded] = useState(false);
   const [marketLoadingMore, setMarketLoadingMore] = useState(false);
   const [marketInstalledSlugs, setMarketInstalledSlugs] = useState<Set<string>>(new Set());
+  const skillsReqSeqRef = useRef(0);
+  const marketListReqSeqRef = useRef(0);
+  const marketSearchReqSeqRef = useRef(0);
 
   const fetchSkills = useCallback(async () => {
+    const reqId = ++skillsReqSeqRef.current;
     setLoading(true);
     setError('');
     try {
@@ -371,18 +376,28 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
         gwApi.skills(),
         gwApi.skillsConfig(),
       ]);
+      if (reqId !== skillsReqSeqRef.current) return;
       const statusData = statusRes as any;
       const configData = configRes as any;
       setSkills(statusData?.skills || []);
       setSkillsConfig(configData?.entries || {});
     } catch (e: any) {
+      if (reqId !== skillsReqSeqRef.current) return;
       setError(e?.message || sk.loadFailed);
     } finally {
-      setLoading(false);
+      if (reqId === skillsReqSeqRef.current) setLoading(false);
     }
   }, [sk.loadFailed]);
 
-  useEffect(() => { fetchSkills(); }, [fetchSkills]);
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput.trim()), 120);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => { fetchSkills(); });
+    return () => cancelAnimationFrame(raf);
+  }, [fetchSkills]);
 
   // 检测 Gateway 连接状态 + 是否有可用频道 + 是否配置了模型
   useEffect(() => {
@@ -547,7 +562,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       await gwApi.proxy('agent', { message: prompt });
       toast('success', sk.sentToAgentHint);
     } catch (err: any) {
-      toast('error', (sk.sendFailed || 'Failed') + ': ' + (err?.message || ''));
+      toast('error', `${sk.sendFailed}: ${err?.message || ''}`);
     }
   }, [sk, toast]);
 
@@ -566,7 +581,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       await gwApi.proxy('agent', { message: prompt });
       toast('success', sk.sentToAgentHint);
     } catch (err: any) {
-      toast('error', (sk.sendFailed || 'Failed') + ': ' + (err?.message || ''));
+      toast('error', `${sk.sendFailed}: ${err?.message || ''}`);
     }
   }, [sk, toast]);
 
@@ -599,6 +614,8 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
     }
     return list;
   }, [skills, activeTab, searchQuery]);
+  const renderedSkills = useMemo(() => filteredSkills.slice(0, 120), [filteredSkills]);
+  const omittedSkills = Math.max(0, filteredSkills.length - renderedSkills.length);
 
   const eligibleCount = useMemo(() => skills.filter(s => s.eligible).length, [skills]);
   const missingCount = useMemo(() => skills.filter(s => !s.eligible && !s.always).length, [skills]);
@@ -623,19 +640,31 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
     setBusyKey(null);
   }, [fetchSkills, sk]);
 
-  const skillGroups = useMemo(() => groupSkills(filteredSkills, sk), [filteredSkills, sk]);
+  const skillGroups = useMemo(() => groupSkills(renderedSkills, sk), [renderedSkills, sk]);
+
+  const renderedMarketResults = useMemo(() => marketResults.slice(0, 120), [marketResults]);
+  const omittedMarketResults = Math.max(0, marketResults.length - renderedMarketResults.length);
 
   // ClawHub 列表加载
   const fetchMarketList = useCallback(async (sort: string, cursor?: string, append = false) => {
+    const reqId = ++marketListReqSeqRef.current;
     if (append) setMarketLoadingMore(true); else setMarketLoading(true);
     try {
       const res = await clawHubApi.list(sort, 20, cursor || undefined) as any;
+      if (reqId !== marketListReqSeqRef.current) return;
       const items = res?.items || [];
       setMarketResults(prev => append ? [...prev, ...items] : items);
       setMarketCursor(res?.nextCursor || null);
       setMarketLoaded(true);
-    } catch { if (!append) setMarketResults([]); }
-    finally { setMarketLoading(false); setMarketLoadingMore(false); }
+    } catch {
+      if (reqId === marketListReqSeqRef.current && !append) setMarketResults([]);
+    }
+    finally {
+      if (reqId === marketListReqSeqRef.current) {
+        setMarketLoading(false);
+        setMarketLoadingMore(false);
+      }
+    }
   }, []);
 
   // 切换到市场 Tab 时自动加载
@@ -661,17 +690,25 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       // 清空搜索时回到列表模式
       setMarketResults([]);
       setMarketLoaded(false);
+      marketSearchReqSeqRef.current += 1;
       fetchMarketList(marketSort);
       return;
     }
+    const reqId = ++marketSearchReqSeqRef.current;
+    marketListReqSeqRef.current += 1;
     setMarketSearching(true);
     try {
       const res = await clawHubApi.search(marketQuery) as any;
+      if (reqId !== marketSearchReqSeqRef.current) return;
       const items = Array.isArray(res) ? res : (res?.results || res?.skills || res?.data || res?.items || []);
       setMarketResults(Array.isArray(items) ? items : []);
       setMarketCursor(null);
-    } catch { setMarketResults([]); }
-    finally { setMarketSearching(false); }
+    } catch {
+      if (reqId === marketSearchReqSeqRef.current) setMarketResults([]);
+    }
+    finally {
+      if (reqId === marketSearchReqSeqRef.current) setMarketSearching(false);
+    }
   }, [marketQuery, marketSort, fetchMarketList]);
 
   // 瀑布流自动加载更多
@@ -720,7 +757,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
               <div className="relative flex-1 min-w-0">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">search</span>
                 <input className="w-full h-9 pl-9 pr-4 bg-white dark:bg-[#1a1c22] border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-800 dark:text-white placeholder:text-slate-400 focus:ring-1 focus:ring-primary outline-none"
-                  placeholder={sk.search} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                  placeholder={sk.search} value={searchInput} onChange={e => setSearchInput(e.target.value)} />
               </div>
               {/* 自动翻译开关 + 进度 + 刷新 */}
               {language !== 'en' && (
@@ -764,13 +801,13 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                         setTranslations({}); // 清空缓存，触发重新翻译
                       }}
                       className="h-9 w-9 flex items-center justify-center bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-lg"
-                      title={sk.refreshTranslation || 'Refresh translations'}>
+                      title={sk.refreshTranslation}>
                       <span className="material-symbols-outlined text-[16px] text-slate-500">refresh</span>
                     </button>
                   )}
                 </div>
               )}
-              <button onClick={() => setGroupView(!groupView)} className="h-9 w-9 flex items-center justify-center bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-lg shrink-0" title={groupView ? 'Flat view' : 'Grouped view'}>
+              <button onClick={() => setGroupView(!groupView)} className="h-9 w-9 flex items-center justify-center bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-lg shrink-0" title={groupView ? sk.flatView : sk.groupedView}>
                 <span className="material-symbols-outlined text-[16px] text-slate-500">{groupView ? 'view_list' : 'folder'}</span>
               </button>
               <button onClick={() => { fetchSkills(); setSkillMessages({}); }} className="h-9 px-3 flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-600 dark:text-white/70 shrink-0">
@@ -837,7 +874,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                         });
                       }}
                       className="h-9 w-9 flex items-center justify-center bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-lg"
-                      title={sk.refreshTranslation || 'Refresh translations'}>
+                      title={sk.refreshTranslation}>
                       <span className="material-symbols-outlined text-[16px] text-slate-500">refresh</span>
                     </button>
                   )}
@@ -864,7 +901,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
           {activeTab !== 'market' && loading && (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
               <span className="material-symbols-outlined text-4xl animate-spin mb-3">progress_activity</span>
-              <span className="text-xs">{sk.loadFailed === error ? sk.loadFailed : 'Loading...'}</span>
+              <span className="text-xs">{sk.loadFailed === error ? sk.loadFailed : sk.loading}</span>
             </div>
           )}
           {activeTab !== 'market' && error && !loading && (
@@ -905,13 +942,16 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredSkills.map(skill => (
+                  {renderedSkills.map(skill => (
                     <SkillCard key={skill.skillKey} skill={skill} config={skillsConfig} language={language}
                       onConfigure={setConfigSkill} onCopyInstall={handleCopyInstall} onSendInstall={handleSendInstall} onToggle={handleToggle}
                       gwReady={canSendToAgent} busyKey={busyKey} message={skillMessages[skill.skillKey] || null}
                       translation={translations[skill.skillKey]} autoTranslate={autoTranslate} />
                   ))}
                 </div>
+              )}
+              {omittedSkills > 0 && (
+                <div className="text-center text-[10px] text-slate-400 dark:text-white/35 mt-2">+{omittedSkills}</div>
               )}
             </>
           )}
@@ -923,7 +963,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
               {(marketLoading || marketSearching) && marketResults.length === 0 && (
                 <div className="flex items-center justify-center py-16 text-slate-400">
                   <span className="material-symbols-outlined text-3xl animate-spin mr-2">progress_activity</span>
-                  <span className="text-xs">{marketSearching ? sk.searching : 'Loading...'}</span>
+                  <span className="text-xs">{marketSearching ? sk.searching : sk.loading}</span>
                 </div>
               )}
               {/* 搜索无结果 */}
@@ -944,7 +984,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
               {marketResults.length > 0 && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {marketResults.map((item: any, i: number) => {
+                    {renderedMarketResults.map((item: any, i: number) => {
                       const slug = item.slug || item.name || `item-${i}`;
                       const marketKey = `market:${slug}`;
                       const mTrans = translations[marketKey];
@@ -987,7 +1027,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                             })()}
                           </div>
                           {/* 描述 */}
-                          <ExpandableDesc text={mTransReady && mTrans?.description ? mTrans.description : (item.summary || item.description || '')} />
+                          <ExpandableDesc text={mTransReady && mTrans?.description ? mTrans.description : (item.summary || item.description || '')} moreLabel={sk.expandMore} />
                           {/* 统计 + 链接 */}
                           <div className="flex items-center gap-3 mt-auto text-[11px] text-slate-400 dark:text-white/35">
                             {stats.downloads > 0 && (
@@ -1024,6 +1064,9 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                       );
                     })}
                   </div>
+                  {omittedMarketResults > 0 && (
+                    <div className="text-center text-[10px] text-slate-400 dark:text-white/35 mt-2">+{omittedMarketResults}</div>
+                  )}
                   {/* 瀑布流加载更多 */}
                   {marketCursor && !marketQuery && (
                     <div className="flex justify-center py-6">

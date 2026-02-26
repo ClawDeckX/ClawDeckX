@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { getTranslation } from '../locales';
+import { Language } from '../types';
 
 interface ConfirmOptions {
   title: string;
@@ -39,6 +41,9 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
     resolveRef.current?.(false);
   }, []);
 
+  const lang = (localStorage.getItem('lang') as Language) || 'zh';
+  const t = getTranslation(lang) as any;
+
   return (
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
@@ -62,7 +67,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 onClick={handleCancel}
                 className="flex-1 py-3.5 text-[13px] font-medium text-slate-600 dark:text-white/80 hover:bg-black/5 dark:hover:bg-white/10 transition-colors border-r border-slate-200/20 dark:border-white/10"
               >
-                {options.cancelText || 'Cancel'}
+                {options.cancelText || t.cancel}
               </button>
               <button
                 onClick={handleConfirm}
@@ -71,7 +76,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     : 'text-primary hover:bg-primary/10'
                   }`}
               >
-                {options.confirmText || 'OK'}
+                {options.confirmText || t.ok}
               </button>
             </div>
           </div>

@@ -1,12 +1,27 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo, createContext, useContext } from 'react';
 import CustomSelect from '../../components/CustomSelect';
+import { getTranslation } from '../../locales';
+import { Language } from '../../types';
 
 // ============================================================================
 // 通用样式常量
 // ============================================================================
-const inputBase = 'h-8 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-md px-3 text-[11px] md:text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors placeholder:text-slate-400 dark:placeholder:text-slate-600';
-const labelBase = 'text-[10px] md:text-xs font-semibold text-slate-500 dark:text-slate-400 select-none';
+const inputBase = 'h-9 md:h-8 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-md px-3 text-[12px] md:text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors placeholder:text-slate-400 dark:placeholder:text-slate-600';
+const labelBase = 'text-[11px] md:text-xs font-semibold text-slate-500 dark:text-slate-400 select-none';
 const descBase = 'text-[11px] md:text-[10px] text-slate-400 dark:text-slate-500 mt-0.5';
+
+type EditorFieldsI18n = Record<string, string>;
+const EditorFieldsI18nContext = createContext<EditorFieldsI18n>({});
+
+export const EditorFieldsI18nProvider: React.FC<{ language: Language; children: React.ReactNode }> = ({ language, children }) => {
+  const value = useMemo(() => {
+    const t = getTranslation(language) as any;
+    return (t && t.cfgEditor) || {};
+  }, [language]);
+  return <EditorFieldsI18nContext.Provider value={value}>{children}</EditorFieldsI18nContext.Provider>;
+};
+
+const useEditorFieldsI18n = () => useContext(EditorFieldsI18nContext);
 
 // ============================================================================
 // Tooltip — 悬停/点击提示气泡
@@ -54,8 +69,8 @@ interface ConfigFieldProps {
 }
 
 export const ConfigField: React.FC<ConfigFieldProps> = ({ label, desc, tooltip, error, children, inline = true }) => (
-  <div className={inline ? 'flex flex-col sm:grid sm:grid-cols-3 sm:items-start gap-1 sm:gap-3 py-1.5' : 'flex flex-col gap-1 py-1.5'}>
-    <div className="flex flex-col">
+  <div className={inline ? 'flex flex-col md:grid md:grid-cols-12 md:items-start gap-2 md:gap-3 py-2 md:py-1.5' : 'flex flex-col gap-2 py-2 md:py-1.5'}>
+    <div className={inline ? 'md:col-span-4 lg:col-span-5 flex flex-col' : 'flex flex-col'}>
       <div className="flex items-center gap-1">
         <label className={labelBase}>{label}</label>
         {tooltip && (
@@ -66,7 +81,7 @@ export const ConfigField: React.FC<ConfigFieldProps> = ({ label, desc, tooltip, 
       </div>
       {desc && <span className={descBase}>{desc}</span>}
     </div>
-    <div className={inline ? 'sm:col-span-2 flex flex-col gap-1' : 'flex flex-col gap-1'}>
+    <div className={inline ? 'md:col-span-8 lg:col-span-7 flex flex-col gap-1.5 min-w-0' : 'flex flex-col gap-1.5'}>
       {children}
       {error && <span className="text-[11px] text-red-500">{error}</span>}
     </div>
@@ -139,7 +154,7 @@ export const NumberField: React.FC<NumberFieldProps> = ({ label, desc, tooltip, 
       max={max}
       step={step}
       placeholder={placeholder}
-      className={`${inputBase} w-full sm:w-32`}
+      className={`${inputBase} w-full md:w-40`}
     />
   </ConfigField>
 );
@@ -159,14 +174,14 @@ interface SelectFieldProps {
 }
 
 export const SelectField: React.FC<SelectFieldProps> = ({ label, desc, tooltip, value, onChange, options, error, allowEmpty }) => {
-  const allOptions = allowEmpty ? [{ value: '', label: '—' }, ...options] : options;
+  const allOptions = allowEmpty ? [{ value: '', label: '-' }, ...options] : options;
   return (
     <ConfigField label={label} desc={desc} tooltip={tooltip} error={error}>
       <CustomSelect
         value={value || ''}
         onChange={onChange}
         options={allOptions}
-        className={`${inputBase} w-full sm:w-48`}
+        className={`${inputBase} w-full md:w-64`}
       />
     </ConfigField>
   );
@@ -210,6 +225,7 @@ interface PasswordFieldProps {
 
 export const PasswordField: React.FC<PasswordFieldProps> = ({ label, desc, tooltip, value, onChange, placeholder, error }) => {
   const [show, setShow] = useState(false);
+  const ed = useEditorFieldsI18n();
   return (
     <ConfigField label={label} desc={desc} tooltip={tooltip} error={error}>
       <div className="relative">
@@ -224,6 +240,7 @@ export const PasswordField: React.FC<PasswordFieldProps> = ({ label, desc, toolt
           type="button"
           onClick={() => setShow(!show)}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          aria-label={show ? ed.hidePassword : ed.showPassword}
         >
           <span className="material-symbols-outlined text-[14px]">{show ? 'visibility_off' : 'visibility'}</span>
         </button>
@@ -246,6 +263,7 @@ interface ArrayFieldProps {
 
 export const ArrayField: React.FC<ArrayFieldProps> = ({ label, desc, tooltip, value, onChange, placeholder }) => {
   const [input, setInput] = useState('');
+  const ed = useEditorFieldsI18n();
   const items = Array.isArray(value) ? value : [];
 
   const add = useCallback(() => {
@@ -268,16 +286,16 @@ export const ArrayField: React.FC<ArrayFieldProps> = ({ label, desc, tooltip, va
           </span>
         ))}
       </div>
-      <div className="flex gap-1.5 mt-1">
+      <div className="flex flex-col sm:flex-row gap-1.5 mt-1">
         <input
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          placeholder={placeholder || 'Enter to add...'}
+          placeholder={placeholder || ed.enterToAdd}
           className={`${inputBase} flex-1`}
         />
-        <button onClick={add} className="h-8 px-2.5 bg-primary/10 text-primary text-[10px] font-bold rounded-md hover:bg-primary/20 transition-colors">+</button>
+        <button onClick={add} className="h-9 md:h-8 px-2.5 bg-primary/10 text-primary text-[11px] md:text-[10px] font-bold rounded-md hover:bg-primary/20 transition-colors">+</button>
       </div>
     </ConfigField>
   );
@@ -315,6 +333,7 @@ function extractDiscordGuildId(input: string): string {
 export const DiscordGuildField: React.FC<DiscordGuildFieldProps> = ({ label, desc, tooltip, value, onChange, placeholder, linkHint }) => {
   const [input, setInput] = useState('');
   const [extracted, setExtracted] = useState<string | null>(null);
+  const ed = useEditorFieldsI18n();
   
   // Convert object to array of guild IDs for display
   const guildsObj = (value && typeof value === 'object' && !Array.isArray(value)) ? value : {};
@@ -362,14 +381,14 @@ export const DiscordGuildField: React.FC<DiscordGuildFieldProps> = ({ label, des
           </span>
         ))}
       </div>
-      <div className="flex gap-1.5 mt-1">
+      <div className="flex flex-col sm:flex-row gap-1.5 mt-1">
         <div className="flex-1 relative">
           <input
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-            placeholder={placeholder || 'Enter to add...'}
+            placeholder={placeholder || ed.enterToAdd}
             className={`${inputBase} w-full ${extracted ? 'pr-24' : ''}`}
           />
           {extracted && (
@@ -378,7 +397,7 @@ export const DiscordGuildField: React.FC<DiscordGuildFieldProps> = ({ label, des
             </span>
           )}
         </div>
-        <button onClick={add} className="h-8 px-2.5 bg-primary/10 text-primary text-[10px] font-bold rounded-md hover:bg-primary/20 transition-colors">+</button>
+        <button onClick={add} className="h-9 md:h-8 px-2.5 bg-primary/10 text-primary text-[11px] md:text-[10px] font-bold rounded-md hover:bg-primary/20 transition-colors">+</button>
       </div>
       {linkHint && (
         <p className="text-[10px] text-slate-400 dark:text-white/40 mt-1">{linkHint}</p>
@@ -403,6 +422,7 @@ interface KeyValueFieldProps {
 export const KeyValueField: React.FC<KeyValueFieldProps> = ({ label, desc, tooltip, value, onChange, keyPlaceholder, valuePlaceholder }) => {
   const [newKey, setNewKey] = useState('');
   const [newVal, setNewVal] = useState('');
+  const ed = useEditorFieldsI18n();
   const entries = Object.entries(value || {});
 
   const add = useCallback(() => {
@@ -434,11 +454,11 @@ export const KeyValueField: React.FC<KeyValueFieldProps> = ({ label, desc, toolt
           ))}
         </div>
       )}
-      <div className="flex gap-1.5 mt-1">
-        <input type="text" value={newKey} onChange={e => setNewKey(e.target.value)} placeholder={keyPlaceholder || 'Key'} className={`${inputBase} w-28`} />
-        <input type="text" value={newVal} onChange={e => setNewVal(e.target.value)} placeholder={valuePlaceholder || 'Value'} className={`${inputBase} flex-1`}
+      <div className="flex flex-col sm:flex-row gap-1.5 mt-1">
+        <input type="text" value={newKey} onChange={e => setNewKey(e.target.value)} placeholder={keyPlaceholder || ed.keyPlaceholder} className={`${inputBase} w-full sm:w-32`} />
+        <input type="text" value={newVal} onChange={e => setNewVal(e.target.value)} placeholder={valuePlaceholder || ed.valuePlaceholder} className={`${inputBase} flex-1`}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-        <button onClick={add} className="h-8 px-2.5 bg-primary/10 text-primary text-[10px] font-bold rounded-md hover:bg-primary/20 transition-colors">+</button>
+        <button onClick={add} className="h-9 md:h-8 px-2.5 bg-primary/10 text-primary text-[11px] md:text-[10px] font-bold rounded-md hover:bg-primary/20 transition-colors">+</button>
       </div>
     </ConfigField>
   );
@@ -460,12 +480,18 @@ interface ConfigSectionProps {
 
 export const ConfigSection: React.FC<ConfigSectionProps> = ({ title, icon, iconColor = 'text-primary', desc, children, collapsible = true, defaultOpen = true, actions }) => {
   const [open, setOpen] = useState(defaultOpen);
+  const toggleSection = () => {
+    if (collapsible) setOpen(!open);
+  };
 
   return (
-    <div className={`bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] rounded-xl transition-colors ${open ? 'overflow-visible' : 'overflow-hidden'}`}>
+    <div className={`bg-slate-50/80 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] rounded-xl transition-colors ${open ? 'overflow-visible' : 'overflow-hidden'}`}>
       <div
-        className={`flex items-center gap-2.5 px-4 py-2.5 ${collapsible ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-white/[0.03]' : ''} transition-colors`}
-        onClick={() => collapsible && setOpen(!open)}
+        className={`flex items-center gap-2.5 px-3 md:px-4 py-3 md:py-2.5 ${collapsible ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-white/[0.03]' : ''} transition-colors`}
+        onClick={toggleSection}
+        role={collapsible ? 'button' : undefined}
+        aria-expanded={collapsible ? open : undefined}
+        aria-label={collapsible ? title : undefined}
       >
         <span className={`material-symbols-outlined text-[18px] ${iconColor}`}>{icon}</span>
         <div className="flex-1 min-w-0">
@@ -477,7 +503,7 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({ title, icon, iconC
           <span className={`material-symbols-outlined text-[16px] text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
         )}
       </div>
-      {open && <div className="px-4 pb-3 border-t border-slate-100 dark:border-white/[0.04]">{children}</div>}
+      {open && <div className="px-3 md:px-4 pb-3.5 md:pb-3 border-t border-slate-100 dark:border-white/[0.04]">{children}</div>}
     </div>
   );
 };
@@ -497,12 +523,18 @@ interface ConfigCardProps {
 
 export const ConfigCard: React.FC<ConfigCardProps> = ({ title, icon, children, onDelete, actions, collapsible = true, defaultOpen = false }) => {
   const [open, setOpen] = useState(defaultOpen);
+  const toggleCard = () => {
+    if (collapsible) setOpen(!open);
+  };
 
   return (
-    <div className="border border-slate-200 dark:border-white/[0.06] rounded-lg overflow-hidden bg-white dark:bg-white/[0.01] mt-2">
+    <div className="border border-slate-200 dark:border-white/[0.06] rounded-lg overflow-hidden bg-white dark:bg-white/[0.01] mt-2.5">
       <div
-        className={`flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-white/[0.02] ${collapsible ? 'cursor-pointer' : ''}`}
-        onClick={() => collapsible && setOpen(!open)}
+        className={`flex items-center gap-2 px-3 py-2.5 bg-slate-50 dark:bg-white/[0.02] ${collapsible ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-white/[0.04]' : ''}`}
+        onClick={toggleCard}
+        role={collapsible ? 'button' : undefined}
+        aria-expanded={collapsible ? open : undefined}
+        aria-label={collapsible ? title : undefined}
       >
         {icon && <span className="material-symbols-outlined text-[16px] text-slate-500">{icon}</span>}
         <span className="text-[11px] md:text-xs font-bold text-slate-700 dark:text-slate-300 flex-1 truncate">{title}</span>
@@ -516,7 +548,7 @@ export const ConfigCard: React.FC<ConfigCardProps> = ({ title, icon, children, o
           <span className={`material-symbols-outlined text-[14px] text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
         )}
       </div>
-      {(!collapsible || open) && <div className="px-3 pb-2">{children}</div>}
+      {(!collapsible || open) && <div className="px-3 pb-2.5">{children}</div>}
     </div>
   );
 };
@@ -532,7 +564,7 @@ interface AddButtonProps {
 export const AddButton: React.FC<AddButtonProps> = ({ label, onClick }) => (
   <button
     onClick={onClick}
-    className="mt-2 w-full h-8 border border-dashed border-slate-300 dark:border-white/10 rounded-lg text-[10px] md:text-[11px] font-bold text-slate-400 dark:text-slate-500 hover:text-primary hover:border-primary dark:hover:text-primary dark:hover:border-primary transition-colors flex items-center justify-center gap-1"
+    className="mt-2.5 w-full h-9 md:h-8 border border-dashed border-slate-300 dark:border-white/10 rounded-lg text-[11px] md:text-[11px] font-bold text-slate-400 dark:text-slate-500 hover:text-primary hover:border-primary dark:hover:text-primary dark:hover:border-primary transition-colors flex items-center justify-center gap-1"
   >
     <span className="material-symbols-outlined text-[14px]">add</span>
     {label}

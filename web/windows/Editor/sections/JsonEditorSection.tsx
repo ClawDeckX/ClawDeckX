@@ -31,14 +31,14 @@ export const JsonEditorSection: React.FC<JsonEditorSectionProps> = ({ config, to
       JSON.parse(value);
       setError('');
     } catch (e: any) {
-      setError(e.message || 'Invalid JSON');
+      setError(e.message || ed.invalidJson);
     }
   }, []);
 
   const handleApply = useCallback(() => {
     const ok = fromJSON(text);
     if (!ok) {
-      setError('Failed to parse JSON');
+      setError(ed.parseJsonFailed);
     } else {
       setError('');
     }
@@ -52,9 +52,9 @@ export const JsonEditorSection: React.FC<JsonEditorSectionProps> = ({ config, to
       setLineCount(formatted.split('\n').length);
       setError('');
     } catch (e: any) {
-      setError(e.message || 'Invalid JSON');
+      setError(e.message || ed.invalidJson);
     }
-  }, [text]);
+  }, [text, ed]);
 
   return (
     <div className="space-y-3">

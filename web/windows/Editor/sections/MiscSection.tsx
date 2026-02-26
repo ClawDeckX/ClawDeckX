@@ -24,15 +24,15 @@ export const MiscSection: React.FC<SectionProps> = ({ setField, getField, delete
 
       {/* UI */}
       <ConfigSection title={es.uiConfig} icon="palette" iconColor="text-pink-500" defaultOpen={false}>
-        <TextField label={es.seamColor} tooltip={tip('ui.seamColor')} value={getField(['ui', 'seamColor']) || ''} onChange={v => setField(['ui', 'seamColor'], v)} placeholder="#007bff" />
-        <TextField label={es.assistantName} tooltip={tip('ui.assistant.name')} value={getField(['ui', 'assistant', 'name']) || ''} onChange={v => setField(['ui', 'assistant', 'name'], v)} mono={false} placeholder="OpenClaw" />
-        <TextField label={es.assistantAvatar} tooltip={tip('ui.assistant.avatar')} value={getField(['ui', 'assistant', 'avatar']) || ''} onChange={v => setField(['ui', 'assistant', 'avatar'], v)} placeholder="https://..." />
+        <TextField label={es.seamColor} tooltip={tip('ui.seamColor')} value={getField(['ui', 'seamColor']) || ''} onChange={v => setField(['ui', 'seamColor'], v)} placeholder={es.phColorHex} />
+        <TextField label={es.assistantName} tooltip={tip('ui.assistant.name')} value={getField(['ui', 'assistant', 'name']) || ''} onChange={v => setField(['ui', 'assistant', 'name'], v)} mono={false} placeholder={es.phAssistantName} />
+        <TextField label={es.assistantAvatar} tooltip={tip('ui.assistant.avatar')} value={getField(['ui', 'assistant', 'avatar']) || ''} onChange={v => setField(['ui', 'assistant', 'avatar'], v)} placeholder={es.phHttps} />
       </ConfigSection>
 
       {/* Env */}
       <ConfigSection title={es.envVars} icon="settings_system_daydream" iconColor="text-slate-500" defaultOpen={false}>
-        <TextField label={es.shellEnv} tooltip={tip('env.shellEnv')} value={getField(['env', 'shellEnv']) || ''} onChange={v => setField(['env', 'shellEnv'], v)} placeholder="bash / zsh" />
-        <KeyValueField label={es.variables} tooltip={tip('env.vars')} value={getField(['env', 'vars']) || {}} onChange={v => setField(['env', 'vars'], v)} keyPlaceholder="KEY" valuePlaceholder="value" />
+        <TextField label={es.shellEnv} tooltip={tip('env.shellEnv')} value={getField(['env', 'shellEnv']) || ''} onChange={v => setField(['env', 'shellEnv'], v)} placeholder={es.phShellName} />
+        <KeyValueField label={es.variables} tooltip={tip('env.vars')} value={getField(['env', 'vars']) || {}} onChange={v => setField(['env', 'vars'], v)} />
       </ConfigSection>
 
     </div>

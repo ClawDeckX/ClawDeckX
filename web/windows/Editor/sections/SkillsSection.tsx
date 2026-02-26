@@ -21,8 +21,8 @@ export const SkillsSection: React.FC<SectionProps> = ({ setField, getField, dele
   return (
     <div className="space-y-4">
       <ConfigSection title={es.loadConfig} icon="download" iconColor="text-violet-500">
-        <ArrayField label={es.allowBundled} tooltip={tip('skills.allowBundled')} value={g(['allowBundled']) || []} onChange={v => s(['allowBundled'], v)} placeholder="skill_name" />
-        <ArrayField label={es.extraDirs} tooltip={tip('skills.load.extraDirs')} value={g(['load', 'extraDirs']) || []} onChange={v => s(['load', 'extraDirs'], v)} placeholder="/path/to/skills" />
+        <ArrayField label={es.allowBundled} tooltip={tip('skills.allowBundled')} value={g(['allowBundled']) || []} onChange={v => s(['allowBundled'], v)} placeholder={es.phSkillName} />
+        <ArrayField label={es.extraDirs} tooltip={tip('skills.load.extraDirs')} value={g(['load', 'extraDirs']) || []} onChange={v => s(['load', 'extraDirs'], v)} placeholder={es.phSkillsPath} />
         <SwitchField label={es.watch} tooltip={tip('skills.load.watch')} value={g(['load', 'watch']) !== false} onChange={v => s(['load', 'watch'], v)} />
         <NumberField label={es.watchDebounceMs} tooltip={tip('skills.load.watchDebounceMs')} value={g(['load', 'watchDebounceMs'])} onChange={v => s(['load', 'watchDebounceMs'], v)} min={0} />
       </ConfigSection>
@@ -46,8 +46,8 @@ export const SkillsSection: React.FC<SectionProps> = ({ setField, getField, dele
             return (
               <ConfigCard key={key} title={key} icon="extension" onDelete={() => deleteField(['skills', 'entries', key])}>
                 <SwitchField label={es.enabled} value={entry.enabled !== false} onChange={v => s(['entries', key, 'enabled'], v)} />
-                <PasswordField label="API Key" value={entry.apiKey || ''} onChange={v => s(['entries', key, 'apiKey'], v)} />
-                <KeyValueField label={es.envVars} value={entry.env || {}} onChange={v => s(['entries', key, 'env'], v)} keyPlaceholder="KEY" valuePlaceholder="value" />
+                <PasswordField label={es.apiKey} value={entry.apiKey || ''} onChange={v => s(['entries', key, 'apiKey'], v)} />
+                <KeyValueField label={es.envVars} value={entry.env || {}} onChange={v => s(['entries', key, 'env'], v)} />
               </ConfigCard>
             );
           })

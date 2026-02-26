@@ -359,12 +359,12 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({ language }) 
     setFormIcon(tpl.icon);
     setFormCategory(tpl.category);
     setFormTags(tpl.tags);
-    setFormAuthor(tpl.author || 'user');
+    setFormAuthor(tpl.author || es.tplAuthorDefault);
     setFormLangs(parseI18nToLangs(tpl.i18n));
     setActiveLangIdx(0);
     setContentTab('edit');
     setShowModal(true);
-  }, []);
+  }, [es]);
 
   // ---------------------------------------------------------------------------
   // Export
@@ -732,7 +732,7 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({ language }) 
               <p className="text-[13px] font-bold text-slate-700 dark:text-white/80">
                 {isNew ? es.tplAdd : es.tplEdit}
               </p>
-              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-white/60 transition-colors">
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-white/60 transition-colors" title={es.tplClose} aria-label={es.tplClose}>
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
@@ -929,7 +929,7 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({ language }) 
                     <p className="text-[11px] text-slate-400 dark:text-white/40">{resolved.desc}</p>
                   </div>
                 </div>
-                <button onClick={() => setPreviewTpl(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white/60 transition-colors">
+                <button onClick={() => setPreviewTpl(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white/60 transition-colors" title={es.tplClose} aria-label={es.tplClose}>
                   <span className="material-symbols-outlined text-[18px]">close</span>
                 </button>
               </div>

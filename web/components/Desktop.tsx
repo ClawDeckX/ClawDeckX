@@ -94,16 +94,25 @@ const Desktop: React.FC<DesktopProps> = ({
     { id: 'alerts', titleKey: 'alerts', icon: 'approval', gradient: 'from-[#FF453A] to-[#C33B32]' },
     { id: 'scheduler', titleKey: 'scheduler', icon: 'event_repeat', gradient: 'from-[#FF375F] to-[#BF2A47]' },
     { id: 'skills', titleKey: 'skills', icon: 'extension', gradient: 'from-[#FF9500] to-[#E67E00]' },
+    { id: 'maintenance', titleKey: 'maintenance', icon: 'health_and_safety', gradient: 'from-[#22C55E] to-[#15803D]' },
     { id: 'nodes', titleKey: 'nodes', icon: 'hub', gradient: 'from-[#10B981] to-[#059669]' },
     // 配置与工具
     { id: 'config_mgmt', titleKey: 'config_mgmt', icon: 'analytics', gradient: 'from-[#F472B6] to-[#DB2777]' },
-    // { id: 'security', titleKey: 'security', icon: 'shield_lock', gradient: 'from-[#FF9F0A] to-[#FF8000]' }, // hidden: audit-only, no real interception
     { id: 'settings', titleKey: 'settings', icon: 'settings', gradient: 'from-[#8E8E93] to-[#636366]' },
     { id: 'usage_wizard', titleKey: 'usage_wizard', icon: 'auto_fix_high', gradient: 'from-[#A855F7] to-[#7C3AED]' },
     { id: 'setup_wizard', titleKey: 'setup_wizard', icon: 'rocket_launch', gradient: 'from-[#FF6B6B] to-[#FF3D3D]' },
   ];
+  const desktopApps = useMemo(() => {
+    // Defensive normalization: keep editor always visible on desktop.
+    const map = new Map<WindowID, AppInfo>();
+    allDesktopApps.forEach((a) => map.set(a.id, a));
+    if (!map.has('editor')) {
+      map.set('editor', { id: 'editor', titleKey: 'editor', icon: 'code_blocks', gradient: 'from-[#14B8A6] to-[#0D9488]' });
+    }
+    return Array.from(map.values());
+  }, [allDesktopApps]);
 
-  const appIds = useMemo(() => allDesktopApps.map(a => a.id), []);
+  const appIds = useMemo(() => desktopApps.map(a => a.id), [desktopApps]);
   const { positions: iconPositions, previewPositions, dragState, getPixelPos, onIconPointerDown, config: iconGridConfig } = useIconGrid(appIds);
 
   // #6 Dock bounce notification — track badge changes
@@ -152,8 +161,9 @@ const Desktop: React.FC<DesktopProps> = ({
       icon: 'shield_lock',
       gradient: 'from-[#3B82F6] to-[#1E40AF]',
       apps: [
-        // { id: 'security', icon: 'shield_lock', color: 'bg-orange-600' }, // hidden: audit-only
+        { id: 'editor', icon: 'code_blocks', color: 'bg-teal-600' },
         { id: 'nodes', icon: 'hub', color: 'bg-sky-600' },
+        { id: 'maintenance', icon: 'health_and_safety', color: 'bg-emerald-600' },
         { id: 'settings', icon: 'settings', color: 'bg-zinc-600' },
         { id: 'setup_wizard', icon: 'rocket_launch', color: 'bg-red-500' },
       ]
@@ -249,7 +259,7 @@ const Desktop: React.FC<DesktopProps> = ({
             gridTemplateRows: 'repeat(auto-fill, minmax(100px, 120px))'
           }}
         >
-          {allDesktopApps.map(app => (
+          {desktopApps.map(app => (
             <div
               key={app.id}
               onClick={() => handleAppClick(app.id)}
@@ -271,7 +281,7 @@ const Desktop: React.FC<DesktopProps> = ({
 
         {/* 桌面端：绝对定位 + 拖拽 + 网格吸附 + 让位动画 */}
         <div className="hidden md:block w-full h-full relative">
-          {allDesktopApps.map(app => {
+          {desktopApps.map(app => {
             const isDragging = dragState?.id === app.id;
             const displayPos = isDragging ? iconPositions[app.id] : (previewPositions[app.id] || iconPositions[app.id]);
             if (!displayPos) return null;
@@ -322,11 +332,20 @@ const Desktop: React.FC<DesktopProps> = ({
           <div ref={popupRef} className={`mb-6 mac-glass p-3 md:p-5 rounded-[1.5rem] md:rounded-[2rem] shadow-2xl border transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-6 mx-4 md:mx-0 ${theme === 'dark' ? 'bg-[#1e1e1e]/90 border-white/10' : 'bg-white/90 border-slate-900/10'}`}>
             <div className="grid gap-4 md:gap-6" style={{ gridTemplateColumns: `repeat(${Math.min(groups.find(g => g.id === activeGroupId)?.apps.length || 4, 4)}, minmax(0, 1fr))` }}>
               {groups.find(g => g.id === activeGroupId)?.apps.map(app => {
-                const appData = allDesktopApps.find(a => a.id === app.id);
+                const appData = desktopApps.find(a => a.id === app.id);
+                const win = activeWindows.find(w => w.id === app.id);
+                const isOpen = !!win?.isOpen;
+                const isMinimized = !!win?.isOpen && !!win?.isMinimized;
+                const minimizedRingClass = theme === 'dark'
+                  ? 'ring-4 ring-sky-200/95 shadow-[0_0_0_2px_rgba(186,230,253,0.25),0_0_16px_rgba(56,189,248,0.55)]'
+                  : 'ring-4 ring-blue-500/95 shadow-[0_0_0_2px_rgba(59,130,246,0.22),0_0_14px_rgba(59,130,246,0.35)]';
                 return (
                   <div key={app.id} onClick={() => handleAppClick(app.id)} className="flex flex-col items-center gap-1.5 md:gap-2 group cursor-pointer active:scale-95 transition-all">
-                    <div className={`relative w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-b ${appData?.gradient} flex items-center justify-center shadow-lg border border-black/10`}>
-                      <span className="material-symbols-outlined text-2xl md:text-3xl text-white">{app.icon}</span>
+                    <div className={`relative w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-b ${appData?.gradient} flex items-center justify-center shadow-lg border border-black/10 ${isMinimized ? minimizedRingClass : ''}`}>
+                      <span className={`material-symbols-outlined text-2xl md:text-3xl text-white ${isOpen && !isMinimized ? '' : 'opacity-95'}`}>{app.icon}</span>
+                      {isOpen && !isMinimized && (
+                        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-[5px] h-[5px] rounded-full bg-white/90 dark:bg-white" />
+                      )}
                     </div>
                     <span className={`text-[11px] md:text-[11px] font-bold text-center leading-tight whitespace-nowrap ${theme === 'dark' ? 'text-white/90' : 'text-slate-800'}`}>{appData ? (t[appData.titleKey] as string) : ''}</span>
                   </div>

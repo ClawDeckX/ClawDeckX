@@ -12,6 +12,8 @@ interface SetupWizardProps {
   onOpenUsageWizard?: () => void;
 }
 
+const SETUP_WIZARD_AUTO_OPEN_DISABLED_KEY = 'setup_wizard_disable_auto_open';
+
 type WizardPhase = 'scan' | 'install' | 'starting' | 'complete';
 
 interface ToolInfo {
@@ -64,6 +66,7 @@ interface SetupEvent {
 const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEditor, onOpenUsageWizard }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const sw = (t as any).sw || {};
+  const common = (t as any).common || {};
 
   const [phase, setPhase] = useState<WizardPhase>('scan');
   const [scanResult, setScanResult] = useState<EnvironmentReport | null>(null);
@@ -97,6 +100,11 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
   const [zerotierNetworkId, setZerotierNetworkId] = useState('');
   const [installTailscale, setInstallTailscale] = useState(false);
   const [sudoPassword, setSudoPassword] = useState('');
+  const [disableAutoOpen, setDisableAutoOpen] = useState<boolean>(() => localStorage.getItem(SETUP_WIZARD_AUTO_OPEN_DISABLED_KEY) === '1');
+
+  useEffect(() => {
+    localStorage.setItem(SETUP_WIZARD_AUTO_OPEN_DISABLED_KEY, disableAutoOpen ? '1' : '0');
+  }, [disableAutoOpen]);
 
   // 扫描环境
   const scanEnvironment = useCallback(async () => {
@@ -185,12 +193,12 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
       });
 
       if (!response.ok) {
-        throw new Error(sw.installFailed || 'Install failed');
+        throw new Error(sw.installFailed);
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new Error(sw.streamFailed || 'Cannot read stream');
+        throw new Error(sw.streamFailed);
       }
 
       const decoder = new TextDecoder();
@@ -242,7 +250,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
                   setPhase('complete');
                 }
                 // 重新扫描环境以获取安装后的版本号等信息
-                setLogs(prev => [...prev, `\n🔍 ${sw.runningDiagnostics || '正在全面诊断中...'}`]);
+                setLogs(prev => [...prev, `\n🔍 ${sw.runningDiagnostics}`]);
                 scanEnvironment();
               }
             } catch { }
@@ -291,7 +299,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
         if (data.running) {
           clearInterval(interval);
           // 添加明显的诊断提示
-          setLogs(prev => [...prev, `\n⏳ ${sw.runningFullDiagnostics || '正在进行全面诊断，请稍等...'}`]);
+          setLogs(prev => [...prev, `\n⏳ ${sw.runningFullDiagnostics}`]);
           scanEnvironment();
           setPhase('complete');
         }
@@ -316,6 +324,18 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
           </h1>
           <p className="text-sm text-slate-500 dark:text-white/60">
             {sw.subtitle}
+          </p>
+          <label className="mt-3 inline-flex items-center gap-2 text-xs text-slate-500 dark:text-white/60 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={disableAutoOpen}
+              onChange={(e) => setDisableAutoOpen(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary/30"
+            />
+            <span>{sw.disableAutoOpen}</span>
+          </label>
+          <p className="mt-1 text-[11px] text-slate-400 dark:text-white/40">
+            {sw.disableAutoOpenHint}
           </p>
         </div>
 
@@ -404,7 +424,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
                     </div>
                     <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
                       <p className="text-[10px] text-slate-400 uppercase">{sw.pkgMgr}</p>
-                      <p className="text-sm font-medium text-slate-700 dark:text-white/80">{scanResult.packageManager || 'N/A'}</p>
+                      <p className="text-sm font-medium text-slate-700 dark:text-white/80">{scanResult.packageManager || common.na}</p>
                     </div>
                   </div>
                 </div>
@@ -950,17 +970,17 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
                               {isZeroTier && item.status === 'ok' && (
                                 <a href="https://my.zerotier.com/" target="_blank" rel="noopener noreferrer"
                                   className="flex items-center gap-1 px-2 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors shrink-0"
-                                  title={sw.zerotierManageHint || '前往 ZeroTier 控制中心管理网络'}>
+                      title={sw.zerotierManageHint}>
                                   <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                                  <span className="text-[10px] font-bold whitespace-nowrap">{sw.zerotierManage || '管理网络'}</span>
+                        <span className="text-[10px] font-bold whitespace-nowrap">{sw.zerotierManage}</span>
                                 </a>
                               )}
                               {isTailscale && item.status === 'ok' && (
                                 <a href="https://login.tailscale.com/admin" target="_blank" rel="noopener noreferrer"
                                   className="flex items-center gap-1 px-2 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors shrink-0"
-                                  title={sw.tailscaleManageHint || '前往 Tailscale 管理后台登录并配置'}>
+                      title={sw.tailscaleManageHint}>
                                   <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                                  <span className="text-[10px] font-bold whitespace-nowrap">{sw.tailscaleManage || '登录配置'}</span>
+                        <span className="text-[10px] font-bold whitespace-nowrap">{sw.tailscaleManage}</span>
                                 </a>
                               )}
                             </div>

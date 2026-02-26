@@ -26,18 +26,22 @@ export const AgentsSection: React.FC<SectionProps> = ({ config, setField, getFie
   const agentList: any[] = Array.isArray(rawAgentList) ? rawAgentList : [];
   const rawBindings = getField(['bindings']);
   const bindings: any[] = Array.isArray(rawBindings) ? rawBindings : [];
-
   return (
     <div className="space-y-4">
       <ConfigSection title={es.defaults} icon="tune" iconColor="text-purple-500">
         <NumberField label={es.maxConcurrent} desc={es.maxConcurrentDesc} tooltip={tip('agents.defaults.maxConcurrent')} value={d(['maxConcurrent'])} onChange={v => sd(['maxConcurrent'], v)} min={1} max={64} />
         <NumberField label={es.subagentConcurrent} tooltip={tip('agents.defaults.subagents.maxConcurrent')} value={d(['subagents', 'maxConcurrent'])} onChange={v => sd(['subagents', 'maxConcurrent'], v)} min={1} max={32} />
-        <TextField label={es.workspace} tooltip={tip('agents.defaults.workspace')} value={d(['workspace']) || ''} onChange={v => sd(['workspace'], v)} placeholder="~/workspace" />
+        <TextField label={es.workspace} tooltip={tip('agents.defaults.workspace')} value={d(['workspace']) || ''} onChange={v => sd(['workspace'], v)} placeholder={es.phWorkspacePath} />
         <NumberField label={es.timeoutS} tooltip={tip('agents.defaults.timeoutSeconds')} value={d(['timeoutSeconds'])} onChange={v => sd(['timeoutSeconds'], v)} min={0} />
         <NumberField label={es.mediaMaxMb} tooltip={tip('agents.defaults.mediaMaxMb')} value={d(['mediaMaxMb'])} onChange={v => sd(['mediaMaxMb'], v)} min={0} />
       </ConfigSection>
 
-      <ConfigSection title={es.behavior} icon="psychology" iconColor="text-indigo-500">
+      <ConfigSection
+        title={es.behavior}
+        icon="psychology"
+        iconColor="text-indigo-500"
+        desc={`${es.thinkingDefault}: ${d(['thinkingDefault']) || 'off'} | ${es.typingMode}: ${d(['typingMode']) || 'never'}`}
+      >
         <SelectField label={es.thinkingDefault} tooltip={tip('agents.defaults.thinkingDefault')} value={d(['thinkingDefault']) || 'off'} onChange={v => sd(['thinkingDefault'], v)} options={THINKING_OPTIONS} />
         <SelectField label={es.subagentThinking} tooltip={tip('agents.defaults.subagents.thinking')} value={d(['subagents', 'thinking']) || 'off'} onChange={v => sd(['subagents', 'thinking'], v)} options={THINKING_OPTIONS} />
         <SelectField label={es.verboseDefault} tooltip={tip('agents.defaults.verboseDefault')} value={d(['verboseDefault']) || 'off'} onChange={v => sd(['verboseDefault'], v)} options={VERBOSE_OPTIONS} />
@@ -75,31 +79,31 @@ export const AgentsSection: React.FC<SectionProps> = ({ config, setField, getFie
 
       <ConfigSection title={es.sandbox} icon="shield" iconColor="text-emerald-500" defaultOpen={false}>
         <SwitchField label={es.dockerEnabled} tooltip={tip('agents.defaults.sandbox.docker.enabled')} value={d(['sandbox', 'docker', 'enabled']) === true} onChange={v => sd(['sandbox', 'docker', 'enabled'], v)} />
-        <TextField label={es.image} tooltip={tip('agents.defaults.sandbox.docker.image')} value={d(['sandbox', 'docker', 'image']) || ''} onChange={v => sd(['sandbox', 'docker', 'image'], v)} placeholder="node:22-slim" />
-        <TextField label={es.network} tooltip={tip('agents.defaults.sandbox.docker.network')} value={d(['sandbox', 'docker', 'network']) || ''} onChange={v => sd(['sandbox', 'docker', 'network'], v)} placeholder="host" />
+        <TextField label={es.image} tooltip={tip('agents.defaults.sandbox.docker.image')} value={d(['sandbox', 'docker', 'image']) || ''} onChange={v => sd(['sandbox', 'docker', 'image'], v)} placeholder={es.phDockerImage} />
+        <TextField label={es.network} tooltip={tip('agents.defaults.sandbox.docker.network')} value={d(['sandbox', 'docker', 'network']) || ''} onChange={v => sd(['sandbox', 'docker', 'network'], v)} placeholder={es.phHost} />
       </ConfigSection>
 
       <ConfigSection
         title={es.agentList}
         icon="groups"
         iconColor="text-purple-500"
-        desc={`${agentList.length} ${es.agentDefaultName || 'agents'}`}
+        desc={`${agentList.length} ${es.agentDefaultName}`}
         defaultOpen={false}
       >
         {agentList.map((agent: any, i: number) => (
-          <ConfigCard key={i} title={agent.name || agent.id || `${es.agentDefaultName || 'Agent'} ${i + 1}`} icon="smart_toy" onDelete={() => {
+          <ConfigCard key={i} title={agent.name || agent.id || `${es.agentDefaultName} ${i + 1}`} icon="smart_toy" onDelete={() => {
             const newList = agentList.filter((_: any, j: number) => j !== i);
             setField(['agents', 'list'], newList);
           }}>
-            <TextField label={es.id || "ID"} value={agent.id || ''} onChange={v => setField(['agents', 'list', String(i), 'id'], v)} />
+            <TextField label={es.id} value={agent.id || ''} onChange={v => setField(['agents', 'list', String(i), 'id'], v)} />
             <TextField label={es.name} value={agent.name || ''} onChange={v => setField(['agents', 'list', String(i), 'name'], v)} mono={false} />
-            <TextField label={es.avatar} tooltip={tip('agents.list.avatar')} value={agent.avatar || ''} onChange={v => setField(['agents', 'list', String(i), 'avatar'], v)} mono={false} placeholder="http://..." />
+            <TextField label={es.avatar} tooltip={tip('agents.list.avatar')} value={agent.avatar || ''} onChange={v => setField(['agents', 'list', String(i), 'avatar'], v)} mono={false} placeholder={es.phHttpUrl} />
             <TextField label={es.systemPrompt} value={agent.systemPrompt || ''} onChange={v => setField(['agents', 'list', String(i), 'systemPrompt'], v)} mono={false} multiline />
-            <TextField label={es.model} value={agent.model?.primary || ''} onChange={v => setField(['agents', 'list', String(i), 'model', 'primary'], v)} placeholder="provider/model-id" />
+            <TextField label={es.model} value={agent.model?.primary || ''} onChange={v => setField(['agents', 'list', String(i), 'model', 'primary'], v)} placeholder={es.phProviderModelId} />
 
             {/* Overrides */}
-            <SelectField label={es.thinkingDefault} tooltip={tip('agents.list.thinking')} value={agent.thinking || ''} onChange={v => setField(['agents', 'list', String(i), 'thinking'], v)} options={[{ value: '', label: es.default || 'Default' }, ...THINKING_OPTIONS]} />
-            <TextField label={es.subagentModel} tooltip={tip('agents.list.subagentModel')} value={agent.subagents?.model || ''} onChange={v => setField(['agents', 'list', String(i), 'subagents', 'model'], v)} placeholder="Use default" />
+            <SelectField label={es.thinkingDefault} tooltip={tip('agents.list.thinking')} value={agent.thinking || ''} onChange={v => setField(['agents', 'list', String(i), 'thinking'], v)} options={[{ value: '', label: es.default }, ...THINKING_OPTIONS]} />
+            <TextField label={es.subagentModel} tooltip={tip('agents.list.subagentModel')} value={agent.subagents?.model || ''} onChange={v => setField(['agents', 'list', String(i), 'subagents', 'model'], v)} placeholder={es.phUseDefault} />
           </ConfigCard>
         ))}
         <AddButton label={es.addAgent} onClick={() => {
@@ -127,10 +131,10 @@ export const AgentsSection: React.FC<SectionProps> = ({ config, setField, getFie
               }} />
               <TextField label={es.channel} value={b.match?.channel || ''} onChange={v => {
                 const next = [...bindings]; next[i] = { ...next[i], match: { ...(next[i].match || {}), channel: v } }; setField(['bindings'], next);
-              }} placeholder="telegram" />
+              }} placeholder={es.phTelegramChannel} />
               <TextField label={es.peer} value={b.match?.peer || ''} onChange={v => {
                 const next = [...bindings]; next[i] = { ...next[i], match: { ...(next[i].match || {}), peer: v } }; setField(['bindings'], next);
-              }} placeholder="user_id" />
+              }} placeholder={es.phUserId} />
             </ConfigCard>
           ))
         )}

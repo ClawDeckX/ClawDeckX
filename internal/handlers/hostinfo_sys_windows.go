@@ -3,8 +3,8 @@
 package handlers
 
 import (
+	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 )
 
@@ -64,36 +64,55 @@ func fileTimeToUint64(ft fileTime) uint64 {
 	return uint64(ft.HighDateTime)<<32 | uint64(ft.LowDateTime)
 }
 
+var (
+	cpuUsageMu     sync.Mutex
+	cpuLastIdle    uint64
+	cpuLastTotal   uint64
+	cpuLastUsage   float64
+	cpuSampledOnce bool
+)
+
 func collectCpuUsage() float64 {
-	var idleTime1, kernelTime1, userTime1 fileTime
+	var idleTime, kernelTime, userTime fileTime
 	ret, _, _ := procGetSystemTimes.Call(
-		uintptr(unsafe.Pointer(&idleTime1)),
-		uintptr(unsafe.Pointer(&kernelTime1)),
-		uintptr(unsafe.Pointer(&userTime1)),
+		uintptr(unsafe.Pointer(&idleTime)),
+		uintptr(unsafe.Pointer(&kernelTime)),
+		uintptr(unsafe.Pointer(&userTime)),
 	)
 	if ret == 0 {
-		return 0
+		cpuUsageMu.Lock()
+		defer cpuUsageMu.Unlock()
+		return cpuLastUsage
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	idle := fileTimeToUint64(idleTime)
+	total := fileTimeToUint64(kernelTime) + fileTimeToUint64(userTime)
 
-	var idleTime2, kernelTime2, userTime2 fileTime
-	ret, _, _ = procGetSystemTimes.Call(
-		uintptr(unsafe.Pointer(&idleTime2)),
-		uintptr(unsafe.Pointer(&kernelTime2)),
-		uintptr(unsafe.Pointer(&userTime2)),
-	)
-	if ret == 0 {
-		return 0
+	cpuUsageMu.Lock()
+	defer cpuUsageMu.Unlock()
+
+	if !cpuSampledOnce {
+		cpuLastIdle = idle
+		cpuLastTotal = total
+		cpuSampledOnce = true
+		return cpuLastUsage
 	}
 
-	idle := fileTimeToUint64(idleTime2) - fileTimeToUint64(idleTime1)
-	kernel := fileTimeToUint64(kernelTime2) - fileTimeToUint64(kernelTime1)
-	user := fileTimeToUint64(userTime2) - fileTimeToUint64(userTime1)
+	totalDelta := total - cpuLastTotal
+	idleDelta := idle - cpuLastIdle
+	cpuLastIdle = idle
+	cpuLastTotal = total
 
-	total := kernel + user
-	if total == 0 {
-		return 0
+	if totalDelta == 0 {
+		return cpuLastUsage
 	}
-	return float64(total-idle) / float64(total) * 100
+
+	usage := float64(totalDelta-idleDelta) / float64(totalDelta) * 100
+	if usage < 0 {
+		usage = 0
+	} else if usage > 100 {
+		usage = 100
+	}
+	cpuLastUsage = usage
+	return cpuLastUsage
 }

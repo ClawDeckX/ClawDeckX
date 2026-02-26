@@ -19,7 +19,7 @@ export const CronSection: React.FC<SectionProps> = ({ setField, getField, langua
     <div className="space-y-4">
       <ConfigSection title={es.cronJobs} icon="schedule" iconColor="text-lime-500">
         <SwitchField label={es.enabled} tooltip={tip('cron.enabled')} value={g(['enabled']) !== false} onChange={v => s(['enabled'], v)} />
-        <TextField label={es.cronStorePath} tooltip={tip('cron.store')} value={g(['store']) || ''} onChange={v => s(['store'], v)} placeholder="~/.openclaw/cron" />
+        <TextField label={es.cronStorePath} tooltip={tip('cron.store')} value={g(['store']) || ''} onChange={v => s(['store'], v)} placeholder={es.phCronStorePath} />
         <NumberField label={es.maxConcurrent} tooltip={tip('cron.maxConcurrentRuns')} value={g(['maxConcurrentRuns'])} onChange={v => s(['maxConcurrentRuns'], v)} min={1} />
         <SelectField label={es.cronWakeMode} tooltip={tip('cron.wakeMode')} value={g(['wakeMode']) || 'now'} onChange={v => s(['wakeMode'], v)} options={WAKE_OPTIONS} />
       </ConfigSection>

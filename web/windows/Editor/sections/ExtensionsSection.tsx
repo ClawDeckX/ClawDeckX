@@ -37,12 +37,12 @@ export const ExtensionsSection: React.FC<SectionProps> = ({ setField, getField, 
         <button onClick={() => setTab('skills')}
           className={`flex-1 h-7 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${tab === 'skills' ? 'bg-white dark:bg-white/10 text-primary shadow-sm' : 'text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60'}`}>
           <span className="material-symbols-outlined text-[12px]">extension</span>
-          {es.secSkills || 'Skills'}
+          {es.secSkills}
         </button>
         <button onClick={() => setTab('plugins')}
           className={`flex-1 h-7 text-[10px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${tab === 'plugins' ? 'bg-white dark:bg-white/10 text-primary shadow-sm' : 'text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60'}`}>
           <span className="material-symbols-outlined text-[12px]">power</span>
-          {es.secPlugins || 'Plugins'}
+          {es.secPlugins}
         </button>
       </div>
 
@@ -50,8 +50,8 @@ export const ExtensionsSection: React.FC<SectionProps> = ({ setField, getField, 
       {tab === 'skills' && (
         <>
           <ConfigSection title={es.loadConfig} icon="download" iconColor="text-violet-500">
-            <ArrayField label={es.allowBundled} tooltip={tip('skills.allowBundled')} value={gs(['allowBundled']) || []} onChange={v => ss(['allowBundled'], v)} placeholder="skill_name" />
-            <ArrayField label={es.extraDirs} tooltip={tip('skills.load.extraDirs')} value={gs(['load', 'extraDirs']) || []} onChange={v => ss(['load', 'extraDirs'], v)} placeholder="/path/to/skills" />
+            <ArrayField label={es.allowBundled} tooltip={tip('skills.allowBundled')} value={gs(['allowBundled']) || []} onChange={v => ss(['allowBundled'], v)} placeholder={es.phSkillName} />
+            <ArrayField label={es.extraDirs} tooltip={tip('skills.load.extraDirs')} value={gs(['load', 'extraDirs']) || []} onChange={v => ss(['load', 'extraDirs'], v)} placeholder={es.phSkillsPath} />
             <SwitchField label={es.watch} tooltip={tip('skills.load.watch')} value={gs(['load', 'watch']) !== false} onChange={v => ss(['load', 'watch'], v)} />
             <NumberField label={es.watchDebounceMs} tooltip={tip('skills.load.watchDebounceMs')} value={gs(['load', 'watchDebounceMs'])} onChange={v => ss(['load', 'watchDebounceMs'], v)} min={0} />
           </ConfigSection>
@@ -75,8 +75,8 @@ export const ExtensionsSection: React.FC<SectionProps> = ({ setField, getField, 
                 return (
                   <ConfigCard key={key} title={key} icon="extension" onDelete={() => deleteField(['skills', 'entries', key])}>
                     <SwitchField label={es.enabled} value={entry.enabled !== false} onChange={v => ss(['entries', key, 'enabled'], v)} />
-                    <PasswordField label="API Key" value={entry.apiKey || ''} onChange={v => ss(['entries', key, 'apiKey'], v)} />
-                    <KeyValueField label={es.envVars} value={entry.env || {}} onChange={v => ss(['entries', key, 'env'], v)} keyPlaceholder="KEY" valuePlaceholder="value" />
+                    <PasswordField label={es.apiKey} value={entry.apiKey || ''} onChange={v => ss(['entries', key, 'apiKey'], v)} />
+                    <KeyValueField label={es.envVars} value={entry.env || {}} onChange={v => ss(['entries', key, 'env'], v)} />
                   </ConfigCard>
                 );
               })
@@ -111,12 +111,12 @@ export const ExtensionsSection: React.FC<SectionProps> = ({ setField, getField, 
         <>
           <ConfigSection title={es.pluginSettings} icon="power" iconColor="text-rose-500">
             <SwitchField label={es.enablePlugins} tooltip={tip('plugins.enabled')} value={gp(['enabled']) !== false} onChange={v => sp(['enabled'], v)} />
-            <ArrayField label={es.allowList} tooltip={tip('plugins.allow')} value={gp(['allow']) || []} onChange={v => sp(['allow'], v)} placeholder="plugin_name" />
-            <ArrayField label={es.denyList} tooltip={tip('plugins.deny')} value={gp(['deny']) || []} onChange={v => sp(['deny'], v)} placeholder="plugin_name" />
+            <ArrayField label={es.allowList} tooltip={tip('plugins.allow')} value={gp(['allow']) || []} onChange={v => sp(['allow'], v)} placeholder={es.phPluginName} />
+            <ArrayField label={es.denyList} tooltip={tip('plugins.deny')} value={gp(['deny']) || []} onChange={v => sp(['deny'], v)} placeholder={es.phPluginName} />
           </ConfigSection>
 
           <ConfigSection title={es.pluginSlots} icon="widgets" iconColor="text-rose-500" defaultOpen={false}>
-            <TextField label={es.memoryPlugin} tooltip={tip('plugins.slots.memory')} value={gp(['slots', 'memory']) || ''} onChange={v => sp(['slots', 'memory'], v)} placeholder="plugin_name" />
+            <TextField label={es.memoryPlugin} tooltip={tip('plugins.slots.memory')} value={gp(['slots', 'memory']) || ''} onChange={v => sp(['slots', 'memory'], v)} placeholder={es.phPluginName} />
           </ConfigSection>
 
           <ConfigSection

@@ -86,17 +86,17 @@ type TabId = 'nodes' | 'devices' | 'bindings';
 // Relative time formatting with i18n support
 function fmtRelativeTime(seconds?: number | null, nd?: any): string {
   if (seconds == null || seconds < 0) return '-';
-  if (seconds < 60) return nd?.justNow || 'just now';
+  if (seconds < 60) return nd?.justNow;
   if (seconds < 3600) {
     const mins = Math.floor(seconds / 60);
-    return `${mins} ${nd?.minutesAgo || 'min ago'}`;
+    return `${mins} ${nd?.minutesAgo}`;
   }
   if (seconds < 86400) {
     const hrs = Math.floor(seconds / 3600);
-    return `${hrs} ${nd?.hoursAgo || 'hr ago'}`;
+    return `${hrs} ${nd?.hoursAgo}`;
   }
   const days = Math.floor(seconds / 86400);
-  return `${days} ${nd?.daysAgo || 'days ago'}`;
+  return `${days} ${nd?.daysAgo}`;
 }
 
 function fmtAge(seconds?: number | null): string {
@@ -137,8 +137,10 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   const [paired, setPaired] = useState<PairedDevice[]>([]);
   
   // Search and filter state
+  const [nodeSearchInput, setNodeSearchInput] = useState('');
   const [nodeSearch, setNodeSearch] = useState('');
   const [nodeFilter, setNodeFilter] = useState<NodeFilter>('all');
+  const [deviceSearchInput, setDeviceSearchInput] = useState('');
   const [deviceSearch, setDeviceSearch] = useState('');
   const [showEventLog, setShowEventLog] = useState(false);
   const [showPairFlow, setShowPairFlow] = useState(false);
@@ -245,6 +247,13 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
       d.remoteIp?.toLowerCase().includes(search)
     );
   }, [paired, deviceSearch]);
+
+  const renderedNodes = useMemo(() => filteredNodes.slice(0, 120), [filteredNodes]);
+  const omittedNodes = Math.max(0, filteredNodes.length - renderedNodes.length);
+  const renderedPending = useMemo(() => filteredPending.slice(0, 120), [filteredPending]);
+  const omittedPending = Math.max(0, filteredPending.length - renderedPending.length);
+  const renderedPaired = useMemo(() => filteredPaired.slice(0, 120), [filteredPaired]);
+  const omittedPaired = Math.max(0, filteredPaired.length - renderedPaired.length);
 
   // Copy to clipboard helper
   const copyToClipboard = useCallback((text: string) => {
@@ -368,7 +377,20 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     finally { setConfigLoading(false); }
   }, []);
 
-  useEffect(() => { fetchNodes(); }, [fetchNodes]);
+  useEffect(() => {
+    const timer = setTimeout(() => setNodeSearch(nodeSearchInput.trim()), 120);
+    return () => clearTimeout(timer);
+  }, [nodeSearchInput]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDeviceSearch(deviceSearchInput.trim()), 120);
+    return () => clearTimeout(timer);
+  }, [deviceSearchInput]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => { fetchNodes(); });
+    return () => cancelAnimationFrame(raf);
+  }, [fetchNodes]);
   useEffect(() => { if (tab === 'devices') fetchDevices(); }, [tab, fetchDevices]);
   useEffect(() => { if (tab === 'bindings' && !config) fetchConfig(); }, [tab, config, fetchConfig]);
 
@@ -550,13 +572,13 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                     <span className="material-symbols-outlined text-[16px] text-slate-400 dark:text-white/30 absolute left-3 top-1/2 -translate-y-1/2">search</span>
                     <input
                       type="text"
-                      value={nodeSearch}
-                      onChange={e => setNodeSearch(e.target.value)}
+                      value={nodeSearchInput}
+                      onChange={e => setNodeSearchInput(e.target.value)}
                       placeholder={nd.searchNodes}
                       className="w-full h-9 pl-9 pr-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 placeholder:text-slate-400 dark:placeholder:text-white/30 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
                     />
-                    {nodeSearch && (
-                      <button onClick={() => setNodeSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white/60">
+                    {nodeSearchInput && (
+                      <button onClick={() => setNodeSearchInput('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white/60">
                         <span className="material-symbols-outlined text-[14px]">close</span>
                       </button>
                     )}
@@ -611,7 +633,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
 
               {/* 节点列表 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {filteredNodes.map((node, i) => {
+                {renderedNodes.map((node, i) => {
                   const isSelected = selectedNode?.id === node.id;
                   const online = isNodeOnline(node);
                   return (
@@ -788,6 +810,9 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                   );
                 })}
               </div>
+              {omittedNodes > 0 && (
+                <div className="text-center text-[10px] text-slate-400 dark:text-white/35">+{omittedNodes}</div>
+              )}
             </div>
           )}
 
@@ -851,13 +876,13 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                   <span className="material-symbols-outlined text-[16px] text-slate-400 dark:text-white/30 absolute left-3 top-1/2 -translate-y-1/2">search</span>
                   <input
                     type="text"
-                    value={deviceSearch}
-                    onChange={e => setDeviceSearch(e.target.value)}
+                    value={deviceSearchInput}
+                    onChange={e => setDeviceSearchInput(e.target.value)}
                     placeholder={nd.searchDevices}
                     className="w-full h-9 pl-9 pr-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 placeholder:text-slate-400 dark:placeholder:text-white/30 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all"
                   />
-                  {deviceSearch && (
-                    <button onClick={() => setDeviceSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white/60">
+                  {deviceSearchInput && (
+                    <button onClick={() => setDeviceSearchInput('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white/60">
                       <span className="material-symbols-outlined text-[14px]">close</span>
                     </button>
                   )}
@@ -965,7 +990,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                     <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">{filteredPending.length}</span>
                   </div>
                   <div className="space-y-2">
-                    {filteredPending.map(req => (
+                    {renderedPending.map(req => (
                       <div key={req.requestId} className="bg-amber-50 dark:bg-amber-500/[0.04] border border-amber-200/50 dark:border-amber-500/10 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
                           <span className="material-symbols-outlined text-amber-500 text-[20px]">smartphone</span>
@@ -1000,6 +1025,9 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                       </div>
                     ))}
                   </div>
+                  {omittedPending > 0 && (
+                    <div className="text-center text-[10px] text-slate-400 dark:text-white/35 mt-2">+{omittedPending}</div>
+                  )}
                 </div>
               )}
 
@@ -1012,7 +1040,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                     <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-mac-green/15 text-mac-green font-bold">{filteredPaired.length}</span>
                   </div>
                   <div className="space-y-3">
-                    {filteredPaired.map(device => {
+                    {renderedPaired.map(device => {
                       const tokens = Array.isArray(device.tokens) ? device.tokens : [];
                       return (
                         <div key={device.deviceId} className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl p-3 sm:p-4">
@@ -1088,6 +1116,9 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                       );
                     })}
                   </div>
+                  {omittedPaired > 0 && (
+                    <div className="text-center text-[10px] text-slate-400 dark:text-white/35 mt-2">+{omittedPaired}</div>
+                  )}
                 </div>
               )}
 

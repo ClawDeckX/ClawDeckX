@@ -15,10 +15,10 @@ export const HooksSection: React.FC<SectionProps> = ({ setField, getField, delet
     <div className="space-y-4">
       <ConfigSection title={es.basicSettings} icon="settings" iconColor="text-pink-500">
         <SwitchField label={es.enableHooks} tooltip={tip('hooks.enabled')} value={g(['enabled']) === true} onChange={v => s(['enabled'], v)} />
-        <TextField label={es.webhookPath} tooltip={tip('hooks.path')} value={g(['path']) || ''} onChange={v => s(['path'], v)} placeholder="/hooks" />
+        <TextField label={es.webhookPath} tooltip={tip('hooks.path')} value={g(['path']) || ''} onChange={v => s(['path'], v)} placeholder={es.phHooksPath} />
         <PasswordField label={es.webhookToken} tooltip={tip('hooks.token')} value={g(['token']) || ''} onChange={v => s(['token'], v)} />
         <NumberField label={es.maxBodyBytes} tooltip={tip('hooks.maxBodyBytes')} value={g(['maxBodyBytes'])} onChange={v => s(['maxBodyBytes'], v)} min={0} />
-        <ArrayField label={es.presets} tooltip={tip('hooks.presets')} value={g(['presets']) || []} onChange={v => s(['presets'], v)} placeholder="preset_name" />
+        <ArrayField label={es.presets} tooltip={tip('hooks.presets')} value={g(['presets']) || []} onChange={v => s(['presets'], v)} placeholder={es.phPresetName} />
       </ConfigSection>
 
       <ConfigSection
@@ -36,10 +36,10 @@ export const HooksSection: React.FC<SectionProps> = ({ setField, getField, delet
               const next = mappings.filter((_: any, j: number) => j !== i);
               s(['mappings'], next);
             }}>
-              <TextField label={es.hookMatch} value={m.match || ''} onChange={v => { const next = [...mappings]; next[i] = { ...next[i], match: v }; s(['mappings'], next); }} placeholder="pattern" />
-              <TextField label={es.hookAction} value={m.action || ''} onChange={v => { const next = [...mappings]; next[i] = { ...next[i], action: v }; s(['mappings'], next); }} placeholder="send / forward" />
-              <TextField label={es.hookChannel || es.channel} value={m.channel || ''} onChange={v => { const next = [...mappings]; next[i] = { ...next[i], channel: v }; s(['mappings'], next); }} placeholder="telegram" />
-              <TextField label={es.hookModel || es.model} value={m.model || ''} onChange={v => { const next = [...mappings]; next[i] = { ...next[i], model: v }; s(['mappings'], next); }} placeholder="provider/model" />
+              <TextField label={es.hookMatch} value={m.match || ''} onChange={v => { const next = [...mappings]; next[i] = { ...next[i], match: v }; s(['mappings'], next); }} placeholder={es.phPattern} />
+              <TextField label={es.hookAction} value={m.action || ''} onChange={v => { const next = [...mappings]; next[i] = { ...next[i], action: v }; s(['mappings'], next); }} placeholder={es.phHookAction} />
+              <TextField label={es.hookChannel || es.channel} value={m.channel || ''} onChange={v => { const next = [...mappings]; next[i] = { ...next[i], channel: v }; s(['mappings'], next); }} placeholder={es.phTelegramChannel} />
+              <TextField label={es.hookModel || es.model} value={m.model || ''} onChange={v => { const next = [...mappings]; next[i] = { ...next[i], model: v }; s(['mappings'], next); }} placeholder={es.phProviderModelId} />
             </ConfigCard>
           ))
         )}
