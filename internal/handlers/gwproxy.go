@@ -345,8 +345,8 @@ func (h *GWProxyHandler) SessionsHistory(w http.ResponseWriter, r *http.Request)
 		web.Fail(w, r, "INVALID_PARAMS", "key is required", http.StatusBadRequest)
 		return
 	}
-	data, err := h.client.RequestWithTimeout("sessions.history", map[string]interface{}{
-		"key": key,
+	data, err := h.client.RequestWithTimeout("chat.history", map[string]interface{}{
+		"sessionKey": key,
 	}, 30*time.Second)
 	if err != nil {
 		web.Fail(w, r, "GW_SESSIONS_HISTORY_FAILED", err.Error(), http.StatusBadGateway)
@@ -497,7 +497,6 @@ func (h *GWProxyHandler) SkillsConfigGet(w http.ResponseWriter, r *http.Request)
 var slowMethods = map[string]bool{
 	"skills.install": true,
 	"skills.update":  true,
-	"clawhub.exec":   true,
 	"update.run":     true,
 }
 

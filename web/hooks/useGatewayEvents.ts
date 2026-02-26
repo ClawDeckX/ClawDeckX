@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { subscribeManagerWS } from '../services/manager-ws';
 
 /**
  * Gateway 事件类型定义
@@ -58,48 +59,23 @@ export type GatewayEventHandlers = {
 };
 
 /**
- * useGatewayEvents — 订阅 Gateway 实时事件
- *
- * 通过 Manager 的 /api/v1/ws → gw_event 频道接收 Gateway 转发的事件。
- * 支持选择性监听：只传入需要的事件处理器即可。
- *
- * @example
- * useGatewayEvents({
- *   shutdown: (p) => setGwRunning(false),
- *   health: (p) => setHealthSnap(p),
- *   cron: (p) => setCronActivity(prev => [p, ...prev]),
- * });
+ * useGatewayEvents - subscribe to real-time gateway events via shared Manager WS.
  */
 export function useGatewayEvents(handlers: GatewayEventHandlers) {
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
 
-  const wsRef = useRef<WebSocket | null>(null);
-
-  const onMessage = useCallback((evt: MessageEvent) => {
+  const onMessage = useCallback((msg: any) => {
     try {
-      const msg = JSON.parse(evt.data);
       const h = handlersRef.current;
       const type = msg.type as string;
       if (type && type in h) {
         (h as any)[type]?.(msg.data ?? {});
       }
-    } catch { /* ignore parse errors */ }
+    } catch {
+      // ignore parse errors
+    }
   }, []);
 
-  useEffect(() => {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws`);
-
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ action: 'subscribe', channels: ['gw_event'] }));
-    };
-    ws.onmessage = onMessage;
-
-    wsRef.current = ws;
-    return () => {
-      ws.close();
-      wsRef.current = null;
-    };
-  }, [onMessage]);
+  useEffect(() => subscribeManagerWS(onMessage), [onMessage]);
 }

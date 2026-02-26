@@ -106,6 +106,36 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
     localStorage.setItem(SETUP_WIZARD_AUTO_OPEN_DISABLED_KEY, disableAutoOpen ? '1' : '0');
   }, [disableAutoOpen]);
 
+  const resolveSetupEventMessage = useCallback((event: SetupEvent): string => {
+    const phaseMap: Record<string, string | undefined> = {
+      scan: sw.scanning,
+      install: sw.phaseInstallDeps,
+      'skill-deps': sw.phaseSkillDeps,
+      'vpn-tools': sw.phaseVpnTools,
+      configure: sw.configuring,
+      start: sw.gwStarting,
+      verify: sw.phaseVerify,
+      update: sw.updatingOpenclaw,
+      'stop-gateway': sw.stoppingGateway,
+      restart: sw.restartingGateway,
+    };
+
+    const stepMap: Record<string, string | undefined> = {
+      'check-config': sw.checkingConfig,
+      'install-gateway-service': sw.installingGatewayService,
+      'start-gateway': sw.gwStarting,
+      doctor: sw.runningDoctor,
+    };
+
+    if (event.type === 'phase' && event.phase) {
+      return phaseMap[event.phase] || event.message;
+    }
+    if (event.type === 'step' && event.step) {
+      return stepMap[event.step] || event.message;
+    }
+    return event.message;
+  }, [sw]);
+
   // 扫描环境
   const scanEnvironment = useCallback(async () => {
     setIsScanning(true);
@@ -220,10 +250,10 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
               if (event.type === 'log') {
                 setLogs(prev => [...prev.slice(-100), event.message]);
               } else if (event.type === 'phase') {
-                setCurrentStep(event.message);
+                setCurrentStep(resolveSetupEventMessage(event));
                 setProgress(event.progress || 0);
               } else if (event.type === 'step') {
-                setCurrentStep(event.message);
+                setCurrentStep(resolveSetupEventMessage(event));
                 setProgress(event.progress || 0);
               } else if (event.type === 'progress') {
                 setProgress(event.progress || 0);
@@ -683,7 +713,7 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
                                     if (ev.type === 'log') {
                                       setUpdateLogs(prev => [...prev.slice(-50), ev.message]);
                                     } else if (ev.type === 'phase' || ev.type === 'step') {
-                                      setUpdateStep(ev.message);
+                                      setUpdateStep(resolveSetupEventMessage(ev));
                                       setUpdateProgress(ev.progress || 0);
                                     } else if (ev.type === 'progress') {
                                       setUpdateProgress(ev.progress || 0);

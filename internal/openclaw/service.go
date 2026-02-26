@@ -1,14 +1,14 @@
-﻿package openclaw
+package openclaw
 
 import (
+	"ClawDeckX/internal/logger"
+	"ClawDeckX/internal/output"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
-	"ClawDeckX/internal/logger"
-	"ClawDeckX/internal/output"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -242,7 +242,7 @@ func (s *Service) Start() error {
 			return s.startWindowsGateway(cmdName, bind, port)
 		}
 		// Unix: nohup 后台启动
-		return runCommand("sh", "-c", fmt.Sprintf("nohup %s gateway run --bind %s --port %s --force > /tmp/openclaw-gateway.log 2>&1 &", cmdName, bind, port))
+		return runCommand("sh", "-c", fmt.Sprintf("nohup %s gateway run --bind %s --port %s > /tmp/openclaw-gateway.log 2>&1 &", cmdName, bind, port))
 	default:
 		return errors.New("无法识别本地运行环境，无法启动")
 	}
@@ -547,7 +547,7 @@ func (s *Service) startWindowsGateway(cmdName, bind, port string) error {
 		logFile, _ = os.Open(os.DevNull)
 	}
 
-	c := exec.Command(cmdName, "gateway", "run", "--bind", bind, "--port", port, "--force")
+	c := exec.Command(cmdName, "gateway", "run", "--bind", bind, "--port", port)
 	c.Stdout = logFile
 	c.Stderr = logFile
 	c.Stdin = nil

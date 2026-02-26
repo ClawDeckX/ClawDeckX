@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
+import { subscribeManagerWS } from '../services/manager-ws';
 import { getTemplatesForFile, resolveTemplate, WorkspaceTemplate } from '../data/templates';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -49,8 +50,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const { toast } = useToast();
   const { confirm } = useConfirm();
 
-  // WS connection (Manager's /api/v1/ws for agent chat streaming events)
-  const wsRef = useRef<WebSocket | null>(null);
+  // Shared Manager WS subscription for agent chat streaming events
   const [gwReady, setGwReady] = useState(false);
   const [wsConnecting, setWsConnecting] = useState(false);
   const runIdRef = useRef<string | null>(null);
@@ -95,24 +95,14 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       if (res?.connected) setGwReady(true);
     }).catch(() => { });
 
-    // 2) Connect to Manager's /api/v1/ws for real-time chat streaming events
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws`);
-
+    // 2) Subscribe to shared Manager WS for real-time chat streaming events
+    let opened = false;
     const connectTimeout = setTimeout(() => {
-      if (ws.readyState !== WebSocket.OPEN) setWsConnecting(false);
-    }, 12000);
+      if (!opened) setWsConnecting(false);
+    }, 3000);
 
-    ws.onopen = () => {
-      clearTimeout(connectTimeout);
-      setGwReady(true);
-      setWsConnecting(false);
-      ws.send(JSON.stringify({ action: 'subscribe', channels: ['gw_event'] }));
-    };
-
-    ws.onmessage = (evt) => {
+    const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
-        const msg = JSON.parse(evt.data);
         if (msg.type === 'chat') {
           const payload = msg.data;
           if (!payload) return;
@@ -149,18 +139,18 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
           setLastHeartbeat({ ts: Date.now(), status: msg.data?.status || 'running' });
         }
       } catch { /* ignore */ }
-    };
+    }, (status) => {
+      if (status === 'open') {
+        opened = true;
+        clearTimeout(connectTimeout);
+        setGwReady(true);
+        setWsConnecting(false);
+      }
+    });
 
-    ws.onclose = () => {
-      clearTimeout(connectTimeout);
-      setWsConnecting(false);
-    };
-
-    wsRef.current = ws;
     return () => {
       clearTimeout(connectTimeout);
-      ws.close();
-      wsRef.current = null;
+      unsubscribe();
     };
   }, []);
 

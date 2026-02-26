@@ -645,10 +645,7 @@ func RunServe(args []string) int {
 			}
 		}
 
-		// 尝试获取公网 IP
-		if publicIP := getPublicIP(); publicIP != "" {
-			fmt.Printf("  ║  %s║\n", padLine(fmt.Sprintf("➜ http://%s:%d", publicIP, cfg.Server.Port)))
-		}
+		// 启动阶段不再同步查询公网 IP，避免外网超时导致首次界面显示变慢
 	} else {
 		// 绑定特定地址
 		fmt.Printf("  ║  %s║\n", padLine(fmt.Sprintf("➜ http://%s:%d", cfg.Server.Bind, cfg.Server.Port)))

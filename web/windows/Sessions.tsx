@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
+import { subscribeManagerWS } from '../services/manager-ws';
 
 interface SessionsProps {
   language: Language;
@@ -63,8 +64,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const c = t.chat as any;
   const sessionDefault = (t as any).dash?.sessionDefault || c.sessionKey;
 
-  // WebSocket connection (Manager's /api/v1/ws for chat streaming events)
-  const wsRef = useRef<WebSocket | null>(null);
+  // Shared Manager WS subscription for chat streaming events
   const handleChatEventRef = useRef<(payload?: any) => void>(() => {});
   const [wsConnected, setWsConnected] = useState(false);
   const [wsError, setWsError] = useState<string | null>(null);
@@ -197,48 +197,38 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setWsError(c.configMissing);
     });
 
-    // 2) Connect to Manager's /api/v1/ws for real-time chat streaming events
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws`);
-
+    // 2) Subscribe to shared Manager WS for real-time chat streaming events
+    let opened = false;
     const connectTimeout = setTimeout(() => {
-      if (ws.readyState !== WebSocket.OPEN) {
+      if (!opened) {
         setWsConnecting(false);
         setWsError(c.wsError);
       }
-    }, 12000);
+    }, 3000);
 
-    ws.onopen = () => {
-      clearTimeout(connectTimeout);
-      setWsConnected(true);
-      setWsConnecting(false);
-      setWsError(null);
-      // Subscribe to gw_event channel for chat streaming events
-      ws.send(JSON.stringify({ action: 'subscribe', channels: ['gw_event'] }));
-    };
-
-    ws.onmessage = (evt) => {
+    const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
-        const msg = JSON.parse(evt.data);
         if (msg.type === 'chat') {
           handleChatEventRef.current(msg.data);
         } else if (msg.type === 'talk.mode') {
           setTalkMode(msg.data?.mode || null);
         }
       } catch { /* ignore */ }
-    };
+    }, (status) => {
+      if (status === 'open') {
+        opened = true;
+        clearTimeout(connectTimeout);
+        setWsConnected(true);
+        setWsConnecting(false);
+        setWsError(null);
+      } else if (status === 'closed') {
+        setWsConnected(false);
+      }
+    });
 
-    ws.onclose = () => {
-      clearTimeout(connectTimeout);
-      setWsConnected(false);
-      setWsConnecting(false);
-    };
-
-    wsRef.current = ws;
     return () => {
       clearTimeout(connectTimeout);
-      ws.close();
-      wsRef.current = null;
+      unsubscribe();
     };
   }, []);
 

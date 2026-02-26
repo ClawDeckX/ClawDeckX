@@ -319,7 +319,7 @@ export const gwApi = {
   sessionsMessages: (key: string, limit = 20) =>
     rpc('sessions.preview', { keys: [key], limit, maxChars: 500 }),
   sessionsHistory: (key: string) =>
-    rpc('sessions.history', { key }),
+    rpc('chat.history', { sessionKey: key }),
   sessionsReset: (key: string) =>
     rpc('sessions.reset', { key }),
   sessionsDelete: (key: string, deleteTranscript = false) =>

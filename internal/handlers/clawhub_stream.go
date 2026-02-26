@@ -52,14 +52,14 @@ func (h *ClawHubHandler) InstallStreamSSE(w http.ResponseWriter, r *http.Request
 		"ts":      time.Now().UnixMilli(),
 	})
 
-	// remote gateway: via JSON-RPC (non-streaming, push start/end events)
+	// remote gateway: via skills.install (non-streaming, push start/end events)
 	if h.isRemoteGateway() {
 		sendSSE("log", map[string]interface{}{
 			"type":    "log",
 			"message": "remote gateway mode, waiting for install to complete...",
 			"ts":      time.Now().UnixMilli(),
 		})
-		result, err := h.remoteClawHubExec("install", params.Slug, params.Version, params.Force, false)
+		result, err := h.remoteSkillsInstall(params.Slug, 120000)
 		if err != nil {
 			sendSSE("error", map[string]interface{}{
 				"type":    "error",
@@ -68,8 +68,8 @@ func (h *ClawHubHandler) InstallStreamSSE(w http.ResponseWriter, r *http.Request
 			})
 			return
 		}
-		if output, ok := result["output"].(string); ok && output != "" {
-			for _, line := range strings.Split(output, "\n") {
+		if msg, ok := result["message"].(string); ok && msg != "" {
+			for _, line := range strings.Split(msg, "\n") {
 				if line = strings.TrimSpace(line); line != "" {
 					sendSSE("log", map[string]interface{}{
 						"type":    "log",
@@ -78,6 +78,13 @@ func (h *ClawHubHandler) InstallStreamSSE(w http.ResponseWriter, r *http.Request
 					})
 				}
 			}
+		}
+		if params.Version != "" || params.Force {
+			sendSSE("log", map[string]interface{}{
+				"type":    "log",
+				"message": "remote install ignores version/force flags with current gateway API",
+				"ts":      time.Now().UnixMilli(),
+			})
 		}
 		sendSSE("done", map[string]interface{}{
 			"type":    "done",

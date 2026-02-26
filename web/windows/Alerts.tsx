@@ -1,10 +1,11 @@
 
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import CustomSelect from '../components/CustomSelect';
+import { subscribeManagerWS } from '../services/manager-ws';
 
 interface AlertsProps { language: Language; }
 
@@ -56,8 +57,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
   const a = (t as any).alrt as any;
   const { toast } = useToast();
 
-  // WS connection (via Manager's own /api/ws)
-  const wsRef = useRef<WebSocket | null>(null);
+  // Shared Manager WS subscription
   const [wsConnected, setWsConnected] = useState(false);
   const [wsConnecting, setWsConnecting] = useState(false);
   const [wsError, setWsError] = useState<string | null>(null);
@@ -85,34 +85,22 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
   const [fwdNewTarget, setFwdNewTarget] = useState('');
   const [fwdLoaded, setFwdLoaded] = useState(false);
 
-  // Connect to Manager's /api/ws for real-time exec approval events
+  // Subscribe to shared Manager WS for real-time exec approval events
   // (Gateway events are forwarded by backend GWCollector → wsHub "gw_event" channel)
   useEffect(() => {
     setWsConnecting(true);
     setWsError(null);
 
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws`);
-
+    let opened = false;
     const connectTimeout = setTimeout(() => {
-      if (ws.readyState !== WebSocket.OPEN) {
+      if (!opened) {
         setWsConnecting(false);
         setWsError(a.wsError);
       }
-    }, 12000);
+    }, 3000);
 
-    ws.onopen = () => {
-      clearTimeout(connectTimeout);
-      setWsConnected(true);
-      setWsConnecting(false);
-      setWsError(null);
-      // Subscribe to gw_event channel to receive gateway-forwarded events
-      ws.send(JSON.stringify({ action: 'subscribe', channels: ['gw_event'] }));
-    };
-
-    ws.onmessage = (evt) => {
+    const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
-        const msg = JSON.parse(evt.data);
         if (msg.type === 'exec.approval.requested') {
           const p = msg.data as PendingApproval | undefined;
           if (p?.id) {
@@ -128,19 +116,21 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
           }
         }
       } catch { /* ignore */ }
-    };
+    }, (status) => {
+      if (status === 'open') {
+        opened = true;
+        clearTimeout(connectTimeout);
+        setWsConnected(true);
+        setWsConnecting(false);
+        setWsError(null);
+      } else if (status === 'closed') {
+        setWsConnected(false);
+      }
+    });
 
-    ws.onclose = () => {
-      clearTimeout(connectTimeout);
-      setWsConnected(false);
-      setWsConnecting(false);
-    };
-
-    wsRef.current = ws;
     return () => {
       clearTimeout(connectTimeout);
-      ws.close();
-      wsRef.current = null;
+      unsubscribe();
     };
   }, []);
 
