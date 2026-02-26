@@ -129,6 +129,7 @@ func (h *DoctorHandler) Run(w http.ResponseWriter, r *http.Request) {
 	items = append(items, h.checkPIDLock())
 	items = append(items, h.checkPort())
 	items = append(items, h.checkDisk())
+	items = append(items, h.gatewayDiagnoseChecks()...)
 
 	// compute score
 	score := 100
@@ -708,7 +709,7 @@ func (h *DoctorHandler) checkDisk() CheckItem {
 }
 
 func (h *DoctorHandler) collectChecks() []CheckItem {
-	return []CheckItem{
+	items := []CheckItem{
 		h.checkInstalled(),
 		h.checkConfig(),
 		h.checkGateway(),
@@ -716,6 +717,55 @@ func (h *DoctorHandler) collectChecks() []CheckItem {
 		h.checkPort(),
 		h.checkDisk(),
 	}
+	items = append(items, h.gatewayDiagnoseChecks()...)
+	return items
+}
+
+func (h *DoctorHandler) gatewayDiagnoseChecks() []CheckItem {
+	diag := openclaw.DiagnoseGateway(h.svc.GatewayHost, h.svc.GatewayPort)
+	if diag == nil || len(diag.Items) == 0 {
+		return nil
+	}
+
+	items := make([]CheckItem, 0, len(diag.Items))
+	for _, it := range diag.Items {
+		status := "ok"
+		severity := "info"
+		switch it.Status {
+		case openclaw.DiagnoseFail:
+			status = "error"
+			severity = "error"
+		case openclaw.DiagnoseWarn:
+			status = "warn"
+			severity = "warn"
+		}
+
+		name := strings.TrimSpace(it.LabelEn)
+		if name == "" {
+			name = strings.TrimSpace(it.Label)
+		}
+		if name == "" {
+			name = strings.TrimSpace(it.Name)
+		}
+
+		id := strings.TrimSpace(it.Name)
+		if id == "" {
+			id = strings.ToLower(strings.ReplaceAll(name, " ", "_"))
+		}
+
+		items = append(items, CheckItem{
+			ID:         "gateway.diag." + id,
+			Code:       "gateway.diag." + id,
+			Name:       name,
+			Category:   "gateway",
+			Severity:   severity,
+			Status:     status,
+			Detail:     it.Detail,
+			Suggestion: it.Suggestion,
+			Fixable:    false,
+		})
+	}
+	return items
 }
 
 func (h *DoctorHandler) runFix(item CheckItem) fixItemResult {

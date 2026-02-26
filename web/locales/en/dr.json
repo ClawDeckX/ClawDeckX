@@ -47,5 +47,21 @@
   "actionReviewAlerts": "Review Alerts",
   "actionOpenEvents": "Open Gateway Events",
   "overviewLoadFail": "Health overview load failed",
-  "checksLoadFail": "Checks load failed"
+  "checksLoadFail": "Checks load failed",
+  "checkCatalog": {
+    "openclaw_install": { "name": "OpenClaw Install" },
+    "config_file": { "name": "Config File" },
+    "gateway_status": { "name": "Gateway Status" },
+    "pid_lock": { "name": "PID Lock" },
+    "port_default": { "name": "Port Check" },
+    "disk_space": { "name": "Disk Space" },
+    "gateway_diag_openclaw_installed": { "name": "OpenClaw Installed" },
+    "gateway_diag_config_exists": { "name": "Config File Exists" },
+    "gateway_diag_config_valid": { "name": "Config File Valid" },
+    "gateway_diag_gateway_process": { "name": "Gateway Process" },
+    "gateway_diag_port_reachable": { "name": "Port Reachable" },
+    "gateway_diag_gateway_api": { "name": "Gateway API Response" },
+    "gateway_diag_port_conflict": { "name": "Port Conflict Check" },
+    "gateway_diag_auth_token": { "name": "Auth Token Match" }
+  }
 }

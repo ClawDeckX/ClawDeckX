@@ -71,31 +71,27 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   // 按钮操作状态
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // 网关诊断
-  const [diagnosing, setDiagnosing] = useState(false);
-  const [diagnoseResult, setDiagnoseResult] = useState<any>(null);
-  const [showDiagnose, setShowDiagnose] = useState(false);
 
   const activeProfile = profiles.find(p => p.is_active);
 
   // 获取网关配置列表
-  const fetchProfiles = useCallback(() => {
+  const fetchProfiles = useCallback((force = false) => {
     setProfilesLoading(true);
-    gatewayProfileApi.list().then((data: any) => {
+    gatewayProfileApi.listCached(15000, force).then((data: any) => {
       setProfiles(Array.isArray(data) ? data : []);
     }).catch(() => {}).finally(() => setProfilesLoading(false));
   }, []);
 
-  const fetchStatus = useCallback(() => {
-    gatewayApi.status().then((data: any) => {
+  const fetchStatus = useCallback((force = false) => {
+    gatewayApi.statusCached(6000, force).then((data: any) => {
       setStatus(data);
     }).catch(() => {
       setStatus({ running: false, runtime: '', detail: '' });
     });
   }, []);
 
-  const fetchLogs = useCallback((limit = 120) => {
-    gatewayApi.log(limit).then((res: any) => {
+  const fetchLogs = useCallback((limit = 120, force = false) => {
+    gatewayApi.logCached(limit, 5000, force).then((res: any) => {
       let lines: string[] = [];
       if (res && Array.isArray(res.lines)) lines = res.lines;
       else if (res && Array.isArray(res)) lines = res;
@@ -103,8 +99,8 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
     }).catch(() => {});
   }, []);
 
-  const fetchHealthCheck = useCallback(() => {
-    gatewayApi.getHealthCheck().then((data: any) => {
+  const fetchHealthCheck = useCallback((force = false) => {
+    gatewayApi.getHealthCheckCached(6000, force).then((data: any) => {
       setHealthCheckEnabled(!!data?.enabled);
       setHealthStatus({ fail_count: data?.fail_count || 0, last_ok: data?.last_ok || '' });
     }).catch(() => {});
@@ -162,11 +158,11 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   }, [activeTab, fetchEvents]);
 
   // 刷新所有状态
-  const refreshAll = useCallback(() => {
-    fetchProfiles();
-    fetchStatus();
-    fetchHealthCheck();
-    if (activeTab === 'logs') fetchLogs(120);
+  const refreshAll = useCallback((force = false) => {
+    fetchProfiles(force);
+    fetchStatus(force);
+    fetchHealthCheck(force);
+    if (activeTab === 'logs') fetchLogs(120, force);
     if (activeTab === 'events') fetchEvents();
   }, [activeTab, fetchProfiles, fetchStatus, fetchLogs, fetchHealthCheck, fetchEvents]);
 
@@ -174,26 +170,13 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
     start: gw.start, stop: gw.stop, restart: gw.restart,
   };
 
-  const handleDiagnose = async () => {
-    setDiagnosing(true);
-    setShowDiagnose(true);
-    try {
-      const data = await gatewayApi.diagnose();
-      setDiagnoseResult(data);
-    } catch (err: any) {
-      setDiagnoseResult({ items: [], summary: 'fail', message: err?.message || gw.diagnoseFailed });
-    } finally {
-      setDiagnosing(false);
-    }
-  };
-
   const handleAction = async (action: 'start' | 'stop' | 'restart') => {
     setActionLoading(action);
     try {
       await gatewayApi[action]();
       toast('success', `${actionLabels[action]} ${gw.ok}`);
-      setTimeout(refreshAll, 1000);
-      setTimeout(refreshAll, 3000);
+      setTimeout(() => refreshAll(true), 1000);
+      setTimeout(() => refreshAll(true), 3000);
     } catch (err: any) {
       toast('error', `${actionLabels[action]} ${gw.failed}: ${err?.message || err}`);
     } finally {
@@ -211,7 +194,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
       } else {
         await gatewayProfileApi.create({ ...formData, port: formData.port || 18789 });
       }
-      fetchProfiles();
+      fetchProfiles(true);
       setEditingProfile(null);
       setFormData({ name: '', host: '127.0.0.1', port: 18789, token: '' });
       setShowProfilePanel(false);
@@ -225,7 +208,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
     if (!confirm(gw.confirmDelete)) return;
     try {
       await gatewayProfileApi.remove(id);
-      fetchProfiles();
+      fetchProfiles(true);
       toast('success', gw.deleted);
     } catch (err: any) {
       toast('error', err?.message || gw.deleteFailed);
@@ -235,8 +218,8 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   const handleActivateProfile = async (id: number) => {
     try {
       await gatewayProfileApi.activate(id);
-      fetchProfiles();
-      setTimeout(refreshAll, 1500);
+      fetchProfiles(true);
+      setTimeout(() => refreshAll(true), 1500);
       toast('success', gw.switched);
     } catch (err: any) {
       toast('error', err?.message || gw.switchFailed);
@@ -633,90 +616,10 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
               <button onClick={() => handleAction('restart')} disabled={!!actionLoading} className="flex items-center gap-1 px-2.5 py-1 bg-primary text-white rounded-lg font-bold text-[10px] transition-all disabled:opacity-40">
                 <span className={`material-symbols-outlined text-[14px] ${actionLoading === 'restart' ? 'animate-spin' : ''}`}>{actionLoading === 'restart' ? 'progress_activity' : 'refresh'}</span>{remote ? gw.reload : gw.restart}
               </button>
-              <button onClick={handleDiagnose} disabled={diagnosing} className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded-lg font-bold text-[10px] transition-all disabled:opacity-40">
-                <span className={`material-symbols-outlined text-[14px] ${diagnosing ? 'animate-spin' : ''}`}>{diagnosing ? 'progress_activity' : 'troubleshoot'}</span>{gw.diagnose}
-              </button>
             </div>
           );
         })()}
       </div>
-
-      {/* 诊断结果面板 */}
-      {showDiagnose && (
-        <div className="mx-4 md:mx-6 mb-3 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02]">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px] text-amber-500">troubleshoot</span>
-              <h3 className="text-xs font-bold text-slate-800 dark:text-white">{gw.diagResult}</h3>
-              {diagnoseResult && (
-                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
-                  diagnoseResult.summary === 'pass' ? 'bg-mac-green/10 text-mac-green' :
-                  diagnoseResult.summary === 'warn' ? 'bg-amber-500/10 text-amber-500' :
-                  'bg-mac-red/10 text-mac-red'
-                }`}>
-                  {diagnoseResult.summary === 'pass' ? gw.diagPass :
-                   diagnoseResult.summary === 'warn' ? gw.diagWarn :
-                   gw.diagFail}
-                </span>
-              )}
-            </div>
-            <button onClick={() => setShowDiagnose(false)} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all">
-              <span className="material-symbols-outlined text-[14px]">close</span>
-            </button>
-          </div>
-          <div className="p-3">
-            {diagnosing ? (
-              <div className="flex items-center justify-center py-6 gap-2 text-slate-400">
-                <span className="material-symbols-outlined text-[20px] animate-spin">progress_activity</span>
-                <span className="text-xs">{gw.diagnosing}</span>
-              </div>
-            ) : diagnoseResult?.items?.length > 0 ? (
-              <div className="space-y-1.5">
-                {diagnoseResult.items.map((item: any, idx: number) => (
-                  <div key={idx} className={`flex items-start gap-2.5 px-3 py-2 rounded-lg ${
-                    item.status === 'fail' ? 'bg-red-50 dark:bg-red-500/5' :
-                    item.status === 'warn' ? 'bg-amber-50 dark:bg-amber-500/5' :
-                    'bg-slate-50 dark:bg-white/[0.02]'
-                  }`}>
-                    <span className={`material-symbols-outlined text-[16px] mt-0.5 shrink-0 ${
-                      item.status === 'pass' ? 'text-mac-green' :
-                      item.status === 'warn' ? 'text-amber-500' :
-                      'text-mac-red'
-                    }`}>
-                      {item.status === 'pass' ? 'check_circle' : item.status === 'warn' ? 'warning' : 'cancel'}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-700 dark:text-white/80">
-                          {preferLabelEn ? (item.labelEn || item.label) : (item.label || item.labelEn)}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 dark:text-white/40 mt-0.5 break-all">{item.detail}</p>
-                      {item.suggestion && (
-                        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 flex items-start gap-1">
-                          <span className="material-symbols-outlined text-[12px] mt-px shrink-0">lightbulb</span>
-                          {item.suggestion}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {diagnoseResult.message && (
-                  <div className="mt-2 pt-2 border-t border-slate-200 dark:border-white/5">
-                    <p className={`text-[11px] font-medium ${
-                      diagnoseResult.summary === 'pass' ? 'text-mac-green' :
-                      diagnoseResult.summary === 'warn' ? 'text-amber-500' :
-                      'text-mac-red'
-                    }`}>{diagnoseResult.message}</p>
-                  </div>
-                )}
-              </div>
-            ) : diagnoseResult ? (
-              <p className="text-xs text-mac-red text-center py-4">{diagnoseResult.message || gw.diagnoseFailed}</p>
-            ) : null}
-          </div>
-        </div>
-      )}
 
       {/* 日志 & 调试区 */}
       <div className="flex-1 flex flex-col bg-slate-900 dark:bg-[#0a0f14] border-t border-slate-200 dark:border-white/10 md:mx-4 md:mb-4 md:rounded-xl overflow-hidden shadow-inner">

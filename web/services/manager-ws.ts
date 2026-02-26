@@ -1,3 +1,5 @@
+import { getToken } from './request';
+
 type ManagerWSStatus = 'connecting' | 'open' | 'closed';
 type ManagerWSMessageHandler = (msg: any) => void;
 type ManagerWSStatusHandler = (status: ManagerWSStatus) => void;
@@ -42,7 +44,9 @@ class ManagerWSBus {
     this.notifyStatus('connecting');
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws`);
+    const token = getToken();
+    const qs = token ? `?token=${encodeURIComponent(token)}` : '';
+    const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws${qs}`);
     this.ws = ws;
 
     ws.onopen = () => {

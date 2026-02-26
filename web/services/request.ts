@@ -2,16 +2,36 @@
 
 import { translateApiError } from './errorCodes';
 
+const TOKEN_STORAGE_KEY = 'claw_ws_token';
+let wsTokenCache: string | null = null;
+
 export function getToken(): string | null {
-  return null; // Token is now HttpOnly cookie
+  if (wsTokenCache) return wsTokenCache;
+  try {
+    wsTokenCache = window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    return wsTokenCache;
+  } catch {
+    return null;
+  }
 }
 
 export function setToken(token: string): void {
-  // No-op: Token is set via HttpOnly cookie by backend
+  wsTokenCache = token || null;
+  try {
+    if (token) window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    else window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // ignore storage failures
+  }
 }
 
 export function clearToken(): void {
-  // No-op: Logout should be handled by backend clearing the cookie
+  wsTokenCache = null;
+  try {
+    window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // ignore storage failures
+  }
 }
 
 export interface ApiResponse<T = any> {
@@ -22,6 +42,14 @@ export interface ApiResponse<T = any> {
   timestamp: string;
   request_id: string;
 }
+
+interface GetCacheEntry<T = any> {
+  expiresAt: number;
+  value?: T;
+  inflight?: Promise<T>;
+}
+
+const getCache = new Map<string, GetCacheEntry<any>>();
 
 export class ApiError extends Error {
   code: string;
@@ -68,6 +96,48 @@ async function request<T = any>(
 
 export function get<T = any>(url: string): Promise<T> {
   return request<T>(url, { method: 'GET' });
+}
+
+export function getCached<T = any>(url: string, ttlMs = 5000, force = false): Promise<T> {
+  const now = Date.now();
+  const cached = getCache.get(url) as GetCacheEntry<T> | undefined;
+
+  if (!force && cached && cached.value !== undefined && cached.expiresAt > now) {
+    return Promise.resolve(cached.value);
+  }
+
+  if (cached?.inflight) {
+    return cached.inflight;
+  }
+
+  const inflight = get<T>(url)
+    .then((value) => {
+      getCache.set(url, {
+        value,
+        expiresAt: Date.now() + Math.max(0, ttlMs),
+      });
+      return value;
+    })
+    .catch((err) => {
+      // Keep previous cached value on failures, if any.
+      if (cached?.value !== undefined) {
+        getCache.set(url, {
+          value: cached.value,
+          expiresAt: cached.expiresAt,
+        });
+      } else {
+        getCache.delete(url);
+      }
+      throw err;
+    });
+
+  getCache.set(url, {
+    value: cached?.value,
+    expiresAt: cached?.expiresAt || 0,
+    inflight,
+  });
+
+  return inflight;
 }
 
 export function post<T = any>(url: string, body?: any): Promise<T> {

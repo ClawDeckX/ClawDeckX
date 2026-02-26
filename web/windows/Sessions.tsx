@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
-import { gwApi } from '../services/api';
+import { gatewayApi, gwApi } from '../services/api';
 import { subscribeManagerWS } from '../services/manager-ws';
 
 interface SessionsProps {
@@ -23,6 +23,23 @@ interface ChatMsg {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: unknown;
   timestamp?: number;
+}
+
+type ChatRunPhase = 'idle' | 'sending' | 'streaming' | 'error';
+
+function appendMessageDedup(
+  prev: ChatMsg[],
+  next: ChatMsg,
+): ChatMsg[] {
+  const text = extractText(next.content);
+  const ts = next.timestamp || 0;
+  const duplicated = prev.some((m) => {
+    if (m.role !== next.role) return false;
+    const mt = m.timestamp || 0;
+    if (ts && mt && Math.abs(mt - ts) > 2000) return false;
+    return extractText(m.content) === text;
+  });
+  return duplicated ? prev : [...prev, next];
 }
 
 function extractText(content: unknown): string {
@@ -70,6 +87,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [wsError, setWsError] = useState<string | null>(null);
   const [wsConnecting, setWsConnecting] = useState(false);
   const [gwReady, setGwReady] = useState(false);
+  const lastGwReconnectAtRef = useRef(0);
 
   // Sessions
   const [sessions, setSessions] = useState<GwSession[]>([]);
@@ -107,8 +125,10 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [sending, setSending] = useState(false);
   const [stream, setStream] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
+  const [runPhase, setRunPhase] = useState<ChatRunPhase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const pendingRunRef = useRef<{ runId: string; beforeCount: number; startedAt: number } | null>(null);
 
   // Inject system message
   const [injectOpen, setInjectOpen] = useState(false);
@@ -174,10 +194,38 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     session: c.catSession, options: c.catOptions, status: c.catStatus,
     tools: c.catTools, management: c.catManagement, media: c.catMedia, docks: c.catDocks,
   }), [c]);
+  const runPhaseMeta = useMemo(() => {
+    if (runPhase === 'sending') {
+      return {
+        text: c.runSending || '发送中',
+        dot: 'bg-amber-400',
+        textClass: 'text-amber-500',
+      };
+    }
+    if (runPhase === 'streaming') {
+      return {
+        text: c.runStreaming || '流式回复',
+        dot: 'bg-primary animate-pulse',
+        textClass: 'text-primary',
+      };
+    }
+    if (runPhase === 'error') {
+      return {
+        text: c.runError || '异常',
+        dot: 'bg-red-500',
+        textClass: 'text-red-500',
+      };
+    }
+    return {
+      text: c.runIdle || '空闲',
+      dot: 'bg-mac-green',
+      textClass: 'text-mac-green',
+    };
+  }, [runPhase, c.runSending, c.runStreaming, c.runError, c.runIdle]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isStreaming = runId !== null;
+  const isStreaming = runPhase === 'streaming';
   const renderedMessages = useMemo(() => messages.slice(-200), [messages]);
   const omittedMessageCount = Math.max(0, messages.length - renderedMessages.length);
 
@@ -187,15 +235,35 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setWsError(null);
 
     // 1) Check GW proxy is reachable via REST
-    gwApi.status().then((res: any) => {
-      if (res?.connected) {
-        setGwReady(true);
-      } else {
+    const refreshGwReady = () => {
+      Promise.allSettled([gwApi.status(), gatewayApi.status()]).then(([rpc, svc]) => {
+        const rpcConnected = rpc.status === 'fulfilled' && !!(rpc.value as any)?.connected;
+        const gatewayRunning = svc.status === 'fulfilled' && !!(svc.value as any)?.running;
+        const ready = rpcConnected || gatewayRunning;
+        setGwReady(ready);
+
+        // Self-heal: gateway process is up but GW WS client is disconnected.
+        if (!rpcConnected && gatewayRunning) {
+          const now = Date.now();
+          if (now - lastGwReconnectAtRef.current > 10000) {
+            lastGwReconnectAtRef.current = now;
+            void gwApi.reconnect().catch(() => { /* ignore */ });
+          }
+        }
+
+        if (!ready) {
+          setWsError(c.configMissing);
+          return;
+        }
+        // Clear hard "config missing" errors when gateway is available.
+        setWsError((prev) => (prev === c.configMissing ? null : prev));
+      }).catch(() => {
+        setGwReady(false);
         setWsError(c.configMissing);
-      }
-    }).catch(() => {
-      setWsError(c.configMissing);
-    });
+      });
+    };
+    refreshGwReady();
+    const gwTimer = setInterval(refreshGwReady, 5000);
 
     // 2) Subscribe to shared Manager WS for real-time chat streaming events
     let opened = false;
@@ -208,7 +276,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
     const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
-        if (msg.type === 'chat') {
+        if (msg.type === 'chat' || msg.type === 'session.message') {
           handleChatEventRef.current(msg.data);
         } else if (msg.type === 'talk.mode') {
           setTalkMode(msg.data?.mode || null);
@@ -228,15 +296,38 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
     return () => {
       clearTimeout(connectTimeout);
+      clearInterval(gwTimer);
       unsubscribe();
     };
-  }, []);
+  }, [c.configMissing, c.wsError]);
 
   // Chat event handler (streaming) - defined before useEffect to avoid closure issues
   const handleChatEvent = useCallback((payload?: any) => {
     if (!payload) return;
     // Only handle events for the current session
-    if (payload.sessionKey && payload.sessionKey !== sessionKeyRef.current) return;
+    const eventSessionKey = payload.sessionKey || payload.key;
+    if (eventSessionKey && eventSessionKey !== sessionKeyRef.current) return;
+
+    // session.message style payload (without state)
+    if (!payload.state && (payload.role || payload.message?.role)) {
+      const msg = payload.message || payload;
+      const text = extractText(msg?.content ?? msg);
+      if (text) {
+        setMessages(prev => appendMessageDedup(prev, {
+          role: (msg.role || 'assistant') as ChatMsg['role'],
+          content: msg.content ?? [{ type: 'text', text }],
+          timestamp: msg.timestamp || Date.now(),
+        }));
+        if ((msg.role || 'assistant') === 'assistant') {
+          setRunId(null);
+          setStream(null);
+          setRunPhase('idle');
+          setError(null);
+          pendingRunRef.current = null;
+        }
+      }
+      return;
+    }
 
     if (payload.state === 'delta') {
       // Gateway sends: message: { role, content: [{ type: 'text', text }], timestamp }
@@ -244,6 +335,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       const text = extractText(msg?.content ?? msg);
       if (typeof text === 'string' && text.length > 0) {
         setStream(text);
+        setRunPhase('streaming');
       }
     } else if (payload.state === 'final') {
       // Add final message directly from the event payload
@@ -251,31 +343,39 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       if (msg) {
         const text = extractText(msg?.content ?? msg);
         if (text) {
-          setMessages(prev => [...prev, {
+          setMessages(prev => appendMessageDedup(prev, {
             role: (msg.role || 'assistant') as ChatMsg['role'],
             content: msg.content ?? [{ type: 'text', text }],
             timestamp: msg.timestamp || Date.now(),
-          }]);
+          }));
         }
       }
       setStream(null);
       setRunId(null);
+      setRunPhase('idle');
+      setError(null);
+      pendingRunRef.current = null;
     } else if (payload.state === 'aborted') {
       // If there was partial stream text, keep it as a message
       setStream(prev => {
         if (prev) {
-          setMessages(msgs => [...msgs, {
+          setMessages(msgs => appendMessageDedup(msgs, {
             role: 'assistant',
             content: [{ type: 'text', text: prev }],
             timestamp: Date.now(),
-          }]);
+          }));
         }
         return null;
       });
       setRunId(null);
+      setRunPhase('idle');
+      setError(null);
+      pendingRunRef.current = null;
     } else if (payload.state === 'error') {
       setStream(null);
       setRunId(null);
+      setRunPhase('error');
+      pendingRunRef.current = null;
       setError(payload.errorMessage || c.error);
     }
   }, [c.error]);
@@ -310,9 +410,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   }, [gwReady]);
 
   // Load chat history (via REST proxy)
-  const loadHistory = useCallback(async () => {
+  const loadHistory = useCallback(async (opts?: { silent?: boolean }) => {
     if (!gwReady) return;
-    setChatLoading(true);
+    if (!opts?.silent) {
+      setChatLoading(true);
+    }
     try {
       const res = await gwApi.proxy('chat.history', { sessionKey, limit: 200 }) as any;
       const msgs = Array.isArray(res?.messages) ? res.messages : [];
@@ -324,25 +426,55 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     } catch {
       setMessages([]);
     } finally {
-      setChatLoading(false);
+      if (!opts?.silent) {
+        setChatLoading(false);
+      }
     }
   }, [gwReady, sessionKey]);
 
   // On ready: load sessions list and refresh it periodically.
   useEffect(() => {
-    if (gwReady && wsConnected) {
+    if (gwReady) {
       loadSessions();
       const timer = setInterval(loadSessions, 30000);
       return () => clearInterval(timer);
     }
-  }, [gwReady, wsConnected, loadSessions]);
+  }, [gwReady, loadSessions]);
 
   // Load chat history only when selected session changes.
   useEffect(() => {
-    if (gwReady && wsConnected) {
+    if (gwReady) {
       loadHistory();
     }
-  }, [gwReady, wsConnected, sessionKey, loadHistory]);
+  }, [gwReady, sessionKey, loadHistory]);
+
+  // Fallback reconciliation: if stream events are missing, poll history until assistant reply appears.
+  useEffect(() => {
+    if (!gwReady || !runId) return;
+    const timer = setInterval(async () => {
+      const pending = pendingRunRef.current;
+      if (!pending || pending.runId !== runId) return;
+      await loadHistory({ silent: true });
+      setMessages((prev) => {
+        const latest = prev[prev.length - 1];
+        const hasAssistantReply = prev.length > pending.beforeCount && latest?.role === 'assistant';
+        if (hasAssistantReply) {
+          setRunId(null);
+          setStream(null);
+          setRunPhase('idle');
+          pendingRunRef.current = null;
+        } else if (Date.now() - pending.startedAt > 90000) {
+          setRunId(null);
+          setStream(null);
+          setRunPhase('error');
+          pendingRunRef.current = null;
+          setError(c.error);
+        }
+        return prev;
+      });
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [gwReady, runId, loadHistory, c.error]);
 
   // Auto-scroll
   useEffect(() => {
@@ -359,6 +491,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setMessages(prev => [...prev, { role: 'user', content: [{ type: 'text', text: msg }], timestamp: Date.now() }]);
     setInput('');
     setSending(true);
+    setRunPhase('sending');
     setError(null);
     setStream('');
 
@@ -370,15 +503,29 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         message: msg,
         idempotencyKey,
       }) as any;
-      setRunId(res?.runId || idempotencyKey);
+      const nextRunId = res?.runId || idempotencyKey;
+      setRunId(nextRunId);
+      setRunPhase('streaming');
+      setError(null);
+      pendingRunRef.current = {
+        runId: nextRunId,
+        beforeCount: messages.length + 1,
+        startedAt: Date.now(),
+      };
     } catch (err: any) {
       setStream(null);
+      setRunPhase('error');
       setError(err?.message || c.error);
       setMessages(prev => [...prev, { role: 'assistant', content: [{ type: 'text', text: 'Error: ' + (err?.message || c.error) }], timestamp: Date.now() }]);
+      pendingRunRef.current = null;
+      // If gateway connection just flapped, force a status refresh sooner.
+      gwApi.status().then((res: any) => {
+        if (res?.connected) setGwReady(true);
+      }).catch(() => { /* ignore */ });
     } finally {
       setSending(false);
     }
-  }, [gwReady, input, sending, isStreaming, sessionKey]);
+  }, [gwReady, input, sending, isStreaming, sessionKey, messages.length, c.error]);
 
   // Abort (via REST proxy)
   const handleAbort = useCallback(async () => {
@@ -386,6 +533,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     try {
       await gwApi.proxy('chat.abort', { sessionKey, runId: runId || undefined });
     } catch { /* ignore */ }
+    setRunId(null);
+    setStream(null);
+    setRunPhase('idle');
+    setError(null);
+    pendingRunRef.current = null;
   }, [gwReady, sessionKey, runId]);
 
   // Copy message
@@ -413,11 +565,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setInjectMsg('');
       setInjectLabel('');
       // Add injected message to local chat view
-      setMessages(prev => [...prev, {
+      setMessages(prev => appendMessageDedup(prev, {
         role: 'assistant' as const,
         content: [{ type: 'text', text: (injectLabel.trim() ? `[${injectLabel.trim()}]\n\n` : '') + msg }],
         timestamp: Date.now(),
-      }]);
+      }));
       setTimeout(() => { setInjectOpen(false); setInjectResult(null); }, 1200);
     } catch (err: any) {
       setInjectResult({ ok: false, text: `${c.injectFailed}: ${err?.message || ''}` });
@@ -459,6 +611,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setMessages([]);
     setStream(null);
     setRunId(null);
+    setRunPhase('idle');
+    pendingRunRef.current = null;
     setDrawerOpen(false);
   }, []);
 
@@ -469,6 +623,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setMessages([]);
     setStream(null);
     setRunId(null);
+    setRunPhase('idle');
+    pendingRunRef.current = null;
   }, []);
 
   // Rename session
@@ -578,7 +734,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const activeLabel = sessions.find(s => s.key === sessionKey)?.label || sessionKey;
 
   // Not connected state
-  if (wsError && !wsConnected && !wsConnecting) {
+  if (!gwReady && wsError && !wsConnected && !wsConnecting) {
     return (
       <div className="flex-1 flex items-center justify-center bg-white dark:bg-[#0d1117]">
         <div className="text-center max-w-sm px-6">
@@ -704,6 +860,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className={`w-1 h-1 rounded-full ${wsConnected ? 'bg-mac-green' : 'bg-slate-300'}`} />
                 <span className="text-[11px] text-slate-400 font-medium font-mono">{sessionKey}</span>
+                <span className="text-slate-300 dark:text-white/15">|</span>
+                <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${runPhaseMeta.textClass}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${runPhaseMeta.dot}`} />
+                  {runPhaseMeta.text}
+                </span>
               </div>
             </div>
           </div>
@@ -714,17 +875,17 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 <span className="material-symbols-outlined text-[14px]">stop_circle</span> {c.abort}
               </button>
             )}
-            <button onClick={() => setInjectOpen(true)} disabled={!wsConnected}
+            <button onClick={() => setInjectOpen(true)} disabled={!gwReady}
               className="p-2 text-slate-400 hover:bg-purple-100 dark:hover:bg-purple-500/10 hover:text-purple-500 rounded-lg transition-colors disabled:opacity-30"
               title={c.inject}>
               <span className="material-symbols-outlined text-[18px]">add_comment</span>
             </button>
-            <button onClick={handleResolve} disabled={!wsConnected || resolving || !sessionKey.trim()}
+            <button onClick={handleResolve} disabled={!gwReady || resolving || !sessionKey.trim()}
               className="p-2 text-slate-400 hover:bg-blue-100 dark:hover:bg-blue-500/10 hover:text-blue-500 rounded-lg transition-colors disabled:opacity-30"
               title={c.resolve}>
               <span className={`material-symbols-outlined text-[18px] ${resolving ? 'animate-spin' : ''}`}>{resolving ? 'progress_activity' : 'link'}</span>
             </button>
-            <button onClick={handleCompact} disabled={!wsConnected || compacting || !sessionKey.trim()}
+            <button onClick={handleCompact} disabled={!gwReady || compacting || !sessionKey.trim()}
               className="p-2 text-slate-400 hover:bg-amber-100 dark:hover:bg-amber-500/10 hover:text-amber-500 rounded-lg transition-colors disabled:opacity-30"
               title={c.compact}>
               <span className={`material-symbols-outlined text-[18px] ${compacting ? 'animate-spin' : ''}`}>{compacting ? 'progress_activity' : 'compress'}</span>
@@ -975,7 +1136,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                disabled={!wsConnected}
+                disabled={!gwReady}
               />
               {isStreaming ? (
                 <button onClick={handleAbort}
@@ -984,8 +1145,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 </button>
               ) : (
                 <button onClick={sendMessage}
-                  disabled={!input.trim() || sending || !wsConnected}
-                  className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-95 ${input.trim() && !sending && wsConnected
+                  disabled={!input.trim() || sending || !gwReady}
+                  className={`w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-95 ${input.trim() && !sending && gwReady
                     ? 'bg-primary text-white shadow-lg shadow-primary/30'
                     : 'bg-slate-100 dark:bg-white/5 text-slate-400'
                     }`}>

@@ -1,4 +1,4 @@
-﻿package monitor
+package monitor
 
 import (
 	"encoding/json"
@@ -93,6 +93,10 @@ func (c *GWCollector) IsRunning() bool {
 func (c *GWCollector) handleEvent(event string, payload json.RawMessage) {
 	// 转发到前端 WebSocket
 	c.wsHub.Broadcast("gw_event", event, payload)
+	// Compatibility alias: some UIs listen for "chat" only.
+	if event == "session.message" {
+		c.wsHub.Broadcast("gw_event", "chat", payload)
+	}
 
 	// 解析并记录有意义的事件
 	switch {
@@ -100,12 +104,37 @@ func (c *GWCollector) handleEvent(event string, payload json.RawMessage) {
 		c.handleSessionEvent(event, payload)
 	case event == "session.message":
 		c.handleMessageEvent(payload)
+	case event == "chat":
+		c.handleChatStreamEvent(payload)
 	case strings.HasPrefix(event, "tool."):
 		c.handleToolEvent(event, payload)
 	case event == "error":
 		c.handleErrorEvent(payload)
 	case strings.HasPrefix(event, "cron."):
 		c.handleCronEvent(event, payload)
+	}
+}
+
+// handleChatStreamEvent 处理 chat 流式事件（delta/final/error）。
+func (c *GWCollector) handleChatStreamEvent(payload json.RawMessage) {
+	var data struct {
+		SessionKey   string `json:"sessionKey"`
+		State        string `json:"state"`
+		ErrorMessage string `json:"errorMessage"`
+	}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return
+	}
+	state := strings.TrimSpace(data.State)
+	switch state {
+	case "final", "aborted":
+		c.writeActivity("Message", "low", fmt.Sprintf("会话回复完成: %s", data.SessionKey), string(payload), "chat", "allow", "")
+	case "error":
+		summary := "会话回复失败"
+		if data.ErrorMessage != "" {
+			summary += ": " + data.ErrorMessage
+		}
+		c.writeActivity("System", "medium", summary, string(payload), "chat", "alert", "")
 	}
 }
 

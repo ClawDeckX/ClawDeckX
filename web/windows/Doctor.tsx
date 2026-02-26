@@ -49,6 +49,18 @@ interface DoctorOverview {
   actions: Array<{ id: string; title: string; target: string; priority: 'high' | 'medium' | 'low' }>;
 }
 
+interface LocalizedCheckItem extends CheckItem {
+  displayName: string;
+  displayDetail: string;
+  displaySuggestion?: string;
+}
+
+interface CheckLocaleEntry {
+  name?: string;
+  detail?: string;
+  suggestion?: string;
+}
+
 function statusClass(status: 'ok' | 'warn' | 'error') {
   if (status === 'ok') return 'text-emerald-500 bg-emerald-500/10';
   if (status === 'warn') return 'text-amber-500 bg-amber-500/10';
@@ -76,22 +88,22 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
   const [onlyFixable, setOnlyFixable] = useState(false);
   const [fixingOne, setFixingOne] = useState<string>('');
 
-  const runDoctor = useCallback(async () => {
-    const data = await doctorApi.run() as DiagResult;
+  const runDoctor = useCallback(async (force = false) => {
+    const data = await doctorApi.runCached(12000, force) as DiagResult;
     setResult(data);
   }, []);
 
-  const loadOverview = useCallback(async () => {
-    const data = await doctorApi.overview() as DoctorOverview;
+  const loadOverview = useCallback(async (force = false) => {
+    const data = await doctorApi.overviewCached(12000, force) as DoctorOverview;
     setOverview(data);
     setLastUpdate(new Date(data?.updatedAt || Date.now()).toLocaleString(dateLocale));
   }, [dateLocale]);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  const fetchAll = useCallback(async (force = false) => {
+    setLoading(force || (!result && !overview));
     setLoadError('');
     try {
-      await Promise.all([runDoctor(), loadOverview()]);
+      await Promise.all([runDoctor(force), loadOverview(force)]);
     } catch (err: any) {
       const msg = err?.message || '';
       const hint = msg ? `: ${msg}` : '';
@@ -113,7 +125,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
       const fixed = Array.isArray(data?.fixed) ? data.fixed : [];
       setFixResult(fixed);
       toast('success', text.fixedOk);
-      await fetchAll();
+      await fetchAll(true);
     } catch (err: any) {
       toast('error', `${text.fixedFail}: ${err?.message || ''}`);
     } finally {
@@ -134,7 +146,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
       } else {
         toast('error', r?.message || text.fixedFail);
       }
-      await fetchAll();
+      await fetchAll(true);
     } catch (err: any) {
       toast('error', `${text.fixedFail}: ${err?.message || ''}`);
     } finally {
@@ -209,6 +221,130 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     return fallback;
   }, [text.cardAvailability, text.cardErrors1h, text.cardEvents24h, text.cardResource]);
 
+  const fallbackCheckCatalog = useMemo<Record<string, CheckLocaleEntry>>(() => {
+    if (language === 'zh') {
+      return {
+        openclaw_install: { name: 'OpenClaw 安装' },
+        config_file: { name: '配置文件' },
+        gateway_status: { name: '网关状态' },
+        pid_lock: { name: 'PID 锁文件' },
+        port_default: { name: '端口检查' },
+        disk_space: { name: '磁盘空间' },
+        gateway_diag_openclaw_installed: { name: 'OpenClaw 已安装' },
+        gateway_diag_config_exists: { name: '配置文件存在' },
+        gateway_diag_config_valid: { name: '配置文件格式正确' },
+        gateway_diag_gateway_process: { name: 'Gateway 进程' },
+        gateway_diag_port_reachable: { name: '端口可达性' },
+        gateway_diag_gateway_api: { name: 'Gateway API 响应' },
+        gateway_diag_port_conflict: { name: '端口冲突检查' },
+        gateway_diag_auth_token: { name: '鉴权 Token 匹配' },
+      };
+    }
+
+    return {
+      openclaw_install: { name: 'OpenClaw Install' },
+      config_file: { name: 'Config File' },
+      gateway_status: { name: 'Gateway Status' },
+      pid_lock: { name: 'PID Lock' },
+      port_default: { name: 'Port Check' },
+      disk_space: { name: 'Disk Space' },
+      gateway_diag_openclaw_installed: { name: 'OpenClaw Installed' },
+      gateway_diag_config_exists: { name: 'Config File Exists' },
+      gateway_diag_config_valid: { name: 'Config File Valid' },
+      gateway_diag_gateway_process: { name: 'Gateway Process' },
+      gateway_diag_port_reachable: { name: 'Port Reachable' },
+      gateway_diag_gateway_api: { name: 'Gateway API Response' },
+      gateway_diag_port_conflict: { name: 'Port Conflict Check' },
+      gateway_diag_auth_token: { name: 'Auth Token Match' },
+    };
+  }, [language]);
+
+  const checkDetailTpl = useMemo(() => {
+    if (language === 'zh') {
+      return {
+        openclawInstalled: '已安装: {path}',
+        openclawNotFound: '未找到 openclaw 命令',
+        configExistsSize: '配置存在，大小: {size}',
+        configExists: '配置存在',
+        configMissing: '未找到配置文件',
+        gatewayNotRunning: '网关未运行',
+        noStalePid: '没有陈旧 PID 文件',
+        stalePid: '发现陈旧 PID 文件，网关未运行',
+        portDefault: '默认端口 {port}',
+        diskOk: '正常',
+      };
+    }
+    return {
+      openclawInstalled: 'installed: {path}',
+      openclawNotFound: 'openclaw command not found',
+      configExistsSize: 'exists, size: {size}',
+      configExists: 'exists',
+      configMissing: 'config file not found',
+      gatewayNotRunning: 'gateway not running',
+      noStalePid: 'no stale files',
+      stalePid: 'stale PID file found but gateway not running',
+      portDefault: 'default port {port}',
+      diskOk: 'ok',
+    };
+  }, [language]);
+
+  const formatTpl = useCallback((tpl: string, vars: Record<string, string>) => {
+    return tpl.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? '');
+  }, []);
+
+  const localizeCheckItem = useCallback((item: CheckItem): LocalizedCheckItem => {
+    const code = (item.code || item.id || '').replace(/\./g, '_');
+    const catalog = (text.checkCatalog || {}) as Record<string, CheckLocaleEntry>;
+    const merged = { ...(fallbackCheckCatalog[code] || {}), ...(catalog[code] || {}) };
+
+    let detail = item.detail || '';
+    if (code === 'openclaw_install') {
+      if (/^installed:\s*/i.test(detail)) {
+        const path = detail.replace(/^installed:\s*/i, '').trim();
+        detail = formatTpl(checkDetailTpl.openclawInstalled, { path });
+      } else if (/openclaw command not found/i.test(detail)) {
+        detail = checkDetailTpl.openclawNotFound;
+      }
+    } else if (code === 'config_file') {
+      const sizeMatch = detail.match(/^exists,\s*size:\s*(.+)$/i);
+      if (sizeMatch) {
+        detail = formatTpl(checkDetailTpl.configExistsSize, { size: sizeMatch[1].trim() });
+      } else if (/^exists$/i.test(detail)) {
+        detail = checkDetailTpl.configExists;
+      } else if (/config file not found/i.test(detail)) {
+        detail = checkDetailTpl.configMissing;
+      }
+    } else if (code === 'gateway_status') {
+      if (/gateway not running/i.test(detail)) {
+        detail = checkDetailTpl.gatewayNotRunning;
+      }
+    } else if (code === 'pid_lock') {
+      if (/^no stale files$/i.test(detail)) {
+        detail = checkDetailTpl.noStalePid;
+      } else if (/stale PID file found but gateway not running/i.test(detail)) {
+        detail = checkDetailTpl.stalePid;
+      }
+    } else if (code === 'port_default') {
+      const m = detail.match(/default port\s+(\d+)/i);
+      if (m) {
+        detail = formatTpl(checkDetailTpl.portDefault, { port: m[1] });
+      }
+    } else if (code === 'disk_space') {
+      if (/^ok$/i.test(detail)) {
+        detail = checkDetailTpl.diskOk;
+      }
+    }
+
+    return {
+      ...item,
+      displayName: merged.name || item.name,
+      displayDetail: merged.detail || detail,
+      displaySuggestion: merged.suggestion || item.suggestion,
+    };
+  }, [checkDetailTpl, fallbackCheckCatalog, formatTpl, text.checkCatalog]);
+
+  const localizedItems = useMemo(() => filteredItems.map(localizeCheckItem), [filteredItems, localizeCheckItem]);
+
   return (
     <div className="h-full overflow-y-auto bg-slate-50 dark:bg-transparent">
       <div className="p-3 md:p-4 border-b border-slate-200 dark:border-white/5 bg-white/70 dark:bg-white/[0.02] backdrop-blur">
@@ -220,7 +356,8 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
           <div className="flex items-center gap-2">
             <span className={`px-2 py-1 rounded text-[10px] font-bold ${statusClass(overview?.status || 'warn')}`}>{statusLabel}</span>
             <span className="text-[13px] font-black text-primary">{overview?.score ?? result?.score ?? na}</span>
-            <button onClick={fetchAll} disabled={loading} className="h-8 px-3 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-slate-700 dark:text-white/70 hover:border-primary/30 disabled:opacity-50">
+            <button onClick={() => fetchAll(true)} disabled={loading} className="h-8 px-3 rounded-lg text-[11px] font-bold border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:border-amber-500/50 disabled:opacity-50 flex items-center gap-1.5">
+              <span className={`material-symbols-outlined text-[14px] ${loading ? 'animate-spin' : ''}`}>{loading ? 'progress_activity' : 'troubleshoot'}</span>
               {loading ? text.running : text.run}
             </button>
             <button onClick={handleFix} disabled={fixing || fixableCount === 0} className="h-8 px-3 rounded-lg text-[11px] font-bold bg-primary text-white disabled:opacity-40">
@@ -355,19 +492,19 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
             </button>
           </div>
 
-          {filteredItems.length === 0 ? (
+          {localizedItems.length === 0 ? (
             <p className="text-[11px] text-slate-400 dark:text-white/40 py-4 text-center">{text.empty}</p>
           ) : (
             <div className="space-y-2">
-              {filteredItems.map((item, idx) => {
+              {localizedItems.map((item, idx) => {
                 const statusText = item.status === 'ok' ? text.ok : item.status === 'warn' ? text.warn : text.error;
                 return (
                   <div key={`${item.name}-${idx}`} className="rounded-lg border border-slate-200 dark:border-white/10 p-2.5 bg-slate-50 dark:bg-white/[0.02]">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[12px] font-bold text-slate-700 dark:text-white/75 truncate">{item.name}</p>
-                        <p className="text-[11px] text-slate-500 dark:text-white/40 mt-0.5 break-all">{item.detail}</p>
-                        {item.suggestion && <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">{item.suggestion}</p>}
+                        <p className="text-[12px] font-bold text-slate-700 dark:text-white/75 truncate">{item.displayName}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-white/40 mt-0.5 break-all">{item.displayDetail}</p>
+                        {item.displaySuggestion && <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">{item.displaySuggestion}</p>}
                       </div>
                       <div className="shrink-0 flex items-center gap-1.5">
                         {item.fixable && (

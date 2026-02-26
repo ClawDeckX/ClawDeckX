@@ -8,6 +8,7 @@ import { useIconGrid } from '../hooks/useIconGrid';
 
 interface DesktopProps {
   onOpenWindow: (id: WindowID) => void;
+  onPrefetchWindow?: (id: WindowID) => void;
   onCloseAllWindows: () => void;
   activeWindows: WindowState[];
   theme: 'light' | 'dark';
@@ -35,6 +36,7 @@ interface AppGroup {
 
 const Desktop: React.FC<DesktopProps> = ({
   onOpenWindow,
+  onPrefetchWindow,
   onCloseAllWindows,
   activeWindows,
   theme,
@@ -83,24 +85,22 @@ const Desktop: React.FC<DesktopProps> = ({
   }, []);
 
   const allDesktopApps: AppInfo[] = [
-    // 核心操作
+    // 默认桌面顺序（与设计稿一致）
     { id: 'dashboard', titleKey: 'dashboard', icon: 'dashboard', gradient: 'from-[#2DA9FF] to-[#007AFF]' },
-    { id: 'gateway', titleKey: 'gateway', icon: 'router', gradient: 'from-[#34C759] to-[#248A3D]' },
-    { id: 'editor', titleKey: 'editor', icon: 'code_blocks', gradient: 'from-[#14B8A6] to-[#0D9488]' },
-    { id: 'sessions', titleKey: 'sessions', icon: 'forum', gradient: 'from-[#818CF8] to-[#4F46E5]' },
-    { id: 'agents', titleKey: 'agents', icon: 'robot_2', gradient: 'from-[#5856D6] to-[#3634A3]' },
-    // 监控与运维
-    { id: 'activity', titleKey: 'activity', icon: 'query_stats', gradient: 'from-[#AF52DE] to-[#8944AB]' },
-    { id: 'alerts', titleKey: 'alerts', icon: 'approval', gradient: 'from-[#FF453A] to-[#C33B32]' },
-    { id: 'scheduler', titleKey: 'scheduler', icon: 'event_repeat', gradient: 'from-[#FF375F] to-[#BF2A47]' },
-    { id: 'skills', titleKey: 'skills', icon: 'extension', gradient: 'from-[#FF9500] to-[#E67E00]' },
-    { id: 'maintenance', titleKey: 'maintenance', icon: 'health_and_safety', gradient: 'from-[#22C55E] to-[#15803D]' },
-    { id: 'nodes', titleKey: 'nodes', icon: 'hub', gradient: 'from-[#10B981] to-[#059669]' },
-    // 配置与工具
-    { id: 'config_mgmt', titleKey: 'config_mgmt', icon: 'analytics', gradient: 'from-[#F472B6] to-[#DB2777]' },
-    { id: 'settings', titleKey: 'settings', icon: 'settings', gradient: 'from-[#8E8E93] to-[#636366]' },
-    { id: 'usage_wizard', titleKey: 'usage_wizard', icon: 'auto_fix_high', gradient: 'from-[#A855F7] to-[#7C3AED]' },
     { id: 'setup_wizard', titleKey: 'setup_wizard', icon: 'rocket_launch', gradient: 'from-[#FF6B6B] to-[#FF3D3D]' },
+    { id: 'usage_wizard', titleKey: 'usage_wizard', icon: 'auto_fix_high', gradient: 'from-[#A855F7] to-[#7C3AED]' },
+    { id: 'editor', titleKey: 'editor', icon: 'code_blocks', gradient: 'from-[#14B8A6] to-[#0D9488]' },
+    { id: 'skills', titleKey: 'skills', icon: 'extension', gradient: 'from-[#FF9500] to-[#E67E00]' },
+    { id: 'alerts', titleKey: 'alerts', icon: 'approval', gradient: 'from-[#FF453A] to-[#C33B32]' },
+    { id: 'gateway', titleKey: 'gateway', icon: 'router', gradient: 'from-[#34C759] to-[#248A3D]' },
+    { id: 'activity', titleKey: 'activity', icon: 'query_stats', gradient: 'from-[#AF52DE] to-[#8944AB]' },
+    { id: 'maintenance', titleKey: 'maintenance', icon: 'health_and_safety', gradient: 'from-[#22C55E] to-[#15803D]' },
+    { id: 'config_mgmt', titleKey: 'config_mgmt', icon: 'analytics', gradient: 'from-[#F472B6] to-[#DB2777]' },
+    { id: 'sessions', titleKey: 'sessions', icon: 'forum', gradient: 'from-[#818CF8] to-[#4F46E5]' },
+    { id: 'scheduler', titleKey: 'scheduler', icon: 'event_repeat', gradient: 'from-[#FF375F] to-[#BF2A47]' },
+    { id: 'agents', titleKey: 'agents', icon: 'robot_2', gradient: 'from-[#5856D6] to-[#3634A3]' },
+    { id: 'settings', titleKey: 'settings', icon: 'settings', gradient: 'from-[#8E8E93] to-[#636366]' },
+    { id: 'nodes', titleKey: 'nodes', icon: 'hub', gradient: 'from-[#10B981] to-[#059669]' },
   ];
   const desktopApps = useMemo(() => {
     // Defensive normalization: keep editor always visible on desktop.
@@ -161,7 +161,6 @@ const Desktop: React.FC<DesktopProps> = ({
       icon: 'shield_lock',
       gradient: 'from-[#3B82F6] to-[#1E40AF]',
       apps: [
-        { id: 'editor', icon: 'code_blocks', color: 'bg-teal-600' },
         { id: 'nodes', icon: 'hub', color: 'bg-sky-600' },
         { id: 'maintenance', icon: 'health_and_safety', color: 'bg-emerald-600' },
         { id: 'settings', icon: 'settings', color: 'bg-zinc-600' },
@@ -195,6 +194,10 @@ const Desktop: React.FC<DesktopProps> = ({
     onOpenWindow(id);
     setActiveGroupId(null);
   };
+
+  const handleAppHover = useCallback((id: WindowID) => {
+    onPrefetchWindow?.(id);
+  }, [onPrefetchWindow]);
 
   const handleTrashClick = () => {
     const hasOpenWindows = activeWindows.some(w => w.isOpen);
@@ -263,6 +266,7 @@ const Desktop: React.FC<DesktopProps> = ({
             <div
               key={app.id}
               onClick={() => handleAppClick(app.id)}
+              onMouseEnter={() => handleAppHover(app.id)}
               className="flex flex-col items-center gap-1 group cursor-pointer w-full p-1 rounded-xl hover:bg-white/10 transition-colors"
             >
               <div className={`relative w-[50px] h-[50px] rounded-[1.1rem] bg-gradient-to-b ${app.gradient} flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.3)] border-[0.5px] border-black/10 group-hover:brightness-110 group-active:scale-90 transition-all duration-200 overflow-hidden shrink-0`}>
@@ -294,6 +298,7 @@ const Desktop: React.FC<DesktopProps> = ({
                 key={app.id}
                 className={`absolute flex flex-col items-center gap-1 group cursor-pointer p-2 rounded-xl hover:bg-white/10 select-none ${isDragging ? 'z-[100] opacity-80 scale-105' : 'transition-all duration-200 ease-out'}`}
                 style={{ left, top, width: iconGridConfig.cellW }}
+                onMouseEnter={() => handleAppHover(app.id)}
                 onPointerDown={(e) => onIconPointerDown(app.id, e)}
                 onDoubleClick={() => handleAppClick(app.id)}
               >
@@ -340,7 +345,7 @@ const Desktop: React.FC<DesktopProps> = ({
                   ? 'ring-4 ring-sky-200/95 shadow-[0_0_0_2px_rgba(186,230,253,0.25),0_0_16px_rgba(56,189,248,0.55)]'
                   : 'ring-4 ring-blue-500/95 shadow-[0_0_0_2px_rgba(59,130,246,0.22),0_0_14px_rgba(59,130,246,0.35)]';
                 return (
-                  <div key={app.id} onClick={() => handleAppClick(app.id)} className="flex flex-col items-center gap-1.5 md:gap-2 group cursor-pointer active:scale-95 transition-all">
+                  <div key={app.id} onClick={() => handleAppClick(app.id)} onMouseEnter={() => handleAppHover(app.id)} className="flex flex-col items-center gap-1.5 md:gap-2 group cursor-pointer active:scale-95 transition-all">
                     <div className={`relative w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-b ${appData?.gradient} flex items-center justify-center shadow-lg border border-black/10 ${isMinimized ? minimizedRingClass : ''}`}>
                       <span className={`material-symbols-outlined text-2xl md:text-3xl text-white ${isOpen && !isMinimized ? '' : 'opacity-95'}`}>{app.icon}</span>
                       {isOpen && !isMinimized && (

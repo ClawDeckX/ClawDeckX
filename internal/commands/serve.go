@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -400,6 +401,7 @@ func RunServe(args []string) int {
 	// Gateway 代理 API（通过 WS JSON-RPC 连接远程 Gateway）
 	gwProxy := handlers.NewGWProxyHandler(gwClient)
 	router.GET("/api/v1/gw/status", gwProxy.Status)
+	router.POST("/api/v1/gw/reconnect", gwProxy.Reconnect)
 	router.GET("/api/v1/gw/health", gwProxy.Health)
 	router.GET("/api/v1/gw/info", gwProxy.GWStatus)
 	router.GET("/api/v1/gw/sessions", gwProxy.SessionsList)
@@ -543,6 +545,13 @@ func RunServe(args []string) int {
 
 	addr := cfg.ListenAddr()
 	logger.Log.Info().Str("addr", addr).Msg("Web 服务已启动")
+
+	// 启动后快速自检：检测 127.0.0.1 是否被其他进程占用并劫持到非 ClawDeckX 服务
+	if conflict, detail := detectLoopbackRouteConflict(cfg.Server.Port); conflict {
+		logger.Log.Warn().Str("detail", detail).Msg("检测到本机回环地址冲突")
+		fmt.Printf("\n⚠️  检测到回环地址冲突: %s\n", detail)
+		fmt.Printf("   建议使用: http://localhost:%d/\n", cfg.Server.Port)
+	}
 
 	// 显示所有可访问的 URL
 	const boxWidth = 60 // 内容区域宽度（不含边框字符）
@@ -886,4 +895,42 @@ func getPublicIP() string {
 		}
 	}
 	return ""
+}
+
+// detectLoopbackRouteConflict checks if localhost and 127.0.0.1 route to different services.
+// Returns true when localhost works as ClawDeckX but 127.0.0.1 is not ClawDeckX.
+func detectLoopbackRouteConflict(port int) (bool, string) {
+	client := &http.Client{Timeout: 1200 * time.Millisecond}
+
+	check := func(host string) (bool, int, string) {
+		url := fmt.Sprintf("http://%s:%d/api/v1/health", host, port)
+		resp, err := client.Get(url)
+		if err != nil {
+			return false, 0, err.Error()
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		ok := resp.StatusCode == http.StatusOK &&
+			strings.Contains(string(body), `"success":true`) &&
+			strings.Contains(string(body), `"status":"ok"`)
+		return ok, resp.StatusCode, string(body)
+	}
+
+	localOK, _, _ := check("localhost")
+	if !localOK {
+		// 若 localhost 本身就不可用，不判定为“127 冲突”，避免误报
+		return false, ""
+	}
+
+	ipOK, ipCode, ipBody := check("127.0.0.1")
+	if ipOK {
+		return false, ""
+	}
+	if ipCode == http.StatusUnauthorized {
+		return true, fmt.Sprintf("127.0.0.1:%d 返回 401 Unauthorized（可能命中 Gateway 而非 ClawDeckX）", port)
+	}
+	if ipCode != 0 {
+		return true, fmt.Sprintf("127.0.0.1:%d 返回 HTTP %d（响应片段: %.120s）", port, ipCode, ipBody)
+	}
+	return true, fmt.Sprintf("127.0.0.1:%d 请求失败（%s）", port, ipBody)
 }

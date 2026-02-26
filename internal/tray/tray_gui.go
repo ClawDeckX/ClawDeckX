@@ -15,8 +15,10 @@ import (
 // onReady is called after the tray is initialized.
 // This function blocks until the user quits via the tray menu.
 func Run(addr string, onQuit func()) {
-	// 0.0.0.0 不是有效的浏览器地址，替换为 127.0.0.1
-	browserAddr := strings.Replace(addr, "0.0.0.0", "127.0.0.1", 1)
+	// 0.0.0.0 不是有效的浏览器地址，替换为 localhost。
+	// 在 Windows 上，127.0.0.1 可能被其他进程以更具体绑定抢占；
+	// 使用 localhost 可优先走 IPv6/本机回环，避免误命中。
+	browserAddr := strings.Replace(addr, "0.0.0.0", "localhost", 1)
 	url := fmt.Sprintf("http://%s", browserAddr)
 
 	systray.Run(func() {

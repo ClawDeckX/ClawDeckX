@@ -1,4 +1,4 @@
-{
+﻿{
   "title": "健康维护中心",
   "subtitle": "可视化体检与一键修复",
   "score": "健康分",
@@ -47,5 +47,21 @@
   "actionReviewAlerts": "查看告警",
   "actionOpenEvents": "打开网关事件",
   "overviewLoadFail": "健康概览加载失败",
-  "checksLoadFail": "检查项加载失败"
+  "checksLoadFail": "检查项加载失败",
+  "checkCatalog": {
+    "openclaw_install": { "name": "OpenClaw 安装" },
+    "config_file": { "name": "配置文件" },
+    "gateway_status": { "name": "网关状态" },
+    "pid_lock": { "name": "PID 锁文件" },
+    "port_default": { "name": "端口检查" },
+    "disk_space": { "name": "磁盘空间" },
+    "gateway_diag_openclaw_installed": { "name": "OpenClaw 已安装" },
+    "gateway_diag_config_exists": { "name": "配置文件存在" },
+    "gateway_diag_config_valid": { "name": "配置文件格式正确" },
+    "gateway_diag_gateway_process": { "name": "Gateway 进程" },
+    "gateway_diag_port_reachable": { "name": "端口可达性" },
+    "gateway_diag_gateway_api": { "name": "Gateway API 响应" },
+    "gateway_diag_port_conflict": { "name": "端口冲突检查" },
+    "gateway_diag_auth_token": { "name": "鉴权 Token 匹配" }
+  }
 }

@@ -1,5 +1,5 @@
 ﻿// ClawDeckX API 服务层 — 对应后端所有 REST API 端点
-import { get, post, put, del, setToken, clearToken } from './request';
+import { get, getCached, post, put, del, setToken, clearToken } from './request';
 
 // ==================== 鉴权 ====================
 export const authApi = {
@@ -70,12 +70,18 @@ export const dashboardApi = {
 // ==================== 网关管理 ====================
 export const gatewayApi = {
   status: () => get<{ running: boolean; runtime: string; detail: string }>('/api/v1/gateway/status'),
+  statusCached: (ttlMs = 6000, force = false) =>
+    getCached<{ running: boolean; runtime: string; detail: string }>('/api/v1/gateway/status', ttlMs, force),
   start: () => post('/api/v1/gateway/start'),
   stop: () => post('/api/v1/gateway/stop'),
   restart: () => post('/api/v1/gateway/restart'),
   kill: () => post('/api/v1/gateway/kill'),
   log: (lines = 200) => get<{ lines: string[] }>(`/api/v1/gateway/log?lines=${lines}`),
+  logCached: (lines = 200, ttlMs = 5000, force = false) =>
+    getCached<{ lines: string[] }>(`/api/v1/gateway/log?lines=${lines}`, ttlMs, force),
   getHealthCheck: () => get<{ enabled: boolean; fail_count: number; max_fails: number; last_ok: string }>('/api/v1/gateway/health-check'),
+  getHealthCheckCached: (ttlMs = 6000, force = false) =>
+    getCached<{ enabled: boolean; fail_count: number; max_fails: number; last_ok: string }>('/api/v1/gateway/health-check', ttlMs, force),
   setHealthCheck: (enabled: boolean) => put('/api/v1/gateway/health-check', { enabled }),
   diagnose: () => post<{
     items: Array<{
@@ -94,6 +100,7 @@ export const gatewayApi = {
 // ==================== 网关配置档案（多网关管理） ====================
 export const gatewayProfileApi = {
   list: () => get<any[]>('/api/v1/gateway/profiles'),
+  listCached: (ttlMs = 15000, force = false) => getCached<any[]>('/api/v1/gateway/profiles', ttlMs, force),
   create: (data: { name: string; host: string; port: number; token: string }) =>
     post('/api/v1/gateway/profiles', data),
   update: (id: number, data: { name?: string; host?: string; port?: number; token?: string }) =>
@@ -219,6 +226,7 @@ export const backupApi = {
 // ==================== 诊断修复 ====================
 export const doctorApi = {
   run: () => get('/api/v1/doctor'),
+  runCached: (ttlMs = 10000, force = false) => getCached('/api/v1/doctor', ttlMs, force),
   overview: () => get<{
     score: number;
     status: 'ok' | 'warn' | 'error';
@@ -239,6 +247,26 @@ export const doctorApi = {
     topIssues: Array<{ id: string; source: string; category: string; risk: string; title: string; detail?: string; timestamp: string }>;
     actions: Array<{ id: string; title: string; target: string; priority: 'high' | 'medium' | 'low' }>;
   }>('/api/v1/doctor/overview'),
+  overviewCached: (ttlMs = 10000, force = false) => getCached<{
+    score: number;
+    status: 'ok' | 'warn' | 'error';
+    summary: string;
+    updatedAt: string;
+    cards: Array<{ id: string; label: string; value: number; unit?: string; trend?: number; status: 'ok' | 'warn' | 'error' }>;
+    riskCounts: Record<string, number>;
+    trend24h: Array<{
+      timestamp: string;
+      label: string;
+      healthScore: number;
+      low: number;
+      medium: number;
+      high: number;
+      critical: number;
+      errors: number;
+    }>;
+    topIssues: Array<{ id: string; source: string; category: string; risk: string; title: string; detail?: string; timestamp: string }>;
+    actions: Array<{ id: string; title: string; target: string; priority: 'high' | 'medium' | 'low' }>;
+  }>('/api/v1/doctor/overview', ttlMs, force),
   fix: (checks?: string[]) => post('/api/v1/doctor/fix', checks && checks.length > 0 ? { checks } : {}),
 };
 
@@ -288,6 +316,7 @@ const rpc = <T = any>(method: string, params?: any): Promise<T> =>
 export const gwApi = {
   // --- 保留 REST（Go 层有额外逻辑） ---
   status: () => get('/api/v1/gw/status'),
+  reconnect: () => post('/api/v1/gw/reconnect'),
   sessionsUsage: (params?: { startDate?: string; endDate?: string; limit?: number; key?: string }) => {
     const qs = new URLSearchParams();
     if (params?.startDate) qs.set('startDate', params.startDate);

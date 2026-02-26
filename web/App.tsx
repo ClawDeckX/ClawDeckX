@@ -33,6 +33,44 @@ const loadNodes = () => import('./windows/Nodes');
 const loadSetupWizard = () => import('./windows/SetupWizard');
 const loadUsageWizard = () => import('./windows/UsageWizard');
 
+const WINDOW_LOADERS: Record<WindowID, () => Promise<unknown>> = {
+  dashboard: loadDashboard,
+  gateway: loadGateway,
+  sessions: loadSessions,
+  activity: loadActivity,
+  alerts: loadAlerts,
+  config_mgmt: loadUsage,
+  editor: loadEditor,
+  skills: loadSkills,
+  agents: loadAgents,
+  maintenance: loadDoctor,
+  scheduler: loadScheduler,
+  settings: loadSettings,
+  nodes: loadNodes,
+  setup_wizard: loadSetupWizard,
+  usage_wizard: loadUsageWizard,
+};
+
+const PRIORITY_WARMUP_LOADERS: Array<() => Promise<unknown>> = [
+  loadGateway,
+  loadEditor,
+  loadSessions,
+  loadAlerts,
+  loadAgents,
+];
+
+const SECONDARY_WARMUP_LOADERS: Array<() => Promise<unknown>> = [
+  loadActivity,
+  loadDoctor,
+  loadScheduler,
+  loadSettings,
+  loadNodes,
+  loadSkills,
+  loadUsage,
+  loadSetupWizard,
+  loadUsageWizard,
+];
+
 const Dashboard = React.lazy(loadDashboard);
 const Gateway = React.lazy(loadGateway);
 const Sessions = React.lazy(loadSessions);
@@ -136,6 +174,8 @@ const App: React.FC = () => {
   const [windows, setWindows] = useState<WindowState[]>(() => buildWindows(language));
   const [maxZ, setMaxZ] = useState(100);
   const [localeReady, setLocaleReady] = useState(language === 'en');
+  const hasWarmedChunksRef = React.useRef(false);
+  const prefetchedWindowsRef = React.useRef<Set<WindowID>>(new Set());
 
   // Cross-window navigation: jump to a specific session in Sessions window
   const [pendingSessionKey, setPendingSessionKey] = useState<string | null>(null);
@@ -200,17 +240,41 @@ const App: React.FC = () => {
   // 登录后空闲预热常用窗口 chunk，减少首次打开等待
   useEffect(() => {
     if (isLocked || !localeReady) return;
+
+    if (hasWarmedChunksRef.current) return;
+    hasWarmedChunksRef.current = true;
+
+    // 省流量或弱网仅预热高优先级，避免挤占带宽导致主交互变慢
+    const conn = (navigator as any).connection;
+    const saveData = !!conn?.saveData;
+    const netType = String(conn?.effectiveType || '');
+    const weakNetwork = /(^|-)2g|slow-2g/.test(netType);
+
     idle(() => {
-      void loadSessions();
-      void loadAlerts();
-      void loadAgents();
-      void loadEditor();
-      void loadGateway();
+      void Promise.allSettled(PRIORITY_WARMUP_LOADERS.map((loader) => loader()));
     });
+
+    if (saveData || weakNetwork) return;
+
+    window.setTimeout(() => {
+      idle(() => {
+        void Promise.allSettled(SECONDARY_WARMUP_LOADERS.map((loader) => loader()));
+      });
+    }, 800);
   }, [isLocked, localeReady]);
 
   const toggleTheme = useCallback(() => setTheme(p => p === 'dark' ? 'light' : 'dark'), []);
   const changeLanguage = useCallback((lang: Language) => setLanguage(lang), []);
+
+  const prefetchWindow = useCallback((id: WindowID) => {
+    if (prefetchedWindowsRef.current.has(id)) return;
+    const loader = WINDOW_LOADERS[id];
+    if (!loader) return;
+    prefetchedWindowsRef.current.add(id);
+    void loader().catch(() => {
+      prefetchedWindowsRef.current.delete(id);
+    });
+  }, []);
 
   const openWindow = useCallback((id: WindowID) => {
     setWindows(prev => {
@@ -301,6 +365,7 @@ const App: React.FC = () => {
         <div className="h-screen w-screen overflow-hidden select-none">
           <Desktop
             onOpenWindow={openWindow}
+            onPrefetchWindow={prefetchWindow}
             onCloseAllWindows={closeAllWindows}
             activeWindows={windows}
             theme={theme}

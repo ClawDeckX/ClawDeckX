@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"encoding/json"
@@ -23,6 +23,17 @@ func NewGWProxyHandler(client *openclaw.GWClient) *GWProxyHandler {
 func (h *GWProxyHandler) Status(w http.ResponseWriter, r *http.Request) {
 	web.OK(w, r, map[string]interface{}{
 		"connected": h.client.IsConnected(),
+	})
+}
+
+// Reconnect triggers GWClient reconnect using current config.
+func (h *GWProxyHandler) Reconnect(w http.ResponseWriter, r *http.Request) {
+	cfg := h.client.GetConfig()
+	h.client.Reconnect(cfg)
+	web.OK(w, r, map[string]interface{}{
+		"message": "reconnecting",
+		"host":    cfg.Host,
+		"port":    cfg.Port,
 	})
 }
 
@@ -500,6 +511,21 @@ var slowMethods = map[string]bool{
 	"update.run":     true,
 }
 
+func proxyTimeoutForMethod(method string) time.Duration {
+	if slowMethods[method] {
+		return 5 * time.Minute
+	}
+	// Chat/session methods are latency-sensitive and may include larger payloads.
+	switch method {
+	case "chat.history", "sessions.preview", "sessions.usage.logs":
+		return 60 * time.Second
+	case "chat.send", "chat.abort", "sessions.list":
+		return 45 * time.Second
+	default:
+		return 30 * time.Second
+	}
+}
+
 // GenericProxy forwards any method to the Gateway.
 func (h *GWProxyHandler) GenericProxy(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -510,11 +536,12 @@ func (h *GWProxyHandler) GenericProxy(w http.ResponseWriter, r *http.Request) {
 		web.Fail(w, r, "INVALID_PARAMS", "method is required", http.StatusBadRequest)
 		return
 	}
-	timeout := 30 * time.Second
-	if slowMethods[req.Method] {
-		timeout = 5 * time.Minute
-	}
+	timeout := proxyTimeoutForMethod(req.Method)
 	data, err := h.client.RequestWithTimeout(req.Method, req.Params, timeout)
+	// One fast retry for chat history to smooth transient gateway hiccups.
+	if err != nil && req.Method == "chat.history" {
+		data, err = h.client.RequestWithTimeout(req.Method, req.Params, timeout)
+	}
 	if err != nil {
 		web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
 		return
