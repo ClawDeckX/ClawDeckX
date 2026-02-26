@@ -232,6 +232,8 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
   const t = useMemo(() => getTranslation(language), [language]);
   const o = (t as any).ow as any;
   const { toast } = useToast();
+  const bilingualLang = useMemo<'zh' | 'en'>(() => (language === 'zh' ? 'zh' : 'en'), [language]);
+  const pickBilingual = useCallback((value: { zh: string; en: string }) => value[bilingualLang], [bilingualLang]);
 
   // Data
   const [config, setConfig] = useState<any>(null);
@@ -395,9 +397,9 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
     setSaving(true);
     try {
       await gwApi.agentFileSet(editingFile.agentId, editingFile.fileName, editingFile.content);
-      toast('success', o?.saved || 'Saved');
+      toast('success', o?.saved);
       await fetchAll();
-    } catch (err: any) { toast('error', err?.message || 'Save failed'); }
+    } catch (err: any) { toast('error', err?.message || o?.saveFailed); }
     setSaving(false);
     setEditingFile(null);
   }, [editingFile, fetchAll, toast, o]);
@@ -420,36 +422,44 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
 
   // Generate persona config from Q&A fields
   const generatePersonaFromQa = useCallback(() => {
-    const isZh = language === 'zh';
     const { name, personality, language: lang, role, userName, userInfo } = qaFields;
+    const fill = (tpl: string, params: Record<string, string>) =>
+      Object.entries(params).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), tpl);
+    const finalName = name || o?.qaDefaultName;
+    const finalPersonality = personality || o?.qaDefaultPersonality;
+    const finalRole = role || o?.qaDefaultRole;
+    const finalLang = lang || o?.qaDefaultLanguage;
+    const finalUserName = userName || o?.qaDefaultUserName;
     const soulLines = [
-      `# ${isZh ? '核心性格' : 'Core Personality'}`,
+      `# ${o?.personaCoreTitle}`,
       '',
-      isZh
-        ? `你是${name || 'AI 助手'}，一个${personality || '专业高效'}的${role || '个人助手'}。`
-        : `You are ${name || 'AI Assistant'}, a ${personality || 'professional and efficient'} ${role || 'personal assistant'}.`,
+      fill(o?.personaIntroTemplate || '', {
+        name: finalName,
+        personality: finalPersonality,
+        role: finalRole,
+      }),
       '',
-      `## ${isZh ? '行为准则' : 'Behavior Guidelines'}`,
-      isZh ? `- 使用${lang || '中文'}交流` : `- Communicate in ${lang || 'English'}`,
-      isZh ? `- 称呼用户为「${userName || '你'}」` : `- Address the user as "${userName || 'you'}"`,
-      isZh ? '- 回答简洁准确，必要时提供详细解释' : '- Give concise, accurate answers; provide details when needed',
-      isZh ? '- 遇到不确定的问题，诚实说明' : '- Be honest about uncertainty',
+      `## ${o?.personaBehaviorTitle}`,
+      fill(o?.personaBehaviorLangTemplate || '', { language: finalLang }),
+      fill(o?.personaBehaviorAddressTemplate || '', { userName: finalUserName }),
+      o?.personaBehaviorConcise,
+      o?.personaBehaviorHonest,
       '',
     ];
     const userLines = userInfo ? [
-      `# ${isZh ? '用户信息' : 'User Info'}`,
+      `# ${o?.personaUserInfoTitle}`,
       '',
       userInfo,
       '',
     ] : [];
     setQaPreviewContent({ soul: soulLines.join('\n'), user: userLines.join('\n') });
     setQaGenerated(true);
-  }, [qaFields, language]);
+  }, [qaFields, o]);
 
   // Apply persona preset
   const applyPersonaPreset = useCallback((preset: PersonaPreset) => {
     if (!defaultAgentId) return;
-    const lang = language === 'zh' ? 'zh' : 'en';
+    const lang = bilingualLang;
     setPendingApply({
       scenarioId: `preset_${preset.id}`,
       request: {
@@ -461,7 +471,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
         ],
       },
     });
-  }, [defaultAgentId, language, o]);
+  }, [defaultAgentId, bilingualLang, o]);
 
   // Apply Q&A generated persona
   const applyQaPersona = useCallback(() => {
@@ -474,7 +484,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
     }
     setPendingApply({
       scenarioId: 'qa_persona',
-      request: { agentId: defaultAgentId, title: o?.personaQaTitle || 'Q&A Persona', files },
+        request: { agentId: defaultAgentId, title: o?.personaQaTitle, files },
     });
     setQaApplied(true);
   }, [defaultAgentId, qaPreviewContent, o]);
@@ -482,7 +492,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
   // Apply automation template
   const applyAutoTemplate = useCallback((tpl: AutoTemplateDef) => {
     if (!defaultAgentId) return;
-    const lang = language === 'zh' ? 'zh' : 'en';
+    const lang = bilingualLang;
     setPendingApply({
       scenarioId: `auto_${tpl.id}`,
       request: {
@@ -491,12 +501,12 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
         files: [{ fileName: 'HEARTBEAT.md', mode: 'append', content: tpl.heartbeatContent[lang] }],
       },
     });
-  }, [defaultAgentId, language, o]);
+  }, [defaultAgentId, bilingualLang, o]);
 
   // Open confirm dialog for scenario apply
   const applyScenario = useCallback((sc: ScenarioDef) => {
     if (!defaultAgentId) return;
-    const lang = language === 'zh' ? 'zh' : 'en';
+    const lang = bilingualLang;
     const cap = sc.id.charAt(0).toUpperCase() + sc.id.slice(1);
     const titleKey = `scenario${cap}Title` as string;
     setPendingApply({
@@ -510,7 +520,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
         ],
       },
     });
-  }, [defaultAgentId, language, o]);
+  }, [defaultAgentId, bilingualLang, o]);
 
   const handleApplyDone = useCallback(async () => {
     if (pendingApply) {
@@ -530,27 +540,27 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
     switch (tipId) {
       case 'Routing': {
         const n = activeChannels.length;
-        return { ok: n > 1, detail: n > 1 ? (o?.tipRoutingStatus || '{n}').replace('{n}', String(n)) : '' };
+          return { ok: n > 1, detail: n > 1 ? o?.tipRoutingStatus.replace('{n}', String(n)) : '' };
       }
       case 'Session': {
         const threshold = config?.agents?.defaults?.compaction?.threshold || 0;
-        return { ok: threshold > 0, detail: threshold > 0 ? (o?.tipSessionStatus || '{n}').replace('{n}', String(threshold)) : '' };
+          return { ok: threshold > 0, detail: threshold > 0 ? o?.tipSessionStatus.replace('{n}', String(threshold)) : '' };
       }
       case 'Security': {
         const hasDm = channels.some((ch: any) => ch.dmPolicy || ch.allowFrom?.length > 0);
-        return { ok: hasDm, detail: hasDm ? (o?.tipSecurityStatus || '') : '' };
+        return { ok: hasDm, detail: hasDm ? (o?.tipSecurityStatus ?? '') : '' };
       }
       case 'Cost': {
         const m = heartbeatModel;
-        return { ok: !!m, detail: m ? (o?.tipCostStatus || '{m}').replace('{m}', m) : '' };
+          return { ok: !!m, detail: m ? o?.tipCostStatus.replace('{m}', m) : '' };
       }
       case 'MultiAgent': {
         const agentCount = Object.keys(agentFiles).length;
-        return { ok: agentCount > 1, detail: agentCount > 1 ? (o?.tipMultiAgentStatus || '{n}').replace('{n}', String(agentCount)) : '' };
+          return { ok: agentCount > 1, detail: agentCount > 1 ? o?.tipMultiAgentStatus.replace('{n}', String(agentCount)) : '' };
       }
       case 'Thinking': {
         const reasoning = config?.agents?.defaults?.model?.reasoning === true;
-        return { ok: reasoning, detail: reasoning ? (o?.tipThinkingStatus || '') : '' };
+        return { ok: reasoning, detail: reasoning ? (o?.tipThinkingStatus ?? '') : '' };
       }
       default: return { ok: false, detail: '' };
     }
@@ -1324,8 +1334,8 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
           const cap = sc.id.charAt(0).toUpperCase() + sc.id.slice(1);
           const titleKey = `scenario${cap}Title` as string;
           const descKey = `scenario${cap}Desc` as string;
-          const snippet = language === 'zh' ? sc.soulSnippet.zh : sc.soulSnippet.en;
-          const hbSnippet = language === 'zh' ? sc.heartbeatSnippet.zh : sc.heartbeatSnippet.en;
+          const snippet = pickBilingual(sc.soulSnippet);
+          const hbSnippet = pickBilingual(sc.heartbeatSnippet);
           const isApplied = appliedScenarios.has(sc.id);
           return (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4" onClick={() => setExpandedScenario(null)}>
@@ -1368,7 +1378,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
                 <div className="flex items-center justify-end gap-2 px-4 sm:px-5 py-3 border-t border-slate-200 dark:border-white/[0.06] shrink-0">
                   <button onClick={() => setExpandedScenario(null)}
                     className="text-[11px] px-3 py-1.5 rounded-lg text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/[0.04] font-bold transition-colors">
-                    {o?.cancel || 'Close'}
+                {o?.cancel || o?.close}
                   </button>
                   {agentId && !isApplied && (
                     <button onClick={() => { applyScenario(sc); setExpandedScenario(null); }}

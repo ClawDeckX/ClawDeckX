@@ -90,6 +90,7 @@ const TIP_KEYS: Record<string, string> = {
 // ============================================================================
 export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getField, deleteField, language, save }) => {
   const es = useMemo(() => (getTranslation(language) as any).es || {}, [language]);
+  const cw = useMemo(() => (getTranslation(language) as any).cw || {}, [language]);
   const channels = getField(['channels']) || {};
   const channelKeys = Object.keys(channels);
   const [addingChannel, setAddingChannel] = useState<string | null>(null);
@@ -101,7 +102,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
   // Send test message
   const [sendChannel, setSendChannel] = useState<string | null>(null);
   const [sendTo, setSendTo] = useState('');
-  const [sendMsg, setSendMsg] = useState('Hello from OpenClaw!');
+  const [sendMsg, setSendMsg] = useState(es.chSendMsgPlaceholder || '');
   const [sendBusy, setSendBusy] = useState(false);
   const [sendResult, setSendResult] = useState<{ ch: string; ok: boolean; text: string } | null>(null);
 
@@ -155,10 +156,10 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
       }
     } catch (err: any) {
       setWizTestStatus('fail');
-      setWizTestMsg(err?.message || 'Test failed');
+      setWizTestMsg(err?.message || es.chSendFailed);
     }
     setTimeout(() => { setWizTestStatus('idle'); setWizTestMsg(''); }, 5000);
-  }, [channels]);
+  }, [channels, es]);
 
   // WhatsApp web login
   const [webLoginBusy, setWebLoginBusy] = useState(false);
@@ -170,20 +171,20 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
     try {
       const res = await gwApi.webLoginStart({}) as any;
       if (res?.qr) {
-        setWebLoginResult({ ok: true, text: 'QR ready', qr: res.qr });
+        setWebLoginResult({ ok: true, text: cw.qrReady, qr: res.qr });
         // Wait for scan
         try {
           await gwApi.webLoginWait({ timeoutMs: 60000 });
-          setWebLoginResult({ ok: true, text: 'Login success' });
-        } catch { setWebLoginResult({ ok: false, text: 'Login timeout or failed' }); }
+          setWebLoginResult({ ok: true, text: cw.loginSuccess });
+        } catch { setWebLoginResult({ ok: false, text: cw.loginTimeout }); }
       } else {
-        setWebLoginResult({ ok: true, text: res?.status || 'Started' });
+        setWebLoginResult({ ok: true, text: res?.status || cw.started });
       }
     } catch (err: any) {
-      setWebLoginResult({ ok: false, text: 'Login failed: ' + (err?.message || '') });
+      setWebLoginResult({ ok: false, text: `${cw.loginFailed}: ${err?.message || ''}` });
     }
     setWebLoginBusy(false);
-  }, []);
+  }, [cw]);
 
   // Check if plugin install is available (local gateway only) and check installed status
   const checkCanInstallPlugin = useCallback(async () => {
@@ -274,14 +275,14 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
           }
         }, pollInterval);
       } else {
-        setPluginInstallResult({ ok: false, msg: res.output || 'Install failed' });
+        setPluginInstallResult({ ok: false, msg: res.output || es.failed });
         setPluginInstalling(false);
       }
     } catch (err: any) {
-      setPluginInstallResult({ ok: false, msg: err?.message || 'Install failed' });
+      setPluginInstallResult({ ok: false, msg: err?.message || es.failed });
       setPluginInstalling(false);
     }
-  }, []);
+  }, [es]);
 
   const handleSendTest = useCallback(async (ch: string) => {
     if (!sendTo.trim() || !sendMsg.trim()) return;
@@ -296,7 +297,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
       });
       setSendResult({ ch, ok: true, text: es.chSendOk });
     } catch (err: any) {
-      setSendResult({ ch, ok: false, text: (es.chSendFailed || 'Send failed') + ': ' + (err?.message || '') });
+      setSendResult({ ch, ok: false, text: `${es.chSendFailed}: ${err?.message || ''}` });
     }
     setSendBusy(false);
   }, [sendTo, sendMsg, es]);
@@ -309,7 +310,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
       setLogoutMsg({ ch, ok: true, text: es.chLogoutOk });
       setLogoutChannel(null);
     } catch (err: any) {
-      setLogoutMsg({ ch, ok: false, text: (es.chLogoutFailed || 'Logout failed') + ': ' + (err?.message || '') });
+      setLogoutMsg({ ch, ok: false, text: `${es.chLogoutFailed}: ${err?.message || ''}` });
     }
     setLogoutBusy(false);
   }, [es]);
@@ -363,16 +364,47 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
       setTimeout(() => resetWizard(), 1500);
     } catch (err: any) {
       setPairingStatus('error');
-      setPairingError(err?.message || 'Approval failed');
+      setPairingError(err?.message || es.decideFailed);
     }
-  }, [pairingCode, resetWizard]);
+  }, [pairingCode, resetWizard, es]);
 
   const tip = (key: string) => (es as any)[TIP_KEYS[key]] || '';
+  const dmPolicyText = (value?: string) => {
+    switch (value) {
+      case 'allowlist': return es.optAllowlist;
+      case 'open': return es.optOpen;
+      case 'closed': return es.optClosed;
+      case 'pairing':
+      default: return es.optPairing;
+    }
+  };
 
   const renderChannelFields = (ch: string, cfg: any) => {
     const p = (f: string[]) => ['channels', ch, ...f];
     const g = (f: string[]) => getField(p(f));
     const s = (f: string[], v: any) => setField(p(f), v);
+    const labelToken = es.chToken;
+    const labelBotToken = es.botToken;
+    const labelAppToken = es.appToken;
+    const labelWebhookUrl = es.webhookUrl;
+    const labelHttpUrl = es.httpUrl;
+    const labelWebhookPath = es.chWebhookPath;
+    const labelAppId = es.appId;
+    const labelAppSecret = es.appSecret;
+    const labelClientId = es.clientId;
+    const labelClientSecret = es.clientSecret;
+    const labelTenantId = es.tenantId;
+    const labelBaseUrl = es.baseUrl;
+    const labelHomeserver = es.homeserver;
+    const labelAccessToken = es.accessToken;
+    const labelCorpId = es.corpId;
+    const labelCorpSecret = es.corpSecret;
+    const labelAgentId = es.agentId;
+    const labelApiKey = es.apiKey;
+    const labelConnectionId = es.connectionId;
+    const labelAccountSid = es.accountSid;
+    const labelAuthToken = es.authToken;
+    const labelEncodingAESKey = es.encodingAESKey;
 
     return (
       <>
@@ -381,12 +413,12 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {/* Telegram */}
         {ch === 'telegram' && (
           <>
-            <PasswordField label="Bot Token" value={g(['botToken']) || ''} onChange={v => s(['botToken'], v)} placeholder="123456:ABC-DEF..." tooltip={tip('botToken')} />
+            <PasswordField label={labelBotToken} value={g(['botToken']) || ''} onChange={v => s(['botToken'], v)} placeholder={es.phTelegramBotToken} tooltip={tip('botToken')} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'pairing'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
             <SelectField label={es.groupPolicy} value={g(['groupPolicy']) || 'allowlist'} onChange={v => s(['groupPolicy'], v)} options={groupPolicy(es)} tooltip={tip('groupPolicy')} />
             <SelectField label={es.streamMode} value={g(['streamMode']) || 'partial'} onChange={v => s(['streamMode'], v)} options={streamMode(es)} tooltip={tip('streamMode')} />
             <ArrayField label={es.allowFrom} value={g(['allowFrom']) || []} onChange={v => s(['allowFrom'], v)} placeholder={es.tipAllowFromPh} tooltip={tip('allowFrom')} />
-            <TextField label="Webhook URL" value={g(['webhookUrl']) || ''} onChange={v => s(['webhookUrl'], v)} placeholder="https://..." tooltip={tip('webhookUrl')} />
+            <TextField label={labelWebhookUrl} value={g(['webhookUrl']) || ''} onChange={v => s(['webhookUrl'], v)} placeholder={es.phHttps} tooltip={tip('webhookUrl')} />
             <SelectField label={es.replyMode} value={g(['replyToMode']) || 'smart'} onChange={v => s(['replyToMode'], v)} options={replyMode(es)} tooltip={tip('replyMode')} />
             <SwitchField label={es.inlineButtons} value={g(['capabilities', 'inlineButtons']) !== false} onChange={v => s(['capabilities', 'inlineButtons'], v)} tooltip={es.tipInlineBtn} />
           </>
@@ -397,31 +429,31 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
           <>
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'pairing'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
             <SwitchField label={es.selfChatMode} value={g(['selfChatMode']) === true} onChange={v => s(['selfChatMode'], v)} tooltip={es.tipSelfChat} />
-            <NumberField label={es.chDebounceMs} value={g(['debounceMs'])} onChange={v => s(['debounceMs'], v)} placeholder="1500" tooltip={es.tipDebounce} />
-            <ArrayField label={es.allowFrom} value={g(['allowFrom']) || []} onChange={v => s(['allowFrom'], v)} placeholder="+8613800138000" tooltip={tip('allowFrom')} />
+            <NumberField label={es.chDebounceMs} value={g(['debounceMs'])} onChange={v => s(['debounceMs'], v)} placeholder={es.phDebounceMs} tooltip={es.tipDebounce} />
+            <ArrayField label={es.allowFrom} value={g(['allowFrom']) || []} onChange={v => s(['allowFrom'], v)} placeholder={es.phPhoneCN} tooltip={tip('allowFrom')} />
           </>
         )}
 
         {/* Discord */}
         {ch === 'discord' && (
           <>
-            <PasswordField label="Token" value={g(['token']) || ''} onChange={v => s(['token'], v)} placeholder="Bot token..." tooltip={es.tipDiscordToken} />
+            <PasswordField label={labelToken} value={g(['token']) || ''} onChange={v => s(['token'], v)} placeholder={es.phBotToken} tooltip={es.tipDiscordToken} />
             <SelectField label={es.dmPolicy} value={g(['dm', 'policy']) || 'pairing'} onChange={v => s(['dm', 'policy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
             <SelectField label={es.groupPolicy} value={g(['groupPolicy']) || 'allowlist'} onChange={v => s(['groupPolicy'], v)} options={groupPolicy(es)} tooltip={tip('groupPolicy')} />
-            <DiscordGuildField label={es.guildIds} value={g(['guilds']) || {}} onChange={v => s(['guilds'], v)} placeholder={es.guildIdPlaceholder || 'guild_id or channel URL'} tooltip={es.tipGuildIds} linkHint={es.guildIdLinkHint} />
-            <SwitchField label="PluralKit" value={g(['pluralkit', 'enabled']) === true} onChange={v => s(['pluralkit', 'enabled'], v)} tooltip={es.tipPluralKit} />
-            <NumberField label={es.maxLinesMsg} value={g(['maxLinesPerMessage'])} onChange={v => s(['maxLinesPerMessage'], v)} placeholder="40" tooltip={es.tipMaxLines} />
+            <DiscordGuildField label={es.guildIds} value={g(['guilds']) || {}} onChange={v => s(['guilds'], v)} placeholder={es.guildIdPlaceholder || es.phGuildIdOrUrl} tooltip={es.tipGuildIds} linkHint={es.guildIdLinkHint} />
+            <SwitchField label={es.pluralKit} value={g(['pluralkit', 'enabled']) === true} onChange={v => s(['pluralkit', 'enabled'], v)} tooltip={es.tipPluralKit} />
+            <NumberField label={es.maxLinesMsg} value={g(['maxLinesPerMessage'])} onChange={v => s(['maxLinesPerMessage'], v)} placeholder={es.phMaxLines} tooltip={es.tipMaxLines} />
           </>
         )}
 
         {/* Slack */}
         {ch === 'slack' && (
           <>
-            <PasswordField label="Bot Token" value={g(['botToken']) || ''} onChange={v => s(['botToken'], v)} placeholder="xoxb-..." tooltip={es.tipSlackBot} />
-            <PasswordField label="App Token" value={g(['appToken']) || ''} onChange={v => s(['appToken'], v)} placeholder="xapp-..." tooltip={es.tipSlackApp} />
-            <SelectField label={es.connMode} value={g(['mode']) || 'socket'} onChange={v => s(['mode'], v)} options={[{ value: 'socket', label: 'Socket Mode' }, { value: 'http', label: 'HTTP' }]} tooltip={es.tipSlackMode} />
+            <PasswordField label={labelBotToken} value={g(['botToken']) || ''} onChange={v => s(['botToken'], v)} placeholder={es.phSlackBotToken} tooltip={es.tipSlackBot} />
+            <PasswordField label={labelAppToken} value={g(['appToken']) || ''} onChange={v => s(['appToken'], v)} placeholder={es.phSlackAppToken} tooltip={es.tipSlackApp} />
+            <SelectField label={es.connMode} value={g(['mode']) || 'socket'} onChange={v => s(['mode'], v)} options={[{ value: 'socket', label: es.optSocketMode }, { value: 'http', label: es.optHttp }]} tooltip={es.tipSlackMode} />
             <SelectField label={es.dmPolicy} value={g(['dm', 'policy']) || 'pairing'} onChange={v => s(['dm', 'policy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
-            <ArrayField label={es.chChannels} value={g(['channels']) || []} onChange={v => s(['channels'], v)} placeholder="channel_id" tooltip={es.tipSlackChannels} />
+            <ArrayField label={es.chChannels} value={g(['channels']) || []} onChange={v => s(['channels'], v)} placeholder={es.phChannelId} tooltip={es.tipSlackChannels} />
             <SwitchField label={es.threadMode} value={g(['thread']) === true} onChange={v => s(['thread'], v)} tooltip={es.tipSlackThread} />
             <SwitchField label={es.allowBots} value={g(['allowBots']) === true} onChange={v => s(['allowBots'], v)} tooltip={es.tipSlackBots} />
           </>
@@ -430,11 +462,11 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {/* Signal */}
         {ch === 'signal' && (
           <>
-            <TextField label={es.chAccount} value={g(['account']) || ''} onChange={v => s(['account'], v)} placeholder="+1234567890" tooltip={es.tipSignalAccount} />
-            <TextField label="HTTP URL" value={g(['httpUrl']) || ''} onChange={v => s(['httpUrl'], v)} placeholder="http://localhost:8080" tooltip={es.tipSignalHttp} />
+            <TextField label={es.chAccount} value={g(['account']) || ''} onChange={v => s(['account'], v)} placeholder={es.phPhoneIntl} tooltip={es.tipSignalAccount} />
+            <TextField label={labelHttpUrl} value={g(['httpUrl']) || ''} onChange={v => s(['httpUrl'], v)} placeholder={es.phLocalHttp} tooltip={es.tipSignalHttp} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'pairing'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
             <SelectField label={es.groupPolicy} value={g(['groupPolicy']) || 'allowlist'} onChange={v => s(['groupPolicy'], v)} options={groupPolicy(es)} tooltip={tip('groupPolicy')} />
-            <SelectField label={es.receiveMode} value={g(['receiveMode']) || 'http'} onChange={v => s(['receiveMode'], v)} options={[{ value: 'http', label: 'HTTP' }, { value: 'dbus', label: 'D-Bus' }, { value: 'json-rpc', label: 'JSON-RPC' }]} tooltip={es.tipSignalReceive} />
+            <SelectField label={es.receiveMode} value={g(['receiveMode']) || 'http'} onChange={v => s(['receiveMode'], v)} options={[{ value: 'http', label: es.optHttp }, { value: 'dbus', label: es.optDbus }, { value: 'json-rpc', label: es.optJsonRpc }]} tooltip={es.tipSignalReceive} />
           </>
         )}
 
@@ -443,7 +475,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
           <>
             <TextField label={es.cliPath} value={g(['cliPath']) || ''} onChange={v => s(['cliPath'], v)} tooltip={es.tipImsgCli} />
             <TextField label={es.dbPath} value={g(['dbPath']) || ''} onChange={v => s(['dbPath'], v)} tooltip={es.tipImsgDb} />
-            <SelectField label={es.chService} value={g(['service']) || 'iMessage'} onChange={v => s(['service'], v)} options={[{ value: 'iMessage', label: 'iMessage' }, { value: 'SMS', label: 'SMS' }]} />
+            <SelectField label={es.chService} value={g(['service']) || 'iMessage'} onChange={v => s(['service'], v)} options={[{ value: 'iMessage', label: es.optIMessage }, { value: 'SMS', label: es.optSms }]} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'pairing'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
           </>
         )}
@@ -451,7 +483,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {/* BlueBubbles */}
         {ch === 'bluebubbles' && (
           <>
-            <TextField label={es.serverUrl} value={g(['serverUrl']) || ''} onChange={v => s(['serverUrl'], v)} placeholder="http://localhost:1234" tooltip={es.tipBBServer} />
+            <TextField label={es.serverUrl} value={g(['serverUrl']) || ''} onChange={v => s(['serverUrl'], v)} placeholder={es.phLocalServerUrl} tooltip={es.tipBBServer} />
             <PasswordField label={es.chPassword} value={g(['password']) || ''} onChange={v => s(['password'], v)} tooltip={es.tipBBPassword} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'pairing'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
           </>
@@ -461,24 +493,24 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {ch === 'googlechat' && (
           <>
             <TextField label={es.chAccount} value={g(['serviceAccount']) || ''} onChange={v => s(['serviceAccount'], v)} tooltip={es.tipGCServiceAccount} />
-            <TextField label="Webhook Path" value={g(['webhookPath']) || ''} onChange={v => s(['webhookPath'], v)} tooltip={es.tipGCWebhook} />
+            <TextField label={labelWebhookPath} value={g(['webhookPath']) || ''} onChange={v => s(['webhookPath'], v)} tooltip={es.tipGCWebhook} />
           </>
         )}
 
         {/* MS Teams */}
         {ch === 'msteams' && (
           <>
-            <TextField label="App ID" value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipTeamsAppId} />
-            <PasswordField label="App Password" value={g(['appPassword']) || ''} onChange={v => s(['appPassword'], v)} tooltip={es.tipTeamsAppPwd} />
-            <TextField label="Tenant ID" value={g(['tenantId']) || ''} onChange={v => s(['tenantId'], v)} tooltip={es.tipTeamsTenant} />
+            <TextField label={labelAppId} value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipTeamsAppId} />
+            <PasswordField label={es.appPassword} value={g(['appPassword']) || ''} onChange={v => s(['appPassword'], v)} tooltip={es.tipTeamsAppPwd} />
+            <TextField label={labelTenantId} value={g(['tenantId']) || ''} onChange={v => s(['tenantId'], v)} tooltip={es.tipTeamsTenant} />
           </>
         )}
 
         {/* Mattermost */}
         {ch === 'mattermost' && (
           <>
-            <PasswordField label="Bot Token" value={g(['botToken']) || ''} onChange={v => s(['botToken'], v)} tooltip={es.tipMMToken} />
-            <TextField label="Base URL" value={g(['baseUrl']) || ''} onChange={v => s(['baseUrl'], v)} placeholder="https://chat.example.com" tooltip={es.tipMMUrl} />
+            <PasswordField label={labelBotToken} value={g(['botToken']) || ''} onChange={v => s(['botToken'], v)} tooltip={es.tipMMToken} />
+            <TextField label={labelBaseUrl} value={g(['baseUrl']) || ''} onChange={v => s(['baseUrl'], v)} placeholder={es.phMattermostUrl} tooltip={es.tipMMUrl} />
             <SelectField label={es.chatMode} value={g(['chatmode']) || 'oncall'} onChange={v => s(['chatmode'], v)} options={[
               { value: 'oncall', label: es.optOnMention },
               { value: 'onchar', label: es.optOnChar },
@@ -491,9 +523,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {/* Matrix */}
         {ch === 'matrix' && (
           <>
-            <TextField label="Homeserver" value={g(['homeserver']) || ''} onChange={v => s(['homeserver'], v)} placeholder="https://matrix.org" tooltip={tip('matrixHome')} />
-            <TextField label={es.userId} value={g(['userId']) || ''} onChange={v => s(['userId'], v)} placeholder="@bot:matrix.org" tooltip={es.tipMatrixUser} />
-            <PasswordField label="Access Token" value={g(['accessToken']) || ''} onChange={v => s(['accessToken'], v)} tooltip={es.tipMatrixToken} />
+            <TextField label={labelHomeserver} value={g(['homeserver']) || ''} onChange={v => s(['homeserver'], v)} placeholder={es.phMatrixHomeserver} tooltip={tip('matrixHome')} />
+            <TextField label={es.userId} value={g(['userId']) || ''} onChange={v => s(['userId'], v)} placeholder={es.phMatrixUserId} tooltip={es.tipMatrixUser} />
+            <PasswordField label={labelAccessToken} value={g(['accessToken']) || ''} onChange={v => s(['accessToken'], v)} tooltip={es.tipMatrixToken} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'pairing'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
           </>
         )}
@@ -501,15 +533,15 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {/* 飞书 */}
         {ch === 'feishu' && (
           <>
-            <TextField label="App ID" value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipFeishuAppId} />
-            <PasswordField label="App Secret" value={g(['appSecret']) || ''} onChange={v => s(['appSecret'], v)} tooltip={es.tipFeishuSecret} />
+            <TextField label={labelAppId} value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipFeishuAppId} />
+            <PasswordField label={labelAppSecret} value={g(['appSecret']) || ''} onChange={v => s(['appSecret'], v)} tooltip={es.tipFeishuSecret} />
             <SelectField label={es.chDomain} value={g(['domain']) || 'feishu'} onChange={v => s(['domain'], v)} options={[
               { value: 'feishu', label: es.optFeishu },
               { value: 'lark', label: es.optLark },
             ]} tooltip={tip('feishuDomain')} />
             <SelectField label={es.connModeLabel} value={g(['connectionMode']) || 'websocket'} onChange={v => s(['connectionMode'], v)} options={[
-              { value: 'websocket', label: 'WebSocket' },
-              { value: 'webhook', label: 'Webhook' },
+              { value: 'websocket', label: es.optWebSocket },
+              { value: 'webhook', label: es.optWebhook },
             ]} tooltip={tip('feishuConn')} />
             <PasswordField label={es.encryptKey} value={g(['encryptKey']) || ''} onChange={v => s(['encryptKey'], v)} tooltip={es.tipFeishuEncrypt} />
             <PasswordField label={es.verificationToken} value={g(['verificationToken']) || ''} onChange={v => s(['verificationToken'], v)} tooltip={es.tipFeishuVerify} />
@@ -522,8 +554,8 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {ch === 'wecom' && (
           <>
             <TextField label={es.chWebhookPath} value={g(['webhookPath']) || '/wecom'} onChange={v => s(['webhookPath'], v)} tooltip={es.tipWecomWebhookPath} />
-            <PasswordField label="Token" value={g(['token']) || ''} onChange={v => s(['token'], v)} tooltip={es.tipWecomToken} />
-            <PasswordField label="EncodingAESKey" value={g(['encodingAESKey']) || ''} onChange={v => s(['encodingAESKey'], v)} tooltip={es.tipWecomAes} />
+            <PasswordField label={labelToken} value={g(['token']) || ''} onChange={v => s(['token'], v)} tooltip={es.tipWecomToken} />
+            <PasswordField label={labelEncodingAESKey} value={g(['encodingAESKey']) || ''} onChange={v => s(['encodingAESKey'], v)} tooltip={es.tipWecomAes} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'open'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
             <SelectField label={es.groupPolicy} value={g(['groupPolicy']) || 'open'} onChange={v => s(['groupPolicy'], v)} options={groupPolicy(es)} tooltip={tip('groupPolicy')} />
             <SwitchField label={es.requireMention} value={g(['requireMention']) !== false} onChange={v => s(['requireMention'], v)} tooltip={es.tipWecomMention} />
@@ -534,11 +566,11 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {ch === 'wecom_kf' && (
           <>
             <TextField label={es.chWebhookPath} value={g(['webhookPath']) || '/wecom-app'} onChange={v => s(['webhookPath'], v)} tooltip={es.tipWecomAppWebhookPath} />
-            <PasswordField label="Token" value={g(['token']) || ''} onChange={v => s(['token'], v)} tooltip={es.tipWecomToken} />
-            <PasswordField label="EncodingAESKey" value={g(['encodingAESKey']) || ''} onChange={v => s(['encodingAESKey'], v)} tooltip={es.tipWecomAes} />
-            <TextField label="Corp ID" value={g(['corpId']) || ''} onChange={v => s(['corpId'], v)} tooltip={es.tipWecomCorpId} />
-            <PasswordField label="Corp Secret" value={g(['corpSecret']) || ''} onChange={v => s(['corpSecret'], v)} tooltip={es.tipWecomAppSecret} />
-            <NumberField label="Agent ID" value={g(['agentId'])} onChange={v => s(['agentId'], v)} placeholder="1000002" tooltip={es.tipWecomAppAgentId} />
+            <PasswordField label={labelToken} value={g(['token']) || ''} onChange={v => s(['token'], v)} tooltip={es.tipWecomToken} />
+            <PasswordField label={labelEncodingAESKey} value={g(['encodingAESKey']) || ''} onChange={v => s(['encodingAESKey'], v)} tooltip={es.tipWecomAes} />
+            <TextField label={labelCorpId} value={g(['corpId']) || ''} onChange={v => s(['corpId'], v)} tooltip={es.tipWecomCorpId} />
+            <PasswordField label={labelCorpSecret} value={g(['corpSecret']) || ''} onChange={v => s(['corpSecret'], v)} tooltip={es.tipWecomAppSecret} />
+            <NumberField label={labelAgentId} value={g(['agentId'])} onChange={v => s(['agentId'], v)} placeholder={es.phAgentId} tooltip={es.tipWecomAppAgentId} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'open'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
           </>
         )}
@@ -546,18 +578,18 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {/* 微信 */}
         {ch === 'wechat' && (
           <>
-            <TextField label="App ID" value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipWechatAppId} />
-            <PasswordField label="App Secret" value={g(['appSecret']) || ''} onChange={v => s(['appSecret'], v)} tooltip={es.tipWechatSecret} />
-            <PasswordField label="Token" value={g(['token']) || ''} onChange={v => s(['token'], v)} tooltip={es.tipWechatToken} />
-            <PasswordField label="Encoding AES Key" value={g(['encodingAesKey']) || ''} onChange={v => s(['encodingAesKey'], v)} tooltip={es.tipWechatAes} />
+            <TextField label={labelAppId} value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipWechatAppId} />
+            <PasswordField label={labelAppSecret} value={g(['appSecret']) || ''} onChange={v => s(['appSecret'], v)} tooltip={es.tipWechatSecret} />
+            <PasswordField label={labelToken} value={g(['token']) || ''} onChange={v => s(['token'], v)} tooltip={es.tipWechatToken} />
+            <PasswordField label={labelEncodingAESKey} value={g(['encodingAesKey']) || ''} onChange={v => s(['encodingAesKey'], v)} tooltip={es.tipWechatAes} />
           </>
         )}
 
         {/* QQ */}
         {ch === 'qq' && (
           <>
-            <TextField label="App ID" value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipQQAppId} />
-            <PasswordField label="Client Secret" value={g(['clientSecret']) || ''} onChange={v => s(['clientSecret'], v)} tooltip={es.tipQQClientSecret} />
+            <TextField label={labelAppId} value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipQQAppId} />
+            <PasswordField label={labelClientSecret} value={g(['clientSecret']) || ''} onChange={v => s(['clientSecret'], v)} tooltip={es.tipQQClientSecret} />
             <SwitchField label={es.chMarkdownSupport} value={g(['markdownSupport']) === true} onChange={v => s(['markdownSupport'], v)} tooltip={es.tipQQMarkdown} />
           </>
         )}
@@ -565,8 +597,8 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {/* 钉钉 */}
         {ch === 'dingtalk' && (
           <>
-            <TextField label="Client ID" value={g(['clientId']) || ''} onChange={v => s(['clientId'], v)} tooltip={es.tipDTClientId} />
-            <PasswordField label="Client Secret" value={g(['clientSecret']) || ''} onChange={v => s(['clientSecret'], v)} tooltip={es.tipDTClientSecret} />
+            <TextField label={labelClientId} value={g(['clientId']) || ''} onChange={v => s(['clientId'], v)} tooltip={es.tipDTClientId} />
+            <PasswordField label={labelClientSecret} value={g(['clientSecret']) || ''} onChange={v => s(['clientSecret'], v)} tooltip={es.tipDTClientSecret} />
             <SwitchField label={es.chEnableAICard} value={g(['enableAICard']) === true} onChange={v => s(['enableAICard'], v)} tooltip={es.tipDTAICard} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'open'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
             <SelectField label={es.groupPolicy} value={g(['groupPolicy']) || 'open'} onChange={v => s(['groupPolicy'], v)} options={groupPolicy(es)} tooltip={tip('groupPolicy')} />
@@ -577,9 +609,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {/* 豆包 */}
         {ch === 'doubao' && (
           <>
-            <TextField label="App ID" value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipDoubaoAppId} />
-            <PasswordField label="App Secret" value={g(['appSecret']) || ''} onChange={v => s(['appSecret'], v)} tooltip={es.tipDoubaoSecret} />
-            <PasswordField label="Token" value={g(['token']) || ''} onChange={v => s(['token'], v)} tooltip={es.tipDoubaoToken} />
+            <TextField label={labelAppId} value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipDoubaoAppId} />
+            <PasswordField label={labelAppSecret} value={g(['appSecret']) || ''} onChange={v => s(['appSecret'], v)} tooltip={es.tipDoubaoSecret} />
+            <PasswordField label={labelToken} value={g(['token']) || ''} onChange={v => s(['token'], v)} tooltip={es.tipDoubaoToken} />
           </>
         )}
 
@@ -588,7 +620,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
           <>
             <PasswordField label={es.chToken} value={g(['botToken']) || ''} onChange={v => s(['botToken'], v)} tooltip={es.tipZaloToken} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'pairing'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
-            <ArrayField label={es.allowFrom} value={g(['allowFrom']) || []} onChange={v => s(['allowFrom'], v)} placeholder="user_id" tooltip={tip('allowFrom')} />
+            <ArrayField label={es.allowFrom} value={g(['allowFrom']) || []} onChange={v => s(['allowFrom'], v)} placeholder={es.phUserId} tooltip={tip('allowFrom')} />
           </>
         )}
 
@@ -596,22 +628,22 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         {ch === 'voicecall' && (
           <>
             <SelectField label={es.voiceProvider} value={g(['provider']) || 'mock'} onChange={v => s(['provider'], v)} options={[
-              { value: 'twilio', label: 'Twilio' },
-              { value: 'telnyx', label: 'Telnyx' },
+              { value: 'twilio', label: es.optTwilio },
+              { value: 'telnyx', label: es.optTelnyx },
               { value: 'mock', label: es.mockDev },
             ]} tooltip={tip('voiceProvider')} />
-            <TextField label={es.fromNumber} value={g(['fromNumber']) || ''} onChange={v => s(['fromNumber'], v)} placeholder="+15550001234" tooltip={es.tipVoiceFrom} />
-            <TextField label={es.toNumber} value={g(['toNumber']) || ''} onChange={v => s(['toNumber'], v)} placeholder="+15550001234" tooltip={es.tipVoiceTo} />
+            <TextField label={es.fromNumber} value={g(['fromNumber']) || ''} onChange={v => s(['fromNumber'], v)} placeholder={es.phVoiceNumber} tooltip={es.tipVoiceFrom} />
+            <TextField label={es.toNumber} value={g(['toNumber']) || ''} onChange={v => s(['toNumber'], v)} placeholder={es.phVoiceNumber} tooltip={es.tipVoiceTo} />
             {g(['provider']) === 'twilio' && (
               <>
-                <TextField label="Account SID" value={g(['twilio', 'accountSid']) || ''} onChange={v => s(['twilio', 'accountSid'], v)} />
-                <PasswordField label="Auth Token" value={g(['twilio', 'authToken']) || ''} onChange={v => s(['twilio', 'authToken'], v)} />
+                <TextField label={labelAccountSid} value={g(['twilio', 'accountSid']) || ''} onChange={v => s(['twilio', 'accountSid'], v)} />
+                <PasswordField label={labelAuthToken} value={g(['twilio', 'authToken']) || ''} onChange={v => s(['twilio', 'authToken'], v)} />
               </>
             )}
             {g(['provider']) === 'telnyx' && (
               <>
-                <PasswordField label="API Key" value={g(['telnyx', 'apiKey']) || ''} onChange={v => s(['telnyx', 'apiKey'], v)} />
-                <TextField label="Connection ID" value={g(['telnyx', 'connectionId']) || ''} onChange={v => s(['telnyx', 'connectionId'], v)} />
+                <PasswordField label={labelApiKey} value={g(['telnyx', 'apiKey']) || ''} onChange={v => s(['telnyx', 'apiKey'], v)} />
+                <TextField label={labelConnectionId} value={g(['telnyx', 'connectionId']) || ''} onChange={v => s(['telnyx', 'connectionId'], v)} />
               </>
             )}
           </>
@@ -642,13 +674,13 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
               defaultOpen={false}
               actions={
                 <div className="flex items-center gap-1">
-                  <button onClick={() => { setSendChannel(sendChannel === ch ? null : ch); setSendResult(null); }} className="text-slate-400 hover:text-sky-500 transition-colors" title={es.chSendTest}>
+                  <button onClick={() => { setSendChannel(sendChannel === ch ? null : ch); setSendResult(null); }} className="text-slate-400 hover:text-sky-500 transition-colors" title={es.chSendTest} aria-label={es.chSendTest}>
                     <span className="material-symbols-outlined text-[14px]">send</span>
                   </button>
-                  <button onClick={() => setLogoutChannel(logoutChannel === ch ? null : ch)} className="text-slate-400 hover:text-amber-500 transition-colors" title={es.chLogout}>
+                  <button onClick={() => setLogoutChannel(logoutChannel === ch ? null : ch)} className="text-slate-400 hover:text-amber-500 transition-colors" title={es.chLogout} aria-label={es.chLogout}>
                     <span className="material-symbols-outlined text-[14px]">logout</span>
                   </button>
-                  <button onClick={() => setDeleteConfirm(ch)} className="text-slate-400 hover:text-red-500 transition-colors">
+                  <button onClick={() => setDeleteConfirm(ch)} className="text-slate-400 hover:text-red-500 transition-colors" title={es.delete} aria-label={es.delete}>
                     <span className="material-symbols-outlined text-[14px]">delete</span>
                   </button>
                 </div>
@@ -719,7 +751,6 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
           {es.addChannel}
         </button>
       ) : (() => {
-        const cw = (getTranslation(language) as any).cw || {};
         const chId = addingChannel !== 'selecting' ? addingChannel : '';
         const chInfo = CHANNEL_TYPES.find(c => c.id === chId);
         const cfg = chId ? (channels[chId] || {}) : {};
@@ -805,7 +836,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                 <span className={`material-symbols-outlined text-[16px] ${stepDone(1) ? 'text-green-500' : stepActive(1) ? 'text-primary' : 'text-slate-400'}`}>checklist</span>
                 <div className="flex-1 min-w-0">
                   <span className={`text-xs font-bold ${stepActive(1) ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-white/60'}`}>{WIZARD_STEPS[1].label}</span>
-                  {stepDone(1) && <p className="text-[10px] text-slate-400 dark:text-white/40 truncate">{cw.prepDone || '✓'}</p>}
+                  {stepDone(1) && <p className="text-[10px] text-slate-400 dark:text-white/40 truncate">{cw.prepDone}</p>}
                 </div>
                 <span className={`material-symbols-outlined text-[16px] text-slate-400 transition-transform ${stepActive(1) ? 'rotate-180' : ''}`}>expand_more</span>
               </div>
@@ -839,7 +870,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                         return (
                           <div className="flex items-center gap-2 p-2.5 rounded-lg bg-green-50 dark:bg-green-500/5 border border-green-200 dark:border-green-500/20">
                             <span className="material-symbols-outlined text-[14px] text-green-500">check_circle</span>
-                            <p className="text-[10px] font-bold text-green-700 dark:text-green-400">{cw.pluginInstalled || 'Plugin installed'}</p>
+                            <p className="text-[10px] font-bold text-green-700 dark:text-green-400">{cw.pluginInstalled}</p>
                           </div>
                         );
                       }
@@ -861,7 +892,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                                     <span className={`material-symbols-outlined text-[14px] ${pluginInstalling ? 'animate-spin' : ''}`}>
                                       {pluginInstalling ? 'progress_activity' : 'download'}
                                     </span>
-                                    {pluginInstalling ? (cw.installing || 'Installing...') : (cw.installPlugin || 'Install Plugin')}
+                                    {pluginInstalling ? cw.installing : cw.installPlugin}
                                   </button>
                                   {pluginInstallResult && (
                                     <div className={`px-2 py-1.5 rounded text-[10px] flex items-center gap-1.5 ${pluginInstallResult.ok ? 'bg-green-100 dark:bg-green-500/10 text-green-600' : 'bg-red-100 dark:bg-red-500/10 text-red-500'}`}>
@@ -870,16 +901,16 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                                           {pluginInstallResult.phase === 'restarting' && (
                                             <>
                                               <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
-                                              {cw.gatewayRestarting || 'Gateway restarting...'}
+                                              {cw.gatewayRestarting}
                                             </>
                                           )}
                                           {pluginInstallResult.phase === 'ready' && (
                                             <>
                                               <span className="material-symbols-outlined text-[12px]">check_circle</span>
-                                              {cw.pluginReady || 'Plugin ready!'}
+                                              {cw.pluginReady}
                                             </>
                                           )}
-                                          {!pluginInstallResult.phase && (cw.pluginInstallSuccess || 'Plugin installed!')}
+                                          {!pluginInstallResult.phase && cw.pluginInstallSuccess}
                                         </>
                                       ) : pluginInstallResult.msg}
                                     </div>
@@ -891,7 +922,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                                 </code>
                               )}
                               {canInstallPlugin === false && (
-                                <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-1">{cw.remoteGatewayHint || 'Remote gateway detected. Please install manually via CLI.'}</p>
+                                <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-1">{cw.remoteGatewayHint}</p>
                               )}
                             </div>
                           </div>
@@ -961,15 +992,15 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-primary text-[18px]">qr_code_2</span>
-                          <span className="text-[11px] font-bold text-slate-700 dark:text-white/80">{cw.whatsappLogin || 'WhatsApp Web 登录'}</span>
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-white/80">{cw.whatsappLogin}</span>
                         </div>
-                        <p className="text-[10px] text-slate-500 dark:text-white/50">{cw.whatsappLoginDesc || '点击下方按钮生成二维码，然后用手机 WhatsApp 扫码登录'}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-white/50">{cw.whatsappLoginDesc}</p>
                         <button onClick={handleWebLogin} disabled={webLoginBusy}
                           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[11px] font-bold bg-green-500 hover:bg-green-600 text-white transition-all disabled:opacity-50">
                           <span className={`material-symbols-outlined text-[16px] ${webLoginBusy ? 'animate-spin' : ''}`}>
                             {webLoginBusy ? 'progress_activity' : 'qr_code_2'}
                           </span>
-                          {webLoginBusy ? (cw.generating || '生成中...') : (cw.generateQR || '生成二维码')}
+                          {webLoginBusy ? cw.generating : cw.generateQR}
                         </button>
                         {webLoginResult && (
                           <div className={`px-3 py-2.5 rounded-lg text-[10px] ${webLoginResult.ok ? 'bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-500/20' : 'bg-red-50 dark:bg-red-500/10 text-red-500 border border-red-200 dark:border-red-500/20'}`}>
@@ -992,7 +1023,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                             {wizTestStatus === 'testing' ? 'progress_activity' : wizTestStatus === 'ok' ? 'check_circle' : wizTestStatus === 'fail' ? 'error' : 'wifi_tethering'}
                           </span>
                           <span className={wizTestStatus === 'ok' ? 'text-green-600 dark:text-green-400' : wizTestStatus === 'fail' ? 'text-red-500' : 'text-slate-700 dark:text-white/80'}>
-                            {wizTestStatus === 'testing' ? (cw.testing || es.chSending) : wizTestStatus === 'ok' ? (cw.testOk || 'OK') : wizTestStatus === 'fail' ? (cw.testFail || 'Fail') : (cw.testConn || es.chSendTest)}
+                            {wizTestStatus === 'testing' ? cw.testing : wizTestStatus === 'ok' ? cw.testOk : wizTestStatus === 'fail' ? cw.testFail : cw.testConn}
                           </span>
                         </button>
                         {wizTestStatus === 'fail' && wizTestMsg && (
@@ -1024,7 +1055,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                 <span className={`material-symbols-outlined text-[16px] ${stepDone(3) ? 'text-green-500' : stepActive(3) ? 'text-primary' : 'text-slate-400'}`}>shield</span>
                 <div className="flex-1 min-w-0">
                   <span className={`text-xs font-bold ${stepActive(3) ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-white/60'}`}>{WIZARD_STEPS[3].label}</span>
-                  {stepDone(3) && <p className="text-[10px] text-slate-400 dark:text-white/40 truncate">{getField(['channels', chId, 'dmPolicy']) || 'pairing'}</p>}
+                  {stepDone(3) && <p className="text-[10px] text-slate-400 dark:text-white/40 truncate">{dmPolicyText(getField(['channels', chId, 'dmPolicy']) || 'pairing')}</p>}
                 </div>
                 <span className={`material-symbols-outlined text-[16px] text-slate-400 transition-transform ${stepActive(3) ? 'rotate-180' : ''}`}>expand_more</span>
               </div>
@@ -1054,7 +1085,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 dark:text-white/60 mb-1.5 block">{es.allowFrom}</label>
-                      <ArrayField label="" value={getField(['channels', chId, 'allowFrom']) || []} onChange={v => setField(['channels', chId, 'allowFrom'], v)} placeholder={es.tipAllowFromPh || 'user_id'} />
+                      <ArrayField label="" value={getField(['channels', chId, 'allowFrom']) || []} onChange={v => setField(['channels', chId, 'allowFrom'], v)} placeholder={es.tipAllowFromPh} />
                     </div>
                   </div>
                   <div className="flex justify-between mt-3 pt-3 border-t border-slate-100 dark:border-white/[0.04]">
@@ -1094,7 +1125,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                           </div>
                           <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.03]">
                             <div className="text-[11px] text-slate-400 dark:text-white/40">{es.dmPolicy}</div>
-                            <div className="text-[11px] font-bold text-slate-800 dark:text-white/90 mt-0.5">{getField(['channels', chId, 'dmPolicy']) || 'pairing'}</div>
+                            <div className="text-[11px] font-bold text-slate-800 dark:text-white/90 mt-0.5">{dmPolicyText(getField(['channels', chId, 'dmPolicy']) || 'pairing')}</div>
                           </div>
                           <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.03]">
                             <div className="text-[11px] text-slate-400 dark:text-white/40">{es.enabled}</div>
@@ -1104,7 +1135,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                         {restarting && (
                           <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/10 border border-primary/20">
                             <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
-                            <span className="text-sm text-primary font-medium">{cw.restartingGateway || '正在重启网关...'}</span>
+                            <span className="text-sm text-primary font-medium">{cw.restartingGateway}</span>
                           </div>
                         )}
                       </>
@@ -1112,19 +1143,19 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 text-primary">
                           <span className="material-symbols-outlined text-xl">link</span>
-                          <span className="text-sm font-bold">{cw.pairingGuideTitle || '配对验证'}</span>
+                          <span className="text-sm font-bold">{cw.pairingGuideTitle}</span>
                         </div>
                         <div className="text-xs text-slate-600 dark:text-white/60 space-y-1">
-                          <p>1. {cw.pairingStep1 || '向 Bot 发送任意普通消息（不是命令）'}</p>
-                          <p>2. {cw.pairingStep2 || 'Bot 会回复一个配对码'}</p>
-                          <p>3. {cw.pairingStep3 || '在下方输入配对码并点击批准'}</p>
+                          <p>1. {cw.pairingStep1}</p>
+                          <p>2. {cw.pairingStep2}</p>
+                          <p>3. {cw.pairingStep3}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
                             value={pairingCode}
                             onChange={e => setPairingCode(e.target.value)}
-                            placeholder={cw.pairingCodePlaceholder || '输入配对码'}
+                            placeholder={cw.pairingCodePlaceholder}
                             className="flex-1 h-9 px-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-sm outline-none"
                           />
                           <button
@@ -1134,13 +1165,13 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                           >
                             {pairingStatus === 'approving' && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
                             {pairingStatus === 'success' && <span className="material-symbols-outlined text-sm">check</span>}
-                            {cw.pairingApprove || '批准'}
+                            {cw.pairingApprove}
                           </button>
                         </div>
                         {pairingStatus === 'success' && (
                           <div className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">check_circle</span>
-                            {cw.pairingSuccess || '配对成功！'}
+                            {cw.pairingSuccess}
                           </div>
                         )}
                         {pairingStatus === 'error' && pairingError && (
@@ -1166,7 +1197,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                     ) : (
                       <button onClick={resetWizard}
                         className="px-5 py-1.5 bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-white/70 text-[11px] font-bold rounded-lg transition-colors">
-                        {cw.skipPairing || '跳过'}
+                        {cw.skipPairing}
                       </button>
                     )}
                   </div>
@@ -1186,18 +1217,18 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                 <span className="material-symbols-outlined text-red-500 text-xl">warning</span>
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-800 dark:text-white">{es.deleteConfirmTitle || '确认删除'}</h3>
-                <p className="text-xs text-slate-500 dark:text-white/50">{es.deleteConfirmDesc || `确定要删除频道 ${deleteConfirm} 吗？`}</p>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-white">{es.deleteConfirmTitle}</h3>
+                <p className="text-xs text-slate-500 dark:text-white/50">{es.deleteConfirmDesc}</p>
               </div>
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeleteConfirm(null)}
                 className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors">
-                {es.cancel || '取消'}
+                {es.cancel}
               </button>
               <button onClick={() => { deleteField(['channels', deleteConfirm]); setDeleteConfirm(null); }}
                 className="px-4 py-2 text-xs font-medium bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors">
-                {es.delete || '删除'}
+                {es.delete}
               </button>
             </div>
           </div>

@@ -66,16 +66,53 @@ function autoLayout(appIds: string[], config: IconGridConfig): Record<string, Gr
   return positions;
 }
 
+function normalizePositions(
+  appIds: string[],
+  current: Record<string, GridPos>,
+  config: IconGridConfig
+): Record<string, GridPos> {
+  const { cols, rows } = computeGridDimensions(config);
+  const next: Record<string, GridPos> = {};
+  const occupied = new Set<string>();
+
+  const clamp = (p: GridPos) => ({
+    col: Math.max(0, Math.min(p.col, cols - 1)),
+    row: Math.max(0, Math.min(p.row, rows - 1)),
+  });
+
+  const firstFreeCell = (): GridPos => {
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        const key = `${c},${r}`;
+        if (!occupied.has(key)) return { col: c, row: r };
+      }
+    }
+    return { col: 0, row: 0 };
+  };
+
+  for (const id of appIds) {
+    const preferred = current[id] ? clamp(current[id]) : firstFreeCell();
+    let key = `${preferred.col},${preferred.row}`;
+    if (occupied.has(key)) {
+      const free = firstFreeCell();
+      next[id] = free;
+      key = `${free.col},${free.row}`;
+    } else {
+      next[id] = preferred;
+    }
+    occupied.add(key);
+  }
+  return next;
+}
+
 export function useIconGrid(appIds: string[], config: IconGridConfig = DEFAULT_CONFIG) {
   const [positions, setPositions] = useState<Record<string, GridPos>>(() => {
     const saved = loadPositions();
-    const hasAll = appIds.every(id => id in saved);
-    if (hasAll) return saved;
-    const layout = autoLayout(appIds, config);
+    const base = autoLayout(appIds, config);
     Object.keys(saved).forEach(id => {
-      if (appIds.includes(id)) layout[id] = saved[id];
+      if (appIds.includes(id)) base[id] = saved[id];
     });
-    return layout;
+    return normalizePositions(appIds, base, config);
   });
 
   const dragging = useRef<{ id: string; startX: number; startY: number; origCol: number; origRow: number } | null>(null);
@@ -88,20 +125,16 @@ export function useIconGrid(appIds: string[], config: IconGridConfig = DEFAULT_C
   useEffect(() => {
     const onResize = () => {
       setPositions(prev => {
-        const { cols, rows } = computeGridDimensions(config);
-        const clamped: Record<string, GridPos> = {};
-        for (const [id, pos] of Object.entries(prev)) {
-          clamped[id] = {
-            col: Math.min(pos.col, cols - 1),
-            row: Math.min(pos.row, rows - 1),
-          };
-        }
-        return clamped;
+        return normalizePositions(appIds, prev, config);
       });
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [config]);
+  }, [appIds, config]);
+
+  useEffect(() => {
+    setPositions(prev => normalizePositions(appIds, prev, config));
+  }, [appIds, config]);
 
   const getPixelPos = useCallback((pos: GridPos) => ({
     x: config.paddingLeft + pos.col * config.cellW,

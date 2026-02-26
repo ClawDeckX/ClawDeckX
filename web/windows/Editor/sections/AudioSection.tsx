@@ -57,10 +57,10 @@ export const AudioSection: React.FC<SectionProps> = ({ setField, getField, langu
     try {
       await gwApi.talkMode(mode);
       setTalkMode(mode);
-      setTalkModeResult({ ok: true, text: (es.talkModeOk || 'Mode set') + ': ' + mode });
+      setTalkModeResult({ ok: true, text: `${es.talkModeOk}: ${mode}` });
       setTimeout(() => setTalkModeResult(null), 3000);
     } catch (err: any) {
-      setTalkModeResult({ ok: false, text: (es.talkModeFailed || 'Failed') + ': ' + (err?.message || '') });
+      setTalkModeResult({ ok: false, text: `${es.talkModeFailed}: ${err?.message || ''}` });
     }
     setTalkModeLoading(false);
   }, [es]);
@@ -86,7 +86,7 @@ export const AudioSection: React.FC<SectionProps> = ({ setField, getField, langu
     try {
       await gwApi.proxy(enable ? 'tts.enable' : 'tts.disable', {});
       setTtsStatus(prev => prev ? { ...prev, enabled: enable } : null);
-    } catch (err: any) { toast('error', err?.message || 'TTS toggle failed'); }
+    } catch (err: any) { toast('error', err?.message || es.ttsConvertFailed); }
     setTtsToggling(false);
   }, []);
 
@@ -104,9 +104,9 @@ export const AudioSection: React.FC<SectionProps> = ({ setField, getField, langu
     try {
       await gwApi.proxy('tts.setProvider', { provider: id });
       setActiveProvider(id);
-    } catch (err: any) { toast('error', err?.message || 'Switch provider failed'); }
+    } catch (err: any) { toast('error', err?.message || es.configSetFailed); }
     setSwitchingProvider(false);
-  }, []);
+  }, [es, toast]);
 
   const handlePreview = useCallback(async () => {
     if (!previewText.trim()) return;
@@ -116,7 +116,7 @@ export const AudioSection: React.FC<SectionProps> = ({ setField, getField, langu
       await gwApi.proxy('tts.convert', { text: previewText.trim() });
       setPreviewResult({ ok: true, text: es.ttsConvertOk });
     } catch (err: any) {
-      setPreviewResult({ ok: false, text: (es.ttsConvertFailed || 'Failed') + ': ' + (err?.message || '') });
+      setPreviewResult({ ok: false, text: `${es.ttsConvertFailed}: ${err?.message || ''}` });
     }
     setPreviewing(false);
   }, [previewText, es]);
@@ -137,7 +137,7 @@ export const AudioSection: React.FC<SectionProps> = ({ setField, getField, langu
       setTriggers(Array.isArray(res?.triggers) ? res.triggers : triggers);
       setTriggerMsg({ ok: true, text: es.voicewakeSaved });
     } catch (err: any) {
-      setTriggerMsg({ ok: false, text: (es.voicewakeFailed || 'Failed') + ': ' + (err?.message || '') });
+      setTriggerMsg({ ok: false, text: `${es.voicewakeFailed}: ${err?.message || ''}` });
     }
     setTriggerSaving(false);
   }, [triggers, es]);
@@ -256,14 +256,14 @@ export const AudioSection: React.FC<SectionProps> = ({ setField, getField, langu
       </ConfigSection>
 
       {/* Talk Mode (live) */}
-      <ConfigSection title={es.talkMode || 'Talk Mode'} icon="record_voice_over" iconColor="text-fuchsia-500" defaultOpen={false}>
+      <ConfigSection title={es.talkMode} icon="record_voice_over" iconColor="text-fuchsia-500" defaultOpen={false}>
         <div className="space-y-2">
-          <p className="text-[10px] text-slate-400 dark:text-white/35">{es.talkModeDesc || 'Switch the live talk/voice mode on the Gateway'}</p>
+          <p className="text-[10px] text-slate-400 dark:text-white/35">{es.talkModeDesc}</p>
           <div className="flex flex-wrap gap-2">
             {[
-              { value: 'push-to-talk', label: es.talkModePtt || 'Push-to-Talk', icon: 'touch_app' },
-              { value: 'voice-activity', label: es.talkModeVad || 'Voice Activity', icon: 'mic' },
-              { value: 'off', label: es.talkModeOff || 'Off', icon: 'mic_off' }
+              { value: 'push-to-talk', label: es.talkModePtt, icon: 'touch_app' },
+              { value: 'voice-activity', label: es.talkModeVad, icon: 'mic' },
+              { value: 'off', label: es.talkModeOff, icon: 'mic_off' }
             ].map(m => (
               <button key={m.value} onClick={() => handleTalkMode(m.value)} disabled={talkModeLoading}
                 className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1 ${talkMode === m.value ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 hover:bg-primary/10 hover:text-primary'}`}>
@@ -282,28 +282,28 @@ export const AudioSection: React.FC<SectionProps> = ({ setField, getField, langu
 
       {/* Voice Config (static) */}
       <ConfigSection title={es.audioConfig} icon="mic" iconColor="text-fuchsia-500" defaultOpen={false}>
-        <TextField label={es.voiceId} tooltip={tip('talk.voiceId')} value={getField(['talk', 'voiceId']) || ''} onChange={v => setField(['talk', 'voiceId'], v)} placeholder="voice_id" />
-        <TextField label={es.audioModelId || "Model ID"} tooltip={tip('talk.modelId')} value={getField(['talk', 'modelId']) || ''} onChange={v => setField(['talk', 'modelId'], v)} placeholder="model_id" />
-        <PasswordField label={es.audioApiKey || "API Key"} tooltip={tip('talk.apiKey')} value={getField(['talk', 'apiKey']) || ''} onChange={v => setField(['talk', 'apiKey'], v)} />
-        <SwitchField label={es.audioInterrupt || "Interrupt on Speech"} tooltip={tip('talk.interruptOnSpeech')} value={getField(['talk', 'interruptOnSpeech']) === true} onChange={v => setField(['talk', 'interruptOnSpeech'], v)} />
+        <TextField label={es.voiceId} tooltip={tip('talk.voiceId')} value={getField(['talk', 'voiceId']) || ''} onChange={v => setField(['talk', 'voiceId'], v)} placeholder={es.phVoiceId} />
+        <TextField label={es.audioModelId} tooltip={tip('talk.modelId')} value={getField(['talk', 'modelId']) || ''} onChange={v => setField(['talk', 'modelId'], v)} placeholder={es.phModelId} />
+        <PasswordField label={es.audioApiKey} tooltip={tip('talk.apiKey')} value={getField(['talk', 'apiKey']) || ''} onChange={v => setField(['talk', 'apiKey'], v)} />
+        <SwitchField label={es.audioInterrupt} tooltip={tip('talk.interruptOnSpeech')} value={getField(['talk', 'interruptOnSpeech']) === true} onChange={v => setField(['talk', 'interruptOnSpeech'], v)} />
       </ConfigSection>
 
-      <ConfigSection title={es.audioTranscription || "Audio Transcription"} icon="hearing" iconColor="text-fuchsia-500" defaultOpen={false}>
-        <ArrayField label={es.audioCommand || "Command"} tooltip={tip('audio.transcription.command')} value={getField(['audio', 'transcription', 'command']) || []} onChange={v => setField(['audio', 'transcription', 'command'], v)} placeholder="whisper, --model, base" />
-        <NumberField label={es.timeoutS || "Timeout (s)"} tooltip={tip('audio.transcription.timeoutSeconds')} value={getField(['audio', 'transcription', 'timeoutSeconds'])} onChange={v => setField(['audio', 'transcription', 'timeoutSeconds'], v)} min={1} />
+      <ConfigSection title={es.audioTranscription} icon="hearing" iconColor="text-fuchsia-500" defaultOpen={false}>
+        <ArrayField label={es.audioCommand} tooltip={tip('audio.transcription.command')} value={getField(['audio', 'transcription', 'command']) || []} onChange={v => setField(['audio', 'transcription', 'command'], v)} placeholder={es.phWhisperCommand} />
+        <NumberField label={es.timeoutS} tooltip={tip('audio.transcription.timeoutSeconds')} value={getField(['audio', 'transcription', 'timeoutSeconds'])} onChange={v => setField(['audio', 'transcription', 'timeoutSeconds'], v)} min={1} />
       </ConfigSection>
 
       <ConfigSection title={es.ttsConfig} icon="record_voice_over" iconColor="text-fuchsia-500" defaultOpen={false}>
         <SelectField label={es.ttsProvider} tooltip={tip('messages.tts.provider')} value={getField(['messages', 'tts', 'provider']) || ''} onChange={v => setField(['messages', 'tts', 'provider'], v)}
           options={[
             { value: '', label: '—' },
-            { value: 'elevenlabs', label: es.ttsProviderElevenLabs || 'ElevenLabs' },
-            { value: 'openai', label: es.ttsProviderOpenAI || 'OpenAI' },
-            { value: 'edge', label: es.ttsProviderEdge || 'Edge' }
+            { value: 'elevenlabs', label: es.ttsProviderElevenLabs },
+            { value: 'openai', label: es.ttsProviderOpenAI },
+            { value: 'edge', label: es.ttsProviderEdge }
           ]} />
         <SwitchField label={es.autoTts} tooltip={tip('messages.tts.auto')} value={getField(['messages', 'tts', 'auto']) === true} onChange={v => setField(['messages', 'tts', 'auto'], v)} />
-        <TextField label={es.mode} tooltip={tip('messages.tts.mode')} value={getField(['messages', 'tts', 'mode']) || ''} onChange={v => setField(['messages', 'tts', 'mode'], v)} placeholder="reply / inline" />
-        <PasswordField label={es.audioApiKey || "API Key"} value={getField(['messages', 'tts', 'apiKey']) || ''} onChange={v => setField(['messages', 'tts', 'apiKey'], v)} />
+        <TextField label={es.mode} tooltip={tip('messages.tts.mode')} value={getField(['messages', 'tts', 'mode']) || ''} onChange={v => setField(['messages', 'tts', 'mode'], v)} placeholder={es.phReplyInline} />
+        <PasswordField label={es.audioApiKey} value={getField(['messages', 'tts', 'apiKey']) || ''} onChange={v => setField(['messages', 'tts', 'apiKey'], v)} />
         <TextField label={es.voiceId} value={getField(['messages', 'tts', 'voiceId']) || ''} onChange={v => setField(['messages', 'tts', 'voiceId'], v)} />
       </ConfigSection>
 

@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
+import { subscribeManagerWS } from '../services/manager-ws';
 import { getTemplatesForFile, resolveTemplate, WorkspaceTemplate } from '../data/templates';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -45,11 +46,11 @@ function extractRunText(content: unknown): string {
 const Agents: React.FC<AgentsProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const a = (t as any).agt as any;
+  const na = (t as any).na || '-';
   const { toast } = useToast();
   const { confirm } = useConfirm();
 
-  // WS connection (Manager's /api/v1/ws for agent chat streaming events)
-  const wsRef = useRef<WebSocket | null>(null);
+  // Shared Manager WS subscription for agent chat streaming events
   const [gwReady, setGwReady] = useState(false);
   const [wsConnecting, setWsConnecting] = useState(false);
   const runIdRef = useRef<string | null>(null);
@@ -94,24 +95,14 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       if (res?.connected) setGwReady(true);
     }).catch(() => { });
 
-    // 2) Connect to Manager's /api/v1/ws for real-time chat streaming events
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws`);
-
+    // 2) Subscribe to shared Manager WS for real-time chat streaming events
+    let opened = false;
     const connectTimeout = setTimeout(() => {
-      if (ws.readyState !== WebSocket.OPEN) setWsConnecting(false);
-    }, 12000);
+      if (!opened) setWsConnecting(false);
+    }, 3000);
 
-    ws.onopen = () => {
-      clearTimeout(connectTimeout);
-      setGwReady(true);
-      setWsConnecting(false);
-      ws.send(JSON.stringify({ action: 'subscribe', channels: ['gw_event'] }));
-    };
-
-    ws.onmessage = (evt) => {
+    const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
-        const msg = JSON.parse(evt.data);
         if (msg.type === 'chat') {
           const payload = msg.data;
           if (!payload) return;
@@ -148,18 +139,18 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
           setLastHeartbeat({ ts: Date.now(), status: msg.data?.status || 'running' });
         }
       } catch { /* ignore */ }
-    };
+    }, (status) => {
+      if (status === 'open') {
+        opened = true;
+        clearTimeout(connectTimeout);
+        setGwReady(true);
+        setWsConnecting(false);
+      }
+    });
 
-    ws.onclose = () => {
-      clearTimeout(connectTimeout);
-      setWsConnecting(false);
-    };
-
-    wsRef.current = ws;
     return () => {
       clearTimeout(connectTimeout);
-      ws.close();
-      wsRef.current = null;
+      unsubscribe();
     };
   }, []);
 
@@ -230,7 +221,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       const content = (res as any)?.file?.content || '';
       setFileContents(prev => ({ ...prev, [name]: content }));
       setFileDrafts(prev => ({ ...prev, [name]: content }));
-    } catch (err: any) { toast('error', err?.message || 'Load file failed'); }
+    } catch (err: any) { toast('error', err?.message || a.fileLoadFailed); }
   }, [selectedId, fileContents]);
 
   const saveFile = useCallback(async () => {
@@ -246,7 +237,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     try {
       await gwApi.agentFileSet(selectedId, fileActive, fileDrafts[fileActive] || '');
       setFileContents(prev => ({ ...prev, [fileActive!]: fileDrafts[fileActive!] || '' }));
-    } catch (err: any) { toast('error', err?.message || 'Save failed'); }
+    } catch (err: any) { toast('error', err?.message || a.fileSaveFailed); }
     setFileSaving(false);
   }, [selectedId, fileActive, fileDrafts, a]);
 
@@ -275,11 +266,11 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     setWaking(true);
     setWakeResult(null);
     try {
-      await gwApi.proxy('wake', { mode, text: a.wakeText || 'Manual wake' });
+      await gwApi.proxy('wake', { mode, text: a.wakeText });
       setWakeResult({ ok: true, text: a.wakeOk });
       setTimeout(() => setWakeResult(null), 3000);
     } catch (err: any) {
-      setWakeResult({ ok: false, text: (a.wakeFailed || 'Wake failed') + ': ' + (err?.message || '') });
+      setWakeResult({ ok: false, text: `${a.wakeFailed}: ${err?.message || ''}` });
     }
     setWaking(false);
   }, [a]);
@@ -290,9 +281,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     setBrowserResult(null);
     try {
       const res = await gwApi.proxy('browser.request', { method: browserMethod, path: browserUrl.trim() }) as any;
-      setBrowserResult({ ok: true, text: (a.browserOk || 'OK') + (res?.status ? ` (${res.status})` : '') });
+      setBrowserResult({ ok: true, text: `${a.browserOk}${res?.status ? ` (${res.status})` : ''}` });
     } catch (err: any) {
-      setBrowserResult({ ok: false, text: (a.browserFailed || 'Failed') + ': ' + (err?.message || '') });
+      setBrowserResult({ ok: false, text: `${a.browserFailed}: ${err?.message || ''}` });
     }
     setBrowserSending(false);
   }, [browserUrl, browserMethod, browserSending, a]);
@@ -375,16 +366,16 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   };
 
   const resolveAgentConfig = (agentId: string) => {
-    if (!config) return { model: '-', workspace: 'default', skills: null, tools: null };
+    if (!config) return { model: na, workspace: a.workspaceDefault, skills: null, tools: null };
     const list = config?.agents?.list || [];
     const entry = list.find((e: any) => e?.id === agentId);
     const defaults = config?.agents?.defaults;
     const model = entry?.model || defaults?.model;
-    const modelLabel = typeof model === 'string' ? model : (model?.primary || '-');
+    const modelLabel = typeof model === 'string' ? model : (model?.primary || na);
     const fallbacks = typeof model === 'object' ? model?.fallbacks : null;
     return {
       model: modelLabel + (Array.isArray(fallbacks) && fallbacks.length > 0 ? ` (+${fallbacks.length})` : ''),
-      workspace: entry?.workspace || defaults?.workspace || 'default',
+      workspace: entry?.workspace || defaults?.workspace || a.workspaceDefault,
       skills: entry?.skills || null,
       tools: entry?.tools || config?.tools || null,
     };
@@ -552,7 +543,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h2 className="text-sm font-bold text-slate-800 dark:text-white truncate">{resolveLabel(selected)}</h2>
-                    {selected.id === defaultId && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">default</span>}
+                    {selected.id === defaultId && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">{(t as any).default}</span>}
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-white/40 font-mono">{selected.id}</p>
                 </div>
@@ -620,8 +611,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                       {[
                         { label: a.workspace, value: cfg.workspace, icon: 'folder' },
                         { label: a.model, value: cfg.model, icon: 'smart_toy' },
-                        { label: a.identity, value: ident?.name || selected.identity?.name || '-', icon: 'person' },
-                        { label: a.emoji, value: resolveEmoji(selected) || '-', icon: 'mood' },
+                        { label: a.identity, value: ident?.name || selected.identity?.name || na, icon: 'person' },
+                        { label: a.emoji, value: resolveEmoji(selected) || na, icon: 'mood' },
                         { label: a.isDefault, value: selected.id === defaultId ? a.yes : a.no, icon: 'star' },
                         { label: a.skills, value: cfg.skills ? `${cfg.skills.length} selected` : (t as any).menu?.all, icon: 'extension' },
                       ].map(kv => (
@@ -636,7 +627,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                     </div>
                     {selected.identity?.theme && (
                       <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3">
-                        <p className="text-[11px] font-bold text-slate-400 dark:text-white/40 uppercase mb-1">Theme</p>
+                        <p className="text-[11px] font-bold text-slate-400 dark:text-white/40 uppercase mb-1">{a.theme}</p>
                         <p className="text-[11px] text-slate-600 dark:text-white/50">{selected.identity.theme}</p>
                       </div>
                     )}
@@ -762,7 +753,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                 const skills: any[] = skillsReport?.skills || [];
                 const groups: Record<string, any[]> = {};
                 skills.forEach((sk: any) => {
-                  const src = sk.bundled ? 'built-in' : (sk.source || 'other');
+                  const src = sk.bundled ? a.sourceBuiltIn : (sk.source || a.sourceOther);
                   if (!groups[src]) groups[src] = [];
                   groups[src].push(sk);
                 });

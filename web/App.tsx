@@ -10,22 +10,44 @@ import { getTranslation, loadLocale } from './locales';
 import { get } from './services/request';
 import { useBadgeCounts } from './hooks/useBadgeCounts';
 
+const idle = (cb: () => void) => {
+  const ric = (window as any).requestIdleCallback as ((fn: () => void, opts?: { timeout: number }) => number) | undefined;
+  if (ric) return ric(cb, { timeout: 1200 });
+  return window.setTimeout(cb, 350);
+};
+
 // 路由级代码分割：每个页面独立 chunk，按需加载
-const Dashboard = React.lazy(() => import('./windows/Dashboard'));
-const Gateway = React.lazy(() => import('./windows/Gateway'));
-const Sessions = React.lazy(() => import('./windows/Sessions'));
-const Activity = React.lazy(() => import('./windows/Activity'));
-const Alerts = React.lazy(() => import('./windows/Alerts'));
-const Usage = React.lazy(() => import('./windows/Usage'));
-const Editor = React.lazy(() => import('./windows/Editor/index'));
-const Skills = React.lazy(() => import('./windows/Skills'));
-// const Security = React.lazy(() => import('./windows/Security')); // hidden: audit-only, no real interception
-const Agents = React.lazy(() => import('./windows/Agents'));
-const Scheduler = React.lazy(() => import('./windows/Scheduler'));
-const Settings = React.lazy(() => import('./windows/Settings'));
-const Nodes = React.lazy(() => import('./windows/Nodes'));
-const SetupWizard = React.lazy(() => import('./windows/SetupWizard'));
-const UsageWizard = React.lazy(() => import('./windows/UsageWizard'));
+const loadDashboard = () => import('./windows/Dashboard');
+const loadGateway = () => import('./windows/Gateway');
+const loadSessions = () => import('./windows/Sessions');
+const loadActivity = () => import('./windows/Activity');
+const loadAlerts = () => import('./windows/Alerts');
+const loadUsage = () => import('./windows/Usage');
+const loadEditor = () => import('./windows/Editor/index');
+const loadSkills = () => import('./windows/Skills');
+const loadAgents = () => import('./windows/Agents');
+const loadDoctor = () => import('./windows/Doctor');
+const loadScheduler = () => import('./windows/Scheduler');
+const loadSettings = () => import('./windows/Settings');
+const loadNodes = () => import('./windows/Nodes');
+const loadSetupWizard = () => import('./windows/SetupWizard');
+const loadUsageWizard = () => import('./windows/UsageWizard');
+
+const Dashboard = React.lazy(loadDashboard);
+const Gateway = React.lazy(loadGateway);
+const Sessions = React.lazy(loadSessions);
+const Activity = React.lazy(loadActivity);
+const Alerts = React.lazy(loadAlerts);
+const Usage = React.lazy(loadUsage);
+const Editor = React.lazy(loadEditor);
+const Skills = React.lazy(loadSkills);
+const Agents = React.lazy(loadAgents);
+const Doctor = React.lazy(loadDoctor);
+const Scheduler = React.lazy(loadScheduler);
+const Settings = React.lazy(loadSettings);
+const Nodes = React.lazy(loadNodes);
+const SetupWizard = React.lazy(loadSetupWizard);
+const UsageWizard = React.lazy(loadUsageWizard);
 
 const WINDOW_IDS: { id: WindowID; openByDefault?: boolean }[] = [
   { id: 'dashboard', openByDefault: true },
@@ -36,8 +58,8 @@ const WINDOW_IDS: { id: WindowID; openByDefault?: boolean }[] = [
   { id: 'config_mgmt' },
   { id: 'editor' },
   { id: 'skills' },
-  // { id: 'security' }, // hidden: audit-only
   { id: 'agents' },
+  { id: 'maintenance' },
   { id: 'scheduler' },
   { id: 'settings' },
   { id: 'nodes' },
@@ -49,6 +71,7 @@ const DEFAULT_W = 960;
 const DEFAULT_H = 680;
 const CASCADE_OFFSET = 30;
 const MENU_BAR_H = 25;
+const SETUP_WIZARD_AUTO_OPEN_DISABLED_KEY = 'setup_wizard_disable_auto_open';
 
 function centeredBounds(): WindowBounds {
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1440;
@@ -148,6 +171,7 @@ const App: React.FC = () => {
   // 自动检查OpenClaw 安装状态，未安装则自动打开安装向导
   useEffect(() => {
     if (isLocked) return;
+    if (localStorage.getItem(SETUP_WIZARD_AUTO_OPEN_DISABLED_KEY) === '1') return;
 
     const checkOpenClawStatus = async () => {
       // 延迟 500ms，确保登录流程完成
@@ -173,6 +197,18 @@ const App: React.FC = () => {
     checkOpenClawStatus();
   }, [isLocked]);
 
+  // 登录后空闲预热常用窗口 chunk，减少首次打开等待
+  useEffect(() => {
+    if (isLocked || !localeReady) return;
+    idle(() => {
+      void loadSessions();
+      void loadAlerts();
+      void loadAgents();
+      void loadEditor();
+      void loadGateway();
+    });
+  }, [isLocked, localeReady]);
+
   const toggleTheme = useCallback(() => setTheme(p => p === 'dark' ? 'light' : 'dark'), []);
   const changeLanguage = useCallback((lang: Language) => setLanguage(lang), []);
 
@@ -190,6 +226,17 @@ const App: React.FC = () => {
     });
     setMaxZ(p => p + 1);
   }, [maxZ]);
+
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      const ce = evt as CustomEvent<{ id?: WindowID }>;
+      const id = ce?.detail?.id;
+      if (!id) return;
+      openWindow(id);
+    };
+    window.addEventListener('clawdeck:open-window', handler as EventListener);
+    return () => window.removeEventListener('clawdeck:open-window', handler as EventListener);
+  }, [openWindow]);
 
   // Navigate to Sessions window and select a specific session
   const navigateToSession = useCallback((sessionKey: string) => {
@@ -287,8 +334,8 @@ const App: React.FC = () => {
                 {w.id === 'config_mgmt' && <Usage language={language} onNavigateToSession={navigateToSession} />}
                 {w.id === 'editor' && <Editor language={language} />}
                 {w.id === 'skills' && <Skills language={language} />}
-                {/* {w.id === 'security' && <Security language={language} />} */}
                 {w.id === 'agents' && <Agents language={language} />}
+                {w.id === 'maintenance' && <Doctor language={language} />}
                 {w.id === 'scheduler' && <Scheduler language={language} />}
                 {w.id === 'settings' && <Settings language={language} />}
                 {w.id === 'nodes' && <Nodes language={language} />}

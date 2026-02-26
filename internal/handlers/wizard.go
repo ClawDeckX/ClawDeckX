@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,19 @@ type TestModelRequest struct {
 	APIKey   string `json:"apiKey"`
 	BaseURL  string `json:"baseUrl"`
 	Model    string `json:"model"`
+	APIType  string `json:"apiType"`
+}
+
+type DiscoverModelsRequest struct {
+	Provider string `json:"provider"`
+	APIKey   string `json:"apiKey"`
+	BaseURL  string `json:"baseUrl"`
+	APIType  string `json:"apiType"`
+}
+
+type DiscoveredModel struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
 }
 
 // TestModel tests model connection.
@@ -82,6 +96,31 @@ func (h *WizardHandler) TestModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	web.OK(w, r, result)
+}
+
+// DiscoverModels discovers model IDs from provider endpoints.
+// POST /api/v1/setup/discover-models
+func (h *WizardHandler) DiscoverModels(w http.ResponseWriter, r *http.Request) {
+	var req DiscoverModelsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+	if strings.TrimSpace(req.Provider) == "" {
+		web.FailErr(w, r, web.ErrInvalidParam)
+		return
+	}
+
+	models, source, err := discoverModels(req)
+	if err != nil {
+		web.Fail(w, r, "MODEL_DISCOVER_FAILED", err.Error(), http.StatusBadGateway)
+		return
+	}
+	web.OK(w, r, map[string]interface{}{
+		"models": models,
+		"count":  len(models),
+		"source": source,
+	})
 }
 
 // probeModel sends a minimal chat completion request to verify the API key and model.
@@ -140,17 +179,21 @@ func (h *WizardHandler) probeModel(req TestModelRequest) (map[string]interface{}
 // buildProbeRequest builds the HTTP request for probing a model provider.
 func buildProbeRequest(req TestModelRequest) (endpoint string, headers map[string]string, body []byte, err error) {
 	provider := strings.ToLower(req.Provider)
+	apiType := strings.ToLower(strings.TrimSpace(req.APIType))
 	baseURL := strings.TrimRight(req.BaseURL, "/")
 
-	switch provider {
-	case "anthropic":
+	switch {
+	case provider == "anthropic" || apiType == "anthropic-messages":
 		if baseURL == "" {
 			baseURL = "https://api.anthropic.com"
 		}
 		endpoint = baseURL + "/v1/messages"
 		headers = map[string]string{
-			"x-api-key":         req.APIKey,
 			"anthropic-version": "2023-06-01",
+		}
+		if req.APIKey != "" {
+			headers["Authorization"] = "Bearer " + req.APIKey
+			headers["x-api-key"] = req.APIKey
 		}
 		body, _ = json.Marshal(map[string]interface{}{
 			"model":      req.Model,
@@ -158,7 +201,7 @@ func buildProbeRequest(req TestModelRequest) (endpoint string, headers map[strin
 			"messages":   []map[string]string{{"role": "user", "content": "Reply OK"}},
 		})
 
-	case "google":
+	case provider == "google" || provider == "gemini" || apiType == "google-generative-ai":
 		if baseURL == "" {
 			baseURL = "https://generativelanguage.googleapis.com/v1beta"
 		}
@@ -189,6 +232,226 @@ func buildProbeRequest(req TestModelRequest) (endpoint string, headers map[strin
 	}
 
 	return endpoint, headers, body, nil
+}
+
+func discoverModels(req DiscoverModelsRequest) ([]DiscoveredModel, string, error) {
+	provider := strings.ToLower(strings.TrimSpace(req.Provider))
+	apiType := strings.ToLower(strings.TrimSpace(req.APIType))
+	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
+
+	switch {
+	case provider == "ollama":
+		models, err := discoverOllamaModelsFromEndpoint(baseURL)
+		return models, "ollama", err
+	case provider == "gemini" || provider == "google" || provider == "google-gemini-cli":
+		models, err := discoverGoogleModelsFromEndpoint(baseURL, req.APIKey)
+		return models, "google", err
+	case provider == "anthropic" || apiType == "anthropic-messages":
+		models, err := discoverAnthropicModelsFromEndpoint(baseURL, req.APIKey)
+		return models, "anthropic", err
+	default:
+		models, err := discoverOpenAICompatibleModelsFromEndpoint(baseURL, req.APIKey)
+		return models, "openai-compatible", err
+	}
+}
+
+func discoverOpenAICompatibleModelsFromEndpoint(baseURL, apiKey string) ([]DiscoveredModel, error) {
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
+	endpoint := strings.TrimRight(baseURL, "/") + "/models"
+	headers := map[string]string{}
+	if strings.TrimSpace(apiKey) != "" {
+		headers["Authorization"] = "Bearer " + strings.TrimSpace(apiKey)
+	}
+	resp, err := doJSONRequest("GET", endpoint, headers, nil)
+	if err != nil {
+		return nil, err
+	}
+	models := parseOpenAIModelsResponse(resp)
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no models discovered from %s", endpoint)
+	}
+	return dedupeModels(models), nil
+}
+
+func discoverAnthropicModelsFromEndpoint(baseURL, apiKey string) ([]DiscoveredModel, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return nil, fmt.Errorf("API Key is required for anthropic model discovery")
+	}
+	if baseURL == "" {
+		baseURL = "https://api.anthropic.com"
+	}
+	endpoint := strings.TrimRight(baseURL, "/") + "/v1/models"
+	headers := map[string]string{
+		"anthropic-version": "2023-06-01",
+	}
+	trimmedKey := strings.TrimSpace(apiKey)
+	headers["x-api-key"] = trimmedKey
+	// Compatibility: some Anthropic-compatible gateways accept Authorization only.
+	headers["Authorization"] = "Bearer " + trimmedKey
+	resp, err := doJSONRequest("GET", endpoint, headers, nil)
+	if err != nil {
+		return nil, err
+	}
+	models := parseOpenAIModelsResponse(resp)
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no models discovered from %s", endpoint)
+	}
+	return dedupeModels(models), nil
+}
+
+func discoverGoogleModelsFromEndpoint(baseURL, apiKey string) ([]DiscoveredModel, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return nil, fmt.Errorf("API Key is required for google model discovery")
+	}
+	if baseURL == "" {
+		baseURL = "https://generativelanguage.googleapis.com/v1beta"
+	}
+	q := url.Values{}
+	q.Set("key", strings.TrimSpace(apiKey))
+	endpoint := strings.TrimRight(baseURL, "/") + "/models?" + q.Encode()
+	resp, err := doJSONRequest("GET", endpoint, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, _ := resp["models"].([]interface{})
+	out := make([]DiscoveredModel, 0, len(raw))
+	for _, it := range raw {
+		m, ok := it.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(anyString(m["name"]))
+		display := strings.TrimSpace(anyString(m["displayName"]))
+		id := strings.TrimPrefix(name, "models/")
+		if id == "" {
+			continue
+		}
+		out = append(out, DiscoveredModel{ID: id, Name: display})
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no models discovered from %s", endpoint)
+	}
+	return dedupeModels(out), nil
+}
+
+func discoverOllamaModelsFromEndpoint(baseURL string) ([]DiscoveredModel, error) {
+	base := strings.TrimSpace(baseURL)
+	if base == "" {
+		base = "http://localhost:11434"
+	}
+	base = strings.TrimRight(base, "/")
+	base = strings.TrimSuffix(base, "/v1")
+	base = strings.TrimSuffix(base, "/v1/")
+	endpoint := base + "/api/tags"
+	resp, err := doJSONRequest("GET", endpoint, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	raw, _ := resp["models"].([]interface{})
+	out := make([]DiscoveredModel, 0, len(raw))
+	for _, it := range raw {
+		m, ok := it.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id := strings.TrimSpace(anyString(m["model"]))
+		name := strings.TrimSpace(anyString(m["name"]))
+		if id == "" {
+			id = name
+		}
+		if id == "" {
+			continue
+		}
+		out = append(out, DiscoveredModel{ID: id, Name: name})
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no models discovered from %s", endpoint)
+	}
+	return dedupeModels(out), nil
+}
+
+func doJSONRequest(method, endpoint string, headers map[string]string, body []byte) (map[string]interface{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	var reader io.Reader
+	if len(body) > 0 {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	if len(body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("request timeout: %s", endpoint)
+		}
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("endpoint error (HTTP %d): %s", resp.StatusCode, extractErrorDetail(data))
+	}
+
+	var obj map[string]interface{}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return nil, fmt.Errorf("invalid response json: %w", err)
+	}
+	return obj, nil
+}
+
+func parseOpenAIModelsResponse(resp map[string]interface{}) []DiscoveredModel {
+	raw, _ := resp["data"].([]interface{})
+	out := make([]DiscoveredModel, 0, len(raw))
+	for _, it := range raw {
+		m, ok := it.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id := strings.TrimSpace(anyString(m["id"]))
+		if id == "" {
+			continue
+		}
+		name := strings.TrimSpace(anyString(m["name"]))
+		out = append(out, DiscoveredModel{ID: id, Name: name})
+	}
+	return out
+}
+
+func dedupeModels(in []DiscoveredModel) []DiscoveredModel {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]DiscoveredModel, 0, len(in))
+	for _, m := range in {
+		id := strings.TrimSpace(m.ID)
+		if id == "" {
+			continue
+		}
+		key := strings.ToLower(id)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, DiscoveredModel{ID: id, Name: strings.TrimSpace(m.Name)})
+	}
+	return out
+}
+
+func anyString(v interface{}) string {
+	s, _ := v.(string)
+	return s
 }
 
 // extractErrorDetail extracts a human-readable error from an API response body.

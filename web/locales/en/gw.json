@@ -3,6 +3,7 @@
   "running": "Running",
   "pid": "PID",
   "uptime": "Uptime",
+  "runtime": "Runtime",
   "traffic": "Traffic",
   "location": "Location",
   "start": "Start",
@@ -77,5 +78,14 @@
   "systemEventPlaceholder": "Event text...",
   "systemEventSend": "Send",
   "systemEventOk": "Event sent",
-  "systemEventFailed": "Failed"
+  "systemEventFailed": "Failed",
+  "events": "Events",
+  "eventRisk": "Risk",
+  "eventSource": "Source",
+  "eventCategory": "Category",
+  "noEvents": "No events",
+  "openRelated": "Open related",
+  "loading": "Loading...",
+  "refresh": "Refresh",
+  "preferLabelEn": true
 }

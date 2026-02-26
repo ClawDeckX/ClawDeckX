@@ -26,18 +26,18 @@ export const MessagesSection: React.FC<SectionProps> = ({ setField, getField, la
   return (
     <div className="space-y-4">
       <ConfigSection title={es.prefixes} icon="format_quote" iconColor="text-cyan-500">
-        <TextField label={es.messagePrefix} tooltip={tip('messages.messagePrefix')} value={g(['messagePrefix']) || ''} onChange={v => s(['messagePrefix'], v)} mono={false} placeholder="[User]" />
-        <TextField label={es.responsePrefix} tooltip={tip('messages.responsePrefix')} value={g(['responsePrefix']) || ''} onChange={v => s(['responsePrefix'], v)} mono={false} placeholder="[Bot]" />
+        <TextField label={es.messagePrefix} tooltip={tip('messages.messagePrefix')} value={g(['messagePrefix']) || ''} onChange={v => s(['messagePrefix'], v)} mono={false} placeholder={es.phUserPrefix} />
+        <TextField label={es.responsePrefix} tooltip={tip('messages.responsePrefix')} value={g(['responsePrefix']) || ''} onChange={v => s(['responsePrefix'], v)} mono={false} placeholder={es.phBotPrefix} />
       </ConfigSection>
 
       <ConfigSection title={es.ackReaction} icon="thumb_up" iconColor="text-amber-500">
-        <TextField label={es.ackEmoji} tooltip={tip('messages.ackReaction')} value={g(['ackReaction']) || ''} onChange={v => s(['ackReaction'], v)} placeholder="👀" mono={false} />
+        <TextField label={es.ackEmoji} tooltip={tip('messages.ackReaction')} value={g(['ackReaction']) || ''} onChange={v => s(['ackReaction'], v)} placeholder={es.phAckEmoji} mono={false} />
         <SelectField label={es.ackScope} tooltip={tip('messages.ackReactionScope')} value={g(['ackReactionScope']) || 'group-mentions'} onChange={v => s(['ackReactionScope'], v)} options={ACK_SCOPE_OPTIONS} />
         <SwitchField label={es.removeAfterReply} tooltip={tip('messages.removeAckAfterReply')} value={g(['removeAckAfterReply']) === true} onChange={v => s(['removeAckAfterReply'], v)} />
       </ConfigSection>
 
       <ConfigSection title={es.groupChat} icon="group" iconColor="text-green-500" defaultOpen={false}>
-        <ArrayField label={es.mentionPatterns} tooltip={tip('messages.groupChat.mentionPatterns')} value={g(['groupChat', 'mentionPatterns']) || []} onChange={v => s(['groupChat', 'mentionPatterns'], v)} placeholder="@bot, /ask" />
+        <ArrayField label={es.mentionPatterns} tooltip={tip('messages.groupChat.mentionPatterns')} value={g(['groupChat', 'mentionPatterns']) || []} onChange={v => s(['groupChat', 'mentionPatterns'], v)} placeholder={es.phMentionPatterns} />
         <NumberField label={es.historyLimit} tooltip={tip('messages.groupChat.historyLimit')} value={g(['groupChat', 'historyLimit'])} onChange={v => s(['groupChat', 'historyLimit'], v)} min={0} />
       </ConfigSection>
 

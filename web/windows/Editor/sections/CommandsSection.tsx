@@ -32,7 +32,7 @@ export const CommandsSection: React.FC<SectionProps> = ({ setField, getField, la
 
       <ConfigSection title={es.accessControl} icon="admin_panel_settings" iconColor="text-red-500" defaultOpen={false}>
         <SwitchField label={es.useAccessGroups} tooltip={tip('commands.useAccessGroups')} value={g(['useAccessGroups']) === true} onChange={v => s(['useAccessGroups'], v)} />
-        <ArrayField label={es.ownerAllowFrom} desc={es.ownerAllowFromDesc} tooltip={tip('commands.ownerAllowFrom')} value={(g(['ownerAllowFrom']) || []).map(String)} onChange={v => s(['ownerAllowFrom'], v)} placeholder="user_id" />
+        <ArrayField label={es.ownerAllowFrom} desc={es.ownerAllowFromDesc} tooltip={tip('commands.ownerAllowFrom')} value={(g(['ownerAllowFrom']) || []).map(String)} onChange={v => s(['ownerAllowFrom'], v)} placeholder={es.phUserId} />
       </ConfigSection>
     </div>
   );

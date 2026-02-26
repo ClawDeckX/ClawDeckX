@@ -3,6 +3,7 @@
   "running": "运行中",
   "pid": "进程 ID",
   "uptime": "运行时间",
+  "runtime": "运行时",
   "traffic": "实时流量",
   "location": "服务器位置",
   "start": "启动",
@@ -77,5 +78,14 @@
   "systemEventPlaceholder": "事件内容...",
   "systemEventSend": "发送",
   "systemEventOk": "事件已发送",
-  "systemEventFailed": "发送失败"
+  "systemEventFailed": "发送失败",
+  "events": "事件",
+  "eventRisk": "风险",
+  "eventSource": "来源",
+  "eventCategory": "分类",
+  "noEvents": "暂无事件",
+  "openRelated": "打开相关",
+  "loading": "加载中...",
+  "refresh": "刷新",
+  "preferLabelEn": false
 }

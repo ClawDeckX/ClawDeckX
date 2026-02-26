@@ -1,4 +1,4 @@
-﻿package commands
+package commands
 
 import (
 	"context"
@@ -213,20 +213,13 @@ func RunServe(args []string) int {
 		notifyMgr.Send(msg)
 	})
 
-	// 安全引擎已禁用：当前仅审计记录，无法实际拦截 Gateway 操作
-	// secEngine := security.NewEngine(wsHub)
-	// secEngine.SetNotifier(notifyMgr)
-	// if err := secEngine.Init(); err != nil {
-	// 	logger.Log.Error().Err(err).Msg("安全引擎初始化失败")
-	// }
-
 	// GW 事件采集器（转发 Gateway 实时事件到前端 WebSocket）
-	gwCollector := monitor.NewGWCollector(gwClient, wsHub, nil, cfg.Monitor.IntervalSeconds)
+	gwCollector := monitor.NewGWCollector(gwClient, wsHub, cfg.Monitor.IntervalSeconds)
 	go gwCollector.Start()
 	defer gwCollector.Stop()
 
-	// 本地文件扫描监控（安全引擎已禁用，传 nil；不自动启动）
-	monSvc := monitor.NewService(cfg.OpenClaw.ConfigPath, wsHub, nil, cfg.Monitor.IntervalSeconds)
+	// 本地文件扫描监控（不自动启动）
+	monSvc := monitor.NewService(cfg.OpenClaw.ConfigPath, wsHub, cfg.Monitor.IntervalSeconds)
 
 	// 初始化处理器
 	authHandler := handlers.NewAuthHandler(&cfg)
@@ -234,8 +227,8 @@ func RunServe(args []string) int {
 	gatewayHandler.SetGWClient(gwClient)
 	dashboardHandler := handlers.NewDashboardHandler(svc)
 	activityHandler := handlers.NewActivityHandler()
+	eventsHandler := handlers.NewEventsHandler()
 	monitorHandler := handlers.NewMonitorHandler()
-	// securityHandler := handlers.NewSecurityHandler(secEngine) // hidden: audit-only
 	settingsHandler := handlers.NewSettingsHandler()
 	settingsHandler.SetGWClient(gwClient)
 	settingsHandler.SetGWService(svc)
@@ -301,15 +294,12 @@ func RunServe(args []string) int {
 	// 活动流
 	router.GET("/api/v1/activities", activityHandler.List)
 	router.GET("/api/v1/activities/", activityHandler.GetByID)
+	router.GET("/api/v1/events", eventsHandler.List)
 
 	// 监控统计
 	router.GET("/api/v1/monitor/stats", monitorHandler.Stats)
 
 	// 安全策略（已禁用：仅审计，无实际拦截能力）
-	// router.GET("/api/v1/security/rules", securityHandler.ListRules)
-	// router.POST("/api/v1/security/rules", securityHandler.CreateRule)
-	// router.PUT("/api/v1/security/rules/", securityHandler.UpdateRule)
-	// router.DELETE("/api/v1/security/rules/", securityHandler.DeleteRule)
 
 	// 系统设置
 	router.GET("/api/v1/settings", settingsHandler.GetAll)
@@ -347,6 +337,7 @@ func RunServe(args []string) int {
 
 	// 诊断修复
 	router.GET("/api/v1/doctor", doctorHandler.Run)
+	router.GET("/api/v1/doctor/overview", doctorHandler.Overview)
 	router.POST("/api/v1/doctor/fix", doctorHandler.Fix)
 
 	// 用户管理
@@ -374,6 +365,7 @@ func RunServe(args []string) int {
 	// 模型/频道配置向导
 	wizardHandler := handlers.NewWizardHandler()
 	router.POST("/api/v1/setup/test-model", wizardHandler.TestModel)
+	router.POST("/api/v1/setup/discover-models", wizardHandler.DiscoverModels)
 	router.POST("/api/v1/setup/test-channel", wizardHandler.TestChannel)
 	router.POST("/api/v1/config/model-wizard", wizardHandler.SaveModel)
 	router.POST("/api/v1/config/channel-wizard", wizardHandler.SaveChannel)
@@ -653,10 +645,7 @@ func RunServe(args []string) int {
 			}
 		}
 
-		// 尝试获取公网 IP
-		if publicIP := getPublicIP(); publicIP != "" {
-			fmt.Printf("  ║  %s║\n", padLine(fmt.Sprintf("➜ http://%s:%d", publicIP, cfg.Server.Port)))
-		}
+		// 启动阶段不再同步查询公网 IP，避免外网超时导致首次界面显示变慢
 	} else {
 		// 绑定特定地址
 		fmt.Printf("  ║  %s║\n", padLine(fmt.Sprintf("➜ http://%s:%d", cfg.Server.Bind, cfg.Server.Port)))

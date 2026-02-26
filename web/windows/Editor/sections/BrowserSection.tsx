@@ -34,8 +34,8 @@ export const BrowserSection: React.FC<SectionProps> = ({ setField, getField, lan
     <div className="space-y-4">
       <ConfigSection title={es.browserConfig} icon="language" iconColor="text-emerald-500">
         <SwitchField label={es.enabled} tooltip={tip('browser.enabled')} value={g(['enabled']) === true} onChange={v => s(['enabled'], v)} />
-        <TextField label={es.cdpUrl} tooltip={tip('browser.cdpUrl')} value={g(['cdpUrl']) || ''} onChange={v => s(['cdpUrl'], v)} placeholder="http://localhost:9222" />
-        <TextField label={es.executablePath} tooltip={tip('browser.executablePath')} value={g(['executablePath']) || ''} onChange={v => s(['executablePath'], v)} placeholder="/usr/bin/chromium" />
+        <TextField label={es.cdpUrl} tooltip={tip('browser.cdpUrl')} value={g(['cdpUrl']) || ''} onChange={v => s(['cdpUrl'], v)} placeholder={es.phBrowserCdpUrl} />
+        <TextField label={es.executablePath} tooltip={tip('browser.executablePath')} value={g(['executablePath']) || ''} onChange={v => s(['executablePath'], v)} placeholder={es.phBrowserExecPath} />
         <SwitchField label={es.headless} tooltip={tip('browser.headless')} value={g(['headless']) !== false} onChange={v => s(['headless'], v)} />
       </ConfigSection>
 
@@ -47,7 +47,7 @@ export const BrowserSection: React.FC<SectionProps> = ({ setField, getField, lan
               options={['GET', 'POST', 'PUT', 'DELETE'].map(m => ({ value: m, label: m }))}
               className="h-8 px-2 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-bold text-slate-700 dark:text-white/70" />
             <input value={reqPath} onChange={e => setReqPath(e.target.value)}
-              placeholder="https://example.com"
+              placeholder={es.phExampleUrl}
               onKeyDown={e => e.key === 'Enter' && handleBrowserRequest()}
               className="flex-1 h-8 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none" />
             <button onClick={handleBrowserRequest} disabled={reqSending || !reqPath.trim()}

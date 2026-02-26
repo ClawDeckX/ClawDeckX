@@ -9,7 +9,6 @@ import (
 	"ClawDeckX/internal/database"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/openclaw"
-	"ClawDeckX/internal/security"
 	"ClawDeckX/internal/web"
 )
 
@@ -19,7 +18,6 @@ type GWCollector struct {
 	client       *openclaw.GWClient
 	activityRepo *database.ActivityRepo
 	wsHub        *web.WSHub
-	engine       *security.Engine
 	interval     time.Duration
 	stopCh       chan struct{}
 	running      bool
@@ -36,7 +34,7 @@ type sessionSnapshot struct {
 }
 
 // NewGWCollector 创建 GW 事件采集器
-func NewGWCollector(client *openclaw.GWClient, wsHub *web.WSHub, engine *security.Engine, intervalSec int) *GWCollector {
+func NewGWCollector(client *openclaw.GWClient, wsHub *web.WSHub, intervalSec int) *GWCollector {
 	if intervalSec < 10 {
 		intervalSec = 30
 	}
@@ -44,7 +42,6 @@ func NewGWCollector(client *openclaw.GWClient, wsHub *web.WSHub, engine *securit
 		client:       client,
 		activityRepo: database.NewActivityRepo(),
 		wsHub:        wsHub,
-		engine:       engine,
 		interval:     time.Duration(intervalSec) * time.Second,
 		stopCh:       make(chan struct{}),
 		lastSessions: make(map[string]sessionSnapshot),
@@ -166,7 +163,7 @@ func (c *GWCollector) handleToolEvent(event string, payload json.RawMessage) {
 		toolName = data.Name
 	}
 
-	// 工具调用需要安全引擎评估
+	// 工具调用记录
 	category := classifyTool(toolName)
 	risk := "low"
 	actionTaken := "allow"
@@ -179,15 +176,6 @@ func (c *GWCollector) handleToolEvent(event string, payload json.RawMessage) {
 	summary := fmt.Sprintf("工具调用: %s", toolName)
 	if input != "" {
 		summary += " → " + input
-	}
-
-	// 安全引擎评估
-	if c.engine != nil {
-		result := c.engine.Evaluate(category, toolName, summary)
-		if result != nil && result.Matched {
-			risk = result.Rule.Risk
-			actionTaken = c.engine.ProcessEvent(category, toolName, summary, string(payload), data.SessionID)
-		}
 	}
 
 	c.writeActivity(category, risk, summary, string(payload), toolName, actionTaken, data.SessionID)

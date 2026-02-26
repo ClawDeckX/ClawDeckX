@@ -19,7 +19,7 @@ export const AuthSection: React.FC<SectionProps> = ({ setField, getField, delete
   return (
     <div className="space-y-4">
       <ConfigSection title={es.authOrderTitle} icon="sort" iconColor="text-red-500">
-        <ArrayField label={es.providerOrderLabel} desc={es.authOrderHint} value={order} onChange={v => setField(['auth', 'order'], v)} placeholder="provider_name" />
+        <ArrayField label={es.providerOrderLabel} desc={es.authOrderHint} value={order} onChange={v => setField(['auth', 'order'], v)} placeholder={es.phProviderName} />
       </ConfigSection>
 
       <ConfigSection
@@ -44,7 +44,7 @@ export const AuthSection: React.FC<SectionProps> = ({ setField, getField, delete
               }} options={AUTH_MODE_OPTIONS} />
               <TextField label={es.authEmail} value={p.email || ''} onChange={v => {
                 const next = [...profiles]; next[i] = { ...next[i], email: v }; setField(['auth', 'profiles'], next);
-              }} placeholder="user@example.com" />
+              }} placeholder={es.phUserEmail} />
             </ConfigCard>
           ))
         )}

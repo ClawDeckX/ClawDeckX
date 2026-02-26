@@ -36,6 +36,7 @@ interface FileApplyConfirmProps {
     applying: string;
     applied: string;
     backupCreated: string;
+    applyFailed: string;
   };
   onDone: () => void;
   onCancel: () => void;
@@ -92,7 +93,7 @@ export const FileApplyConfirm: React.FC<FileApplyConfirmProps> = ({ request, loc
       toast('success', locale.applied);
       onDone();
     } catch (err: any) {
-      toast('error', err?.message || 'Apply failed');
+      toast('error', err?.message || locale.applyFailed);
     }
     setApplying(false);
   }, [request, contentCache, locale, toast, onDone]);

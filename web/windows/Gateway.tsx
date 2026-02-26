@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
-import { gatewayApi, gatewayProfileApi, gwApi } from '../services/api';
+import { eventsApi, gatewayApi, gatewayProfileApi, gwApi } from '../services/api';
 import { useToast } from '../components/Toast';
 
 interface GatewayProfile {
@@ -21,6 +21,7 @@ interface GatewayProps {
 const Gateway: React.FC<GatewayProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const gw = t.gw as any;
+  const na = (t as any).na as string;
   const { toast } = useToast();
 
   // 网关状态 & 日志
@@ -34,7 +35,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   const [levelFilters, setLevelFilters] = useState<Record<string, boolean>>({ trace: true, debug: true, info: true, warn: true, error: true, fatal: true });
 
   // Debug 面板
-  const [activeTab, setActiveTab] = useState<'logs' | 'debug'>('logs');
+  const [activeTab, setActiveTab] = useState<'logs' | 'events' | 'debug'>('logs');
   const [rpcMethod, setRpcMethod] = useState('');
   const [rpcParams, setRpcParams] = useState('{}');
   const [rpcResult, setRpcResult] = useState<string | null>(null);
@@ -43,6 +44,12 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   const [debugStatus, setDebugStatus] = useState<any>(null);
   const [debugHealth, setDebugHealth] = useState<any>(null);
   const [debugLoading, setDebugLoading] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventRisk, setEventRisk] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
+  const [eventKeyword, setEventKeyword] = useState('');
+  const [eventType, setEventType] = useState<'all' | 'activity' | 'alert'>('all');
+  const [eventSource, setEventSource] = useState('all');
 
   // System Event
   const [sysEventText, setSysEventText] = useState('');
@@ -51,6 +58,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
 
   // 网关配置档案
   const [profiles, setProfiles] = useState<GatewayProfile[]>([]);
+  const [profilesLoading, setProfilesLoading] = useState(false);
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [editingProfile, setEditingProfile] = useState<GatewayProfile | null>(null);
   const [formData, setFormData] = useState({ name: '', host: '127.0.0.1', port: 18789, token: '' });
@@ -72,9 +80,10 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
 
   // 获取网关配置列表
   const fetchProfiles = useCallback(() => {
+    setProfilesLoading(true);
     gatewayProfileApi.list().then((data: any) => {
       setProfiles(Array.isArray(data) ? data : []);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setProfilesLoading(false));
   }, []);
 
   const fetchStatus = useCallback(() => {
@@ -85,8 +94,8 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
     });
   }, []);
 
-  const fetchLogs = useCallback(() => {
-    gatewayApi.log(200).then((res: any) => {
+  const fetchLogs = useCallback((limit = 120) => {
+    gatewayApi.log(limit).then((res: any) => {
       let lines: string[] = [];
       if (res && Array.isArray(res.lines)) lines = res.lines;
       else if (res && Array.isArray(res)) lines = res;
@@ -101,26 +110,65 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
     }).catch(() => {});
   }, []);
 
+  const fetchEvents = useCallback(async () => {
+    setEventsLoading(true);
+    try {
+      const data = await eventsApi.list({
+        page: 1,
+        page_size: 120,
+        risk: eventRisk,
+        type: eventType,
+        source: eventSource,
+        keyword: eventKeyword.trim() || undefined,
+      });
+      setEvents(Array.isArray(data?.list) ? data.list : []);
+    } catch {
+      setEvents([]);
+    } finally {
+      setEventsLoading(false);
+    }
+  }, [eventKeyword, eventRisk, eventSource, eventType]);
+
   // 初始加载 + 定时轮询（状态、日志、心跳全部轮询）
   useEffect(() => {
     fetchProfiles();
     fetchStatus();
-    fetchLogs();
     fetchHealthCheck();
+    const deferTimer = setTimeout(() => {
+      fetchLogs(120);
+      if (activeTab === 'events') fetchEvents();
+    }, 0);
+    return () => clearTimeout(deferTimer);
+  }, [fetchProfiles, fetchStatus, fetchHealthCheck, fetchLogs, fetchEvents, activeTab]);
+
+  useEffect(() => {
     const timer = setInterval(() => {
       fetchStatus();
-      fetchLogs();
       fetchHealthCheck();
     }, 5000);
     return () => clearInterval(timer);
-  }, [fetchProfiles, fetchStatus, fetchLogs, fetchHealthCheck]);
+  }, [fetchStatus, fetchHealthCheck]);
+
+  useEffect(() => {
+    if (activeTab !== 'logs') return;
+    const timer = setInterval(() => fetchLogs(120), 8000);
+    return () => clearInterval(timer);
+  }, [activeTab, fetchLogs]);
+
+  useEffect(() => {
+    if (activeTab !== 'events') return;
+    const timer = setInterval(() => fetchEvents(), 10000);
+    return () => clearInterval(timer);
+  }, [activeTab, fetchEvents]);
 
   // 刷新所有状态
   const refreshAll = useCallback(() => {
+    fetchProfiles();
     fetchStatus();
-    fetchLogs();
     fetchHealthCheck();
-  }, [fetchStatus, fetchLogs, fetchHealthCheck]);
+    if (activeTab === 'logs') fetchLogs(120);
+    if (activeTab === 'events') fetchEvents();
+  }, [activeTab, fetchProfiles, fetchStatus, fetchLogs, fetchHealthCheck, fetchEvents]);
 
   const actionLabels: Record<string, string> = {
     start: gw.start, stop: gw.stop, restart: gw.restart,
@@ -133,7 +181,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
       const data = await gatewayApi.diagnose();
       setDiagnoseResult(data);
     } catch (err: any) {
-      setDiagnoseResult({ items: [], summary: 'fail', message: err?.message || 'Diagnose failed' });
+      setDiagnoseResult({ items: [], summary: 'fail', message: err?.message || gw.diagnoseFailed });
     } finally {
       setDiagnosing(false);
     }
@@ -337,24 +385,65 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
     }
   };
 
+  const parsedLogEntries = useMemo(() => {
+    return visibleLogs.map((line) => ({ line, parsed: parseLogLine(line) }));
+  }, [visibleLogs]);
+
   // 日志过滤
   const filteredLogs = useMemo(() => {
     const needle = logSearch.trim().toLowerCase();
-    return visibleLogs.filter((line, _i) => {
-      // 级别过滤
-      const parsed = parseLogLine(line);
+    return parsedLogEntries.filter(({ line, parsed }) => {
       if (parsed && parsed.level) {
         const lvl = parsed.level.toLowerCase();
         if (lvl in levelFilters && !levelFilters[lvl]) return false;
       }
-      // 搜索过滤
       if (needle && !line.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [visibleLogs, logSearch, levelFilters]);
+  }, [parsedLogEntries, logSearch, levelFilters]);
+
+  // Limit rendered DOM rows to keep logs tab responsive.
+  const renderedLogs = useMemo(() => filteredLogs.slice(-300), [filteredLogs]);
+  const omittedLogCount = Math.max(0, filteredLogs.length - renderedLogs.length);
 
   const logEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (autoFollow) logEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [filteredLogs, autoFollow]);
+  useEffect(() => {
+    if (activeTab === 'events') fetchEvents();
+  }, [activeTab, eventRisk, eventType, eventSource, eventKeyword, fetchEvents]);
+
+  const filteredEvents = events;
+  const eventSources = useMemo(() => {
+    const set = new Set<string>();
+    events.forEach((e: any) => {
+      const s = String(e?.source || '').trim();
+      if (s) set.add(s);
+    });
+    return ['all', ...Array.from(set).slice(0, 12)];
+  }, [events]);
+
+  const eventsLabel = gw.events;
+  const eventRiskLabel = gw.eventRisk;
+  const eventSourceLabel = gw.eventSource;
+  const eventCategoryLabel = gw.eventCategory;
+  const eventNoneLabel = gw.noEvents;
+  const openRelatedLabel = gw.openRelated;
+  const preferLabelEn = !!gw.preferLabelEn;
+
+  const jumpToWindow = useCallback((id: string) => {
+    window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id } }));
+  }, []);
+
+  const suggestJumpWindow = useCallback((ev: any): 'gateway' | 'alerts' | 'activity' | 'maintenance' | 'editor' => {
+    const typ = String(ev?.type || '').toLowerCase();
+    const cat = String(ev?.category || '').toLowerCase();
+    const src = String(ev?.source || '').toLowerCase();
+    if (typ === 'alert' || cat.includes('security')) return 'alerts';
+    if (cat.includes('gateway') || src.includes('gateway')) return 'gateway';
+    if (cat.includes('config') || cat.includes('model')) return 'editor';
+    if (cat.includes('doctor') || cat.includes('health')) return 'maintenance';
+    return 'activity';
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-transparent">
@@ -367,7 +456,12 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
           </button>
         </div>
 
-        {profiles.length === 0 ? (
+        {profilesLoading && profiles.length === 0 ? (
+          <div className="w-full py-4 border border-slate-200 dark:border-white/10 rounded-xl text-slate-400 dark:text-white/40 text-xs flex items-center justify-center gap-2">
+            <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+            {gw.loading}
+          </div>
+        ) : profiles.length === 0 ? (
           <button onClick={openAddForm} className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-white/10 rounded-xl text-slate-400 dark:text-white/40 text-xs font-medium hover:border-primary hover:text-primary transition-all">
             <span className="material-symbols-outlined text-[20px] block mb-1">add_circle</span>
             {gw.noProfiles}
@@ -507,15 +601,15 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
               {status?.running ? gw.running : gw.stopped}
             </div>
             {activeProfile && <span className="text-[10px] text-slate-400 dark:text-white/40 font-mono">{activeProfile.host}:{activeProfile.port}</span>}
-            <span className="text-[10px] text-slate-400 dark:text-white/40">Runtime: <span className="text-mac-green font-mono">{status?.runtime || '--'}</span></span>
+            <span className="text-[10px] text-slate-400 dark:text-white/40">{gw.runtime}: <span className="text-mac-green font-mono">{status?.runtime || na}</span></span>
           </div>
           {/* 健康探测状态 (自动启用) */}
           {status?.running && (
             <div className="flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02]">
               {(() => {
-                if (!healthStatus?.last_ok) return <><span className="material-symbols-outlined text-[12px] text-mac-yellow animate-spin">progress_activity</span><span className="text-[11px] text-slate-400 dark:text-white/40">{gw.hbProbing || 'Probing...'}</span></>;
-                if (healthStatus.fail_count > 0) return <><span className="material-symbols-outlined text-[12px] text-mac-red">heart_broken</span><span className="text-[11px] font-bold text-mac-red">{gw.hbUnhealthy || 'Unhealthy'} ({healthStatus.fail_count})</span></>;
-                return <><span className="material-symbols-outlined text-[12px] text-mac-green animate-pulse">favorite</span><span className="text-[11px] font-bold text-mac-green">{gw.hbHealthy || 'Healthy'}</span></>;
+                if (!healthStatus?.last_ok) return <><span className="material-symbols-outlined text-[12px] text-mac-yellow animate-spin">progress_activity</span><span className="text-[11px] text-slate-400 dark:text-white/40">{gw.hbProbing}</span></>;
+                if (healthStatus.fail_count > 0) return <><span className="material-symbols-outlined text-[12px] text-mac-red">heart_broken</span><span className="text-[11px] font-bold text-mac-red">{gw.hbUnhealthy} ({healthStatus.fail_count})</span></>;
+                return <><span className="material-symbols-outlined text-[12px] text-mac-green animate-pulse">favorite</span><span className="text-[11px] font-bold text-mac-green">{gw.hbHealthy}</span></>;
               })()}
             </div>
           )}
@@ -594,7 +688,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-bold text-slate-700 dark:text-white/80">
-                          {language === 'zh' ? item.label : (item.labelEn || item.label)}
+                          {preferLabelEn ? (item.labelEn || item.label) : (item.label || item.labelEn)}
                         </span>
                       </div>
                       <p className="text-[10px] text-slate-500 dark:text-white/40 mt-0.5 break-all">{item.detail}</p>
@@ -629,11 +723,11 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
         {/* Tab Bar + Search + Filters — 单行紧凑 */}
         <div className="shrink-0 h-9 flex items-center gap-1.5 px-3 bg-white/5 border-b border-white/5">
           {/* Tabs */}
-          {(['logs', 'debug'] as const).map(tab => (
-            <button key={tab} onClick={() => { setActiveTab(tab); if (tab === 'debug') fetchDebugData(); }}
+          {(['logs', 'events', 'debug'] as const).map(tab => (
+            <button key={tab} onClick={() => { setActiveTab(tab); if (tab === 'debug') fetchDebugData(); if (tab === 'events') fetchEvents(); }}
               className={`px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider transition-all ${activeTab === tab ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'}`}>
-              <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">{tab === 'logs' ? 'terminal' : 'bug_report'}</span>
-              {tab === 'logs' ? gw.logs : gw.debug}
+              <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">{tab === 'logs' ? 'terminal' : tab === 'events' ? 'event_note' : 'bug_report'}</span>
+              {tab === 'logs' ? gw.logs : tab === 'events' ? eventsLabel : gw.debug}
             </button>
           ))}
 
@@ -665,7 +759,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
               <button onClick={handleClearLogs} className="text-white/30 hover:text-white transition-colors" title={gw.clear}>
                 <span className="material-symbols-outlined text-[14px]">delete_sweep</span>
               </button>
-              <button onClick={() => { const blob = new Blob([filteredLogs.join('\n')], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `gateway-logs-${Date.now()}.txt`; a.click(); }}
+              <button onClick={() => { const blob = new Blob([filteredLogs.map(item => item.line).join('\n')], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `gateway-logs-${Date.now()}.txt`; a.click(); }}
                 className="text-white/30 hover:text-white transition-colors" title={gw.export}>
                 <span className="material-symbols-outlined text-[14px]">download</span>
               </button>
@@ -686,8 +780,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
                   <span className="material-symbols-outlined text-[32px] mb-2">terminal</span>
                   <span className="text-[10px]">{gw.noLogs}</span>
                 </div>
-              ) : filteredLogs.map((log, idx) => {
-                const parsed = parseLogLine(log);
+              ) : renderedLogs.map(({ line: log, parsed }, idx) => {
                 if (!parsed) {
                   return (
                     <div key={idx} className="flex gap-2 md:gap-3 mb-0.5 group leading-relaxed hover:bg-white/[0.02] rounded px-1 -mx-1">
@@ -716,6 +809,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
             <div className="h-7 bg-black/40 px-4 flex items-center justify-between text-[11px] text-white/30 font-bold uppercase shrink-0">
               <div className="flex gap-4">
                 <span>{filteredLogs.length}{filteredLogs.length !== visibleLogs.length ? `/${visibleLogs.length}` : ''} {gw.lines}</span>
+                {omittedLogCount > 0 && <span>+{omittedLogCount}</span>}
                 {activeProfile && <span className="text-primary/60">{activeProfile.host}:{activeProfile.port}</span>}
               </div>
               <div className="flex items-center gap-1">
@@ -724,6 +818,107 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
               </div>
             </div>
           </>
+        ) : activeTab === 'events' ? (
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-[220px]">
+                <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-white/20 text-[12px]">search</span>
+                <input
+                  value={eventKeyword}
+                  onChange={e => setEventKeyword(e.target.value)}
+                  placeholder={gw.search}
+                  className="w-full h-8 pl-7 pr-2 bg-white/5 border border-white/5 rounded text-[11px] text-white/80 placeholder:text-white/20 focus:ring-1 focus:ring-primary/50 outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                {(['all', 'low', 'medium', 'high', 'critical'] as const).map(risk => (
+                  <button
+                    key={risk}
+                    onClick={() => setEventRisk(risk)}
+                    className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-all ${eventRisk === risk ? 'bg-white/10 text-white' : 'bg-white/5 text-white/40 hover:text-white/70'}`}
+                  >
+                    {risk}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                {(['all', 'activity', 'alert'] as const).map(tp => (
+                  <button
+                    key={tp}
+                    onClick={() => setEventType(tp)}
+                    className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-all ${eventType === tp ? 'bg-white/10 text-white' : 'bg-white/5 text-white/40 hover:text-white/70'}`}
+                  >
+                    {tp}
+                  </button>
+                ))}
+              </div>
+              <select
+                value={eventSource}
+                onChange={(e) => setEventSource(e.target.value)}
+                className="h-8 px-2 bg-white/5 border border-white/10 rounded text-[11px] text-white/80"
+              >
+                {eventSources.map((s) => (
+                  <option key={s} value={s} className="text-slate-800">
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={fetchEvents}
+                disabled={eventsLoading}
+                className="ml-auto px-2 py-1 rounded text-[10px] font-bold bg-white/5 text-white/60 hover:text-white disabled:opacity-40"
+              >
+                <span className={`material-symbols-outlined text-[12px] align-middle mr-1 ${eventsLoading ? 'animate-spin' : ''}`}>{eventsLoading ? 'progress_activity' : 'refresh'}</span>
+                      {gw.refresh}
+              </button>
+            </div>
+
+            {eventsLoading && filteredEvents.length === 0 ? (
+              <div className="flex items-center justify-center py-10 text-white/30 text-[11px]">
+                <span className="material-symbols-outlined text-[18px] animate-spin mr-2">progress_activity</span>
+                    {gw.loading}
+              </div>
+            ) : filteredEvents.length === 0 ? (
+              <div className="flex items-center justify-center py-10 text-white/20 text-[11px]">{eventNoneLabel}</div>
+            ) : (
+              <div className="space-y-2">
+                {filteredEvents.map((ev, idx) => {
+                  const risk = String(ev?.risk || 'low').toLowerCase();
+                  const jumpTarget = suggestJumpWindow(ev);
+                  const riskCls = risk === 'critical' || risk === 'high'
+                    ? 'text-red-400 bg-red-500/10'
+                    : risk === 'medium'
+                      ? 'text-amber-400 bg-amber-500/10'
+                      : 'text-emerald-400 bg-emerald-500/10';
+                  const ts = ev?.timestamp || ev?.created_at;
+                  return (
+                    <div key={`${ev?.id || idx}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-bold text-white/85 break-all">{ev?.title || ev?.summary || na}</p>
+                          {ev?.detail && <p className="text-[11px] text-white/45 mt-1 break-all">{ev.detail}</p>}
+                        </div>
+                        <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${riskCls}`}>{risk}</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-white/35">
+                        <span>{eventSourceLabel}: {ev?.source || na}</span>
+                        <span>{eventCategoryLabel}: {ev?.category || na}</span>
+                        <span>{eventRiskLabel}: {risk}</span>
+                        <span>{ev?.type || na}</span>
+                        <span>{ts ? new Date(ts).toLocaleString() : na}</span>
+                        <button
+                          onClick={() => jumpToWindow(jumpTarget)}
+                          className="ml-auto px-1.5 py-0.5 rounded bg-primary/15 text-primary hover:bg-primary/25"
+                        >
+                          {openRelatedLabel}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : (
           /* Debug Panel */
           <div className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar space-y-4">

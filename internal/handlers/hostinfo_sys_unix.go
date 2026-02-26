@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
+	"sync"
 )
 
 func collectOsUptime() int64 {
@@ -76,45 +76,68 @@ func collectSysMemory() SysMemInfo {
 }
 
 func collectCpuUsage() float64 {
-	// Linux: read /proc/stat twice with a short interval
-	read := func() (idle, total uint64, ok bool) {
-		data, err := os.ReadFile("/proc/stat")
-		if err != nil {
-			return 0, 0, false
-		}
-		lines := strings.Split(string(data), "\n")
-		if len(lines) == 0 {
-			return 0, 0, false
-		}
-		fields := strings.Fields(lines[0]) // "cpu user nice system idle iowait irq softirq ..."
-		if len(fields) < 5 || fields[0] != "cpu" {
-			return 0, 0, false
-		}
-		var sum uint64
-		for i := 1; i < len(fields); i++ {
-			v, _ := strconv.ParseUint(fields[i], 10, 64)
-			sum += v
-			if i == 4 { // idle is the 4th value (index 4 in fields, 1-indexed field 4)
-				idle = v
-			}
-		}
-		return idle, sum, true
+	// Linux: non-blocking incremental sample based on previous /proc/stat snapshot.
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		cpuUsageMu.Lock()
+		defer cpuUsageMu.Unlock()
+		return cpuLastUsage
+	}
+	lines := strings.Split(string(data), "\n")
+	if len(lines) == 0 {
+		cpuUsageMu.Lock()
+		defer cpuUsageMu.Unlock()
+		return cpuLastUsage
+	}
+	fields := strings.Fields(lines[0]) // "cpu user nice system idle iowait irq softirq ..."
+	if len(fields) < 5 || fields[0] != "cpu" {
+		cpuUsageMu.Lock()
+		defer cpuUsageMu.Unlock()
+		return cpuLastUsage
 	}
 
-	idle1, total1, ok1 := read()
-	if !ok1 {
-		return 0
-	}
-	time.Sleep(200 * time.Millisecond)
-	idle2, total2, ok2 := read()
-	if !ok2 {
-		return 0
+	var idle, total uint64
+	for i := 1; i < len(fields); i++ {
+		v, _ := strconv.ParseUint(fields[i], 10, 64)
+		total += v
+		if i == 4 { // idle is the 4th value (index 4 in fields, 1-indexed field 4)
+			idle = v
+		}
 	}
 
-	totalDelta := total2 - total1
-	idleDelta := idle2 - idle1
+	cpuUsageMu.Lock()
+	defer cpuUsageMu.Unlock()
+
+	if !cpuSampledOnce {
+		cpuLastIdle = idle
+		cpuLastTotal = total
+		cpuSampledOnce = true
+		return cpuLastUsage
+	}
+
+	totalDelta := total - cpuLastTotal
+	idleDelta := idle - cpuLastIdle
+	cpuLastIdle = idle
+	cpuLastTotal = total
+
 	if totalDelta == 0 {
-		return 0
+		return cpuLastUsage
 	}
-	return float64(totalDelta-idleDelta) / float64(totalDelta) * 100
+
+	usage := float64(totalDelta-idleDelta) / float64(totalDelta) * 100
+	if usage < 0 {
+		usage = 0
+	} else if usage > 100 {
+		usage = 100
+	}
+	cpuLastUsage = usage
+	return cpuLastUsage
 }
+
+var (
+	cpuUsageMu     sync.Mutex
+	cpuLastIdle    uint64
+	cpuLastTotal   uint64
+	cpuLastUsage   float64
+	cpuSampledOnce bool
+)

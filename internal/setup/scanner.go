@@ -1,12 +1,13 @@
-﻿package setup
+package setup
 
 import (
+	"ClawDeckX/internal/openclaw"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
-	"ClawDeckX/internal/openclaw"
 	"os"
 	"os/exec"
 	"os/user"
@@ -916,17 +917,40 @@ func configGatewayBindFromFile(path string) string {
 
 // checkGatewayRunning 检测 Gateway 是否运行（通过 HTTP 健康检查确认是真正的 OpenClaw Gateway）
 func checkGatewayRunning() (running bool, port int) {
-	ports := []int{18789, 18790, 18791}
+	ports := []int{}
+	if cfgPath := GetOpenClawConfigPath(); cfgPath != "" {
+		if p := strings.TrimSpace(configGatewayPortFromFile(cfgPath)); p != "" {
+			if n, err := strconv.Atoi(p); err == nil && n > 0 && n <= 65535 {
+				ports = append(ports, n)
+			}
+		}
+	}
+	// 常见本地网关端口（不包含 ClawDeckX Web 面板默认端口 18791）
+	ports = append(ports, 18789, 18790, 19001)
+	seen := map[int]struct{}{}
+
 	client := &http.Client{Timeout: 2 * time.Second}
 	for _, p := range ports {
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+
 		// 优先通过 /health 端点确认是 OpenClaw Gateway
 		url := fmt.Sprintf("http://127.0.0.1:%d/health", p)
 		resp, err := client.Get(url)
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode < 500 {
-				return true, p
-			}
+		if err != nil {
+			continue
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+		// 需要具备基础网关特征，避免把本地 Web 服务 404/健康页误判成 Gateway。
+		lower := strings.ToLower(string(body))
+		if strings.Contains(lower, "openclaw") || strings.Contains(lower, "gateway") || strings.Contains(lower, "\"ok\":true") || strings.Contains(lower, "\"status\":\"ok\"") {
+			return true, p
 		}
 	}
 	return false, 0

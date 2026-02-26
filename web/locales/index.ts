@@ -12,14 +12,14 @@ import owEn from './en/ow.json';
 import gwEn from './en/gw.json';
 import esEn from './en/es.json';
 import ndEn from './en/nd.json';
-import secEn from './en/sec.json';
+import drEn from './en/dr.json';
 import tooltipsEn from './en/tooltips.json';
 
-function buildLocale(common: any, sw: any, mw: any, cw: any, ow: any, gw: any, es: any, nd: any, sec: any) {
-  return { ...common, sw, mw, cw, ow, gw, es, nd, sec };
+function buildLocale(common: any, sw: any, mw: any, cw: any, ow: any, gw: any, es: any, nd: any, dr: any) {
+  return { ...common, sw, mw, cw, ow, gw, es, nd, dr };
 }
 
-const en = buildLocale(commonEn, swEn, mwEn, cwEn, owEn, gwEn, esEn, ndEn, secEn);
+const en = buildLocale(commonEn, swEn, mwEn, cwEn, owEn, gwEn, esEn, ndEn, drEn);
 
 // Runtime cache: loaded locales + tooltips
 const localeMap: Record<string, any> = { en };
@@ -29,14 +29,15 @@ const tooltipMap: Record<string, any> = { en: tooltipsEn };
 type LocaleLoader = () => Promise<{ locale: any; tooltips: any }>;
 const loaders: Record<string, LocaleLoader> = {
   zh: async () => {
-    const [common, sw, mw, cw, ow, gw, es, nd, sec, tooltips] = await Promise.all([
+    const [common, sw, mw, cw, ow, gw, es, nd, dr, tooltips] = await Promise.all([
       import('./zh/common.json'), import('./zh/sw.json'), import('./zh/mw.json'),
       import('./zh/cw.json'), import('./zh/ow.json'), import('./zh/gw.json'),
-      import('./zh/es.json'), import('./zh/nd.json'), import('./zh/sec.json'),
+      import('./zh/es.json'), import('./zh/nd.json'),
+      import('./zh/dr.json'),
       import('./zh/tooltips.json'),
     ]);
     return {
-      locale: buildLocale(common.default, sw.default, mw.default, cw.default, ow.default, gw.default, es.default, nd.default, sec.default),
+      locale: buildLocale(common.default, sw.default, mw.default, cw.default, ow.default, gw.default, es.default, nd.default, dr.default),
       tooltips: tooltips.default,
     };
   },

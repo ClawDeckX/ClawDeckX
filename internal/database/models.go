@@ -50,20 +50,6 @@ type AuditLog struct {
 	CreatedAt time.Time `gorm:"index" json:"created_at"`
 }
 
-type RiskRule struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	RuleID    string    `gorm:"uniqueIndex" json:"rule_id"`
-	Category  string    `json:"category"`
-	Risk      string    `json:"risk"`
-	Pattern   string    `json:"pattern"`
-	Reason    string    `json:"reason"`
-	Actions   string    `json:"actions"` // JSON array: ["abort","notify"]
-	Enabled   bool      `gorm:"default:true" json:"enabled"`
-	BuiltIn   bool      `gorm:"default:false" json:"built_in"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 type MonitorState struct {
 	ID               uint       `gorm:"primaryKey" json:"id"`
 	ConsecutiveBad   int        `gorm:"default:0" json:"consecutive_bad"`

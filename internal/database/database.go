@@ -73,7 +73,6 @@ func autoMigrate() error {
 		&Activity{},
 		&Alert{},
 		&AuditLog{},
-		&RiskRule{},
 		&MonitorState{},
 		&BackupRecord{},
 		&Setting{},

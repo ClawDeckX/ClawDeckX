@@ -23,11 +23,11 @@ export const MemorySection: React.FC<SectionProps> = ({ setField, getField, lang
       </ConfigSection>
 
       {g(['backend']) === 'qmd' && (
-        <ConfigSection title="QMD" icon="database" iconColor="text-sky-500" defaultOpen={false}>
-          <TextField label={es.qmdCommand} tooltip={tip('memory.qmd.command')} value={g(['qmd', 'command']) || ''} onChange={v => s(['qmd', 'command'], v)} placeholder="qmd" />
+        <ConfigSection title={es.optQmd} icon="database" iconColor="text-sky-500" defaultOpen={false}>
+          <TextField label={es.qmdCommand} tooltip={tip('memory.qmd.command')} value={g(['qmd', 'command']) || ''} onChange={v => s(['qmd', 'command'], v)} placeholder={es.phQmdCommand} />
           <TextField label={es.qmdDataPath} tooltip={tip('memory.qmd.paths.data')} value={g(['qmd', 'paths', 'data']) || ''} onChange={v => s(['qmd', 'paths', 'data'], v)} />
           <NumberField label={es.maxMemories} tooltip={tip('memory.qmd.limits.maxEntries')} value={g(['qmd', 'limits', 'maxEntries'])} onChange={v => s(['qmd', 'limits', 'maxEntries'], v)} min={1} />
-          <TextField label={es.scope} tooltip={tip('memory.qmd.scope')} value={g(['qmd', 'scope']) || ''} onChange={v => s(['qmd', 'scope'], v)} placeholder="global / per-session" />
+          <TextField label={es.scope} tooltip={tip('memory.qmd.scope')} value={g(['qmd', 'scope']) || ''} onChange={v => s(['qmd', 'scope'], v)} placeholder={es.phMemoryScope} />
         </ConfigSection>
       )}
     </div>

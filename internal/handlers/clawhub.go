@@ -60,30 +60,31 @@ func (h *ClawHubHandler) isRemoteGateway() bool {
 	return true
 }
 
-// remoteClawHubExec executes clawhub commands on the remote machine via Gateway JSON-RPC.
-func (h *ClawHubHandler) remoteClawHubExec(action string, slug string, version string, force bool, all bool) (map[string]interface{}, error) {
+// remoteSkillsInstall installs a skill on remote gateway via JSON-RPC skills.install.
+func (h *ClawHubHandler) remoteSkillsInstall(slug string, timeoutMs int) (map[string]interface{}, error) {
+	installID := fmt.Sprintf("clawdeckx-%d", time.Now().UnixNano())
 	params := map[string]interface{}{
-		"action": action,
+		"name":      slug,
+		"installId": installID,
+		"timeoutMs": timeoutMs,
 	}
-	if slug != "" {
-		params["slug"] = slug
-	}
-	if version != "" {
-		params["version"] = version
-	}
-	if force {
-		params["force"] = true
-	}
-	if all {
-		params["all"] = true
-	}
-	params["timeoutMs"] = 120000
-
-	data, err := h.gwClient.RequestWithTimeout("clawhub.exec", params, 130*time.Second)
+	data, err := h.gwClient.RequestWithTimeout("skills.install", params, 130*time.Second)
 	if err != nil {
 		return nil, err
 	}
+	var result map[string]interface{}
+	if json.Unmarshal(data, &result) != nil {
+		return nil, fmt.Errorf("failed to parse remote response")
+	}
+	return result, nil
+}
 
+// remoteSkillsStatus fetches remote skills.status for fallback listing.
+func (h *ClawHubHandler) remoteSkillsStatus() (map[string]interface{}, error) {
+	data, err := h.gwClient.RequestWithTimeout("skills.status", map[string]interface{}{}, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
 	var result map[string]interface{}
 	if json.Unmarshal(data, &result) != nil {
 		return nil, fmt.Errorf("failed to parse remote response")
@@ -247,9 +248,9 @@ func (h *ClawHubHandler) Install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// remote gateway: proxy via JSON-RPC clawhub.exec
+	// remote gateway: use skills.install (clawhub.exec removed upstream)
 	if h.isRemoteGateway() {
-		result, err := h.remoteClawHubExec("install", params.Slug, params.Version, params.Force, false)
+		result, err := h.remoteSkillsInstall(params.Slug, 120000)
 		if err != nil {
 			logger.Log.Error().Err(err).Str("slug", params.Slug).Msg("remote skill install failed")
 			web.Fail(w, r, "SKILL_INSTALL_FAILED", "remote install failed: "+err.Error(), http.StatusBadGateway)
@@ -258,9 +259,10 @@ func (h *ClawHubHandler) Install(w http.ResponseWriter, r *http.Request) {
 		logger.Log.Info().Str("slug", params.Slug).Msg("remote skill installed")
 		web.OK(w, r, map[string]interface{}{
 			"slug":    params.Slug,
-			"output":  result["output"],
+			"output":  result,
 			"success": true,
 			"remote":  true,
+			"note":    "remote install uses skills.install; version/force are ignored by upstream API",
 		})
 		return
 	}
@@ -306,21 +308,9 @@ func (h *ClawHubHandler) Uninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// remote gateway: proxy via JSON-RPC clawhub.exec
+	// remote gateway: clawhub.exec removed upstream; no RPC uninstall available.
 	if h.isRemoteGateway() {
-		result, err := h.remoteClawHubExec("uninstall", params.Slug, "", false, false)
-		if err != nil {
-			logger.Log.Error().Err(err).Str("slug", params.Slug).Msg("remote skill uninstall failed")
-			web.Fail(w, r, "SKILL_UNINSTALL_FAILED", "remote uninstall failed: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-		logger.Log.Info().Str("slug", params.Slug).Msg("remote skill uninstalled")
-		web.OK(w, r, map[string]interface{}{
-			"slug":    params.Slug,
-			"output":  result["output"],
-			"success": true,
-			"remote":  true,
-		})
+		web.Fail(w, r, "SKILL_UNINSTALL_FAILED", "remote gateway does not expose skill uninstall RPC; please run uninstall on remote host", http.StatusNotImplemented)
 		return
 	}
 
@@ -369,19 +359,9 @@ func (h *ClawHubHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// remote gateway: proxy via JSON-RPC clawhub.exec
+	// remote gateway: clawhub.exec removed upstream; no equivalent update RPC.
 	if h.isRemoteGateway() {
-		result, err := h.remoteClawHubExec("update", params.Slug, "", params.Force, params.All)
-		if err != nil {
-			logger.Log.Error().Err(err).Str("slug", params.Slug).Msg("remote skill update failed")
-			web.Fail(w, r, "SKILL_UPDATE_FAILED", "remote update failed: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-		web.OK(w, r, map[string]interface{}{
-			"output":  result["output"],
-			"success": true,
-			"remote":  true,
-		})
+		web.Fail(w, r, "SKILL_UPDATE_FAILED", "remote gateway does not expose skill update RPC; please run update on remote host", http.StatusNotImplemented)
 		return
 	}
 
@@ -411,18 +391,40 @@ func (h *ClawHubHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // InstalledList lists installed ClawHub skills (from lockfile).
 func (h *ClawHubHandler) InstalledList(w http.ResponseWriter, r *http.Request) {
-	// remote gateway: fetch via JSON-RPC clawhub.exec list
+	// remote gateway: clawhub.exec removed upstream; fallback to skills.status snapshot.
 	if h.isRemoteGateway() {
-		result, err := h.remoteClawHubExec("list", "", "", false, false)
+		result, err := h.remoteSkillsStatus()
 		if err != nil {
 			web.Fail(w, r, "CLAWHUB_LIST_FAILED", "failed to list remote installed skills: "+err.Error(), http.StatusBadGateway)
 			return
 		}
+		list := []map[string]interface{}{}
+		if rawSkills, ok := result["skills"].([]interface{}); ok {
+			for _, raw := range rawSkills {
+				s, ok := raw.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				item := map[string]interface{}{
+					"slug": s["skillKey"],
+				}
+				if v, ok := s["name"]; ok {
+					item["name"] = v
+				}
+				if v, ok := s["source"]; ok {
+					item["source"] = v
+				}
+				if v, ok := s["filePath"]; ok {
+					item["path"] = v
+				}
+				list = append(list, item)
+			}
+		}
 		web.OK(w, r, map[string]interface{}{
-			"skills":    []interface{}{},
-			"output":    result["output"],
+			"skills":    list,
 			"remote":    true,
 			"skillsDir": "(remote)",
+			"note":      "remote list uses skills.status fallback",
 		})
 		return
 	}

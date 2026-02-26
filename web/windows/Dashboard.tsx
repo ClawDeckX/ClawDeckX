@@ -22,25 +22,29 @@ function fmtCost(n: number): string {
   return '$' + n.toFixed(2);
 }
 
-function fmtUptime(ms: number): string {
+function fmtUptime(ms: number, units: { d: string; h: string; m: string; s: string }): string {
   const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
+  if (s < 60) return `${s}${units.s}`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
+  if (m < 60) return `${m}${units.m}`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ${m % 60}m`;
+  if (h < 24) return `${h}${units.h} ${m % 60}${units.m}`;
   const d = Math.floor(h / 24);
-  return `${d}d ${h % 24}h`;
+  return `${d}${units.d} ${h % 24}${units.h}`;
 }
 
-function fmtPresenceAge(ts: number): string {
+function fmtPresenceAge(
+  ts: number,
+  labels: { justNow: string; minAgo: string; hourAgo: string; dayAgo: string },
+): string {
   const diff = Date.now() - ts;
-  if (diff < 60_000) return '<1m ago';
+  const format = (tpl: string, n: number) => tpl.replace('{{n}}', String(n));
+  if (diff < 60_000) return labels.justNow;
   const mins = Math.round(diff / 60_000);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return format(labels.minAgo, mins);
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.round(hrs / 24)}d ago`;
+  if (hrs < 24) return format(labels.hourAgo, hrs);
+  return format(labels.dayAgo, Math.round(hrs / 24));
 }
 
 function MiniSparkline({ data, color, h = 32, w = 80 }: { data: number[]; color: string; h?: number; w?: number }) {
@@ -83,14 +87,36 @@ function fmtBytes(b: number): string {
 }
 
 function HealthDot({ ok }: { ok: boolean }) {
-  return <div className={`w-2.5 h-2.5 rounded-full ${ok ? 'bg-mac-green animate-pulse' : 'bg-slate-400'} shadow-sm`} />;
+  return <div className={`w-2.5 h-2.5 rounded-full ${ok ? 'bg-mac-green motion-safe:animate-pulse' : 'bg-slate-400'} shadow-sm`} />;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const d = (t as any).dash as any;
+  const locale = String(language || 'en');
+  const HOST_INFO_CACHE_KEY = 'dashboard.hostInfo.cache.v1';
 
-  // O2: Single state object — one setState call per fetch cycle, minimal re-renders
+  const readCachedHostInfo = (): any | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem(HOST_INFO_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  };
+
+  const writeCachedHostInfo = (data: any) => {
+    if (typeof window === 'undefined' || !data) return;
+    try {
+      window.localStorage.setItem(HOST_INFO_CACHE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignore storage errors and keep UI responsive.
+    }
+  };
+
+  // O2: Single state object - one setState call per fetch cycle.
   interface DashState {
     data: any; gwStatus: any; sessions: any[]; models: any[]; skills: any[];
     agents: any[]; cronStatus: any; channels: any; usageCost: any; health: any;
@@ -99,93 +125,186 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
   const [ds, setDs] = useState<DashState>({
     data: null, gwStatus: null, sessions: [], models: [], skills: [],
     agents: [], cronStatus: null, channels: null, usageCost: null, health: null,
-    instances: [], hostInfo: null, userConfig: null,
+    instances: [], hostInfo: readCachedHostInfo(), userConfig: null,
   });
-  // O1+O4: Split loading — initialLoading (first load, shows skeleton) vs refreshing (spinner only)
+  // O1+O4: Split loading state into initial load and refresh.
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [hasPartialFailure, setHasPartialFailure] = useState(false);
+  const [hasFetchError, setHasFetchError] = useState(false);
 
-  // O3: Abort flag — skip setState after unmount
+  // O3: Abort flag - skip setState after unmount.
   const abortRef = useRef(false);
-  // O5: Fetch-in-progress guard — prevent overlapping fetches from visibility + interval
-  const fetchingRef = useRef(false);
+  const fastFetchingRef = useRef(false);
+  const slowFetchingRef = useRef(false);
+  const hostFetchingRef = useRef(false);
+  const bootstrappedRef = useRef(false);
 
-  const fetchAll = useCallback(async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
-    setRefreshing(true);
-    const settle = (p: Promise<any>) => p.catch(() => null);
-    const [dashData, gwStatusData, sessData, modelsData, skillsData, agentsData, cronData, channelsData, costData, healthData, presenceData, hostData, gwCfgData] = await Promise.all([
-      settle(dashboardApi.get()),
-      settle(gwApi.status()),
-      settle(gwApi.sessions()),
-      settle(gwApi.models()),
-      settle(gwApi.skills()),
-      settle(gwApi.agents()),
-      settle(gwApi.cronStatus()),
-      settle(gwApi.channels()),
-      settle(gwApi.usageCost({ days: 7 })),
-      settle(gwApi.health()),
-      settle(gwApi.proxy('system-presence', {})),
-      settle(hostInfoApi.get()),
-      settle(gwApi.configGet()),
-    ]);
-    // O3: If component unmounted during fetch, bail out
-    if (abortRef.current) return;
-    // 配置优先从网关 WebSocket 获取（本地/远程统一），失败时降级读本地文件
-    let cfgObj = gwCfgData?.config || gwCfgData;
-    if (!cfgObj || typeof cfgObj !== 'object' || !cfgObj.models) {
-      const localCfg = await settle(configApi.get());
-      cfgObj = localCfg?.config || localCfg;
+  const fetchFast = useCallback(async () => {
+    if (fastFetchingRef.current) return;
+    fastFetchingRef.current = true;
+    const settle = async <T,>(p: Promise<T>): Promise<{ ok: boolean; data: T | null }> => {
+      try {
+        return { ok: true, data: await p };
+      } catch {
+        return { ok: false, data: null };
+      }
+    };
+
+    try {
+      const [dashRes, gwStatusRes, channelsRes, healthRes, presenceRes] = await Promise.all([
+        settle(dashboardApi.get()),
+        settle(gwApi.status()),
+        settle(gwApi.channels()),
+        settle(gwApi.health()),
+        settle(gwApi.proxy('system-presence', {})),
+      ]);
+      if (abortRef.current) return;
+
+      const results = [dashRes, gwStatusRes, channelsRes, healthRes, presenceRes];
+      const hadFailure = results.some((r) => !r.ok);
+      const allFailed = results.every((r) => !r.ok);
+      setHasPartialFailure(hadFailure && !allFailed);
+      setHasFetchError(allFailed);
+
+      setDs(prev => ({
+        ...prev,
+        data: dashRes.data ?? prev.data,
+        gwStatus: gwStatusRes.data ?? prev.gwStatus,
+        channels: channelsRes.data ?? prev.channels,
+        health: healthRes.data ?? prev.health,
+        instances: presenceRes.data ? (Array.isArray(presenceRes.data) ? presenceRes.data : []) : prev.instances,
+      }));
+      setLastUpdate(new Date());
+      if (!bootstrappedRef.current) {
+        bootstrappedRef.current = true;
+        setInitialLoading(false);
+      }
+    } catch {
+      if (!abortRef.current) {
+        setHasFetchError(true);
+        setInitialLoading(false);
+      }
+    } finally {
+      fastFetchingRef.current = false;
     }
-    if (abortRef.current) return;
-    // O2: Single atomic state update — merges new data while preserving old values on failure
-    setDs(prev => ({
-      data: dashData ?? prev.data,
-      gwStatus: gwStatusData ?? prev.gwStatus,
-      sessions: sessData ? (Array.isArray(sessData) ? sessData : sessData?.sessions || []) : prev.sessions,
-      models: modelsData ? (Array.isArray(modelsData) ? modelsData : modelsData?.list || modelsData?.models || []) : prev.models,
-      skills: skillsData ? (Array.isArray(skillsData) ? skillsData : skillsData?.skills || []) : prev.skills,
-      agents: agentsData ? (Array.isArray(agentsData) ? agentsData : agentsData?.agents || []) : prev.agents,
-      cronStatus: cronData ?? prev.cronStatus,
-      channels: channelsData ?? prev.channels,
-      usageCost: costData ?? prev.usageCost,
-      health: healthData ?? prev.health,
-      instances: presenceData ? (Array.isArray(presenceData) ? presenceData : []) : prev.instances,
-      hostInfo: hostData ?? prev.hostInfo,
-      userConfig: cfgObj ?? prev.userConfig,
-    }));
-    setLastUpdate(new Date());
-    setInitialLoading(false);
-    setRefreshing(false);
-    fetchingRef.current = false;
   }, []);
+
+  const fetchSlow = useCallback(async () => {
+    if (slowFetchingRef.current) return;
+    slowFetchingRef.current = true;
+    const settle = async <T,>(p: Promise<T>): Promise<{ ok: boolean; data: T | null }> => {
+      try {
+        return { ok: true, data: await p };
+      } catch {
+        return { ok: false, data: null };
+      }
+    };
+
+    try {
+      const [sessRes, modelsRes, skillsRes, agentsRes, cronRes, costRes, gwCfgRes] = await Promise.all([
+        settle(gwApi.sessions()),
+        settle(gwApi.models()),
+        settle(gwApi.skills()),
+        settle(gwApi.agents()),
+        settle(gwApi.cronStatus()),
+        settle(gwApi.usageCost({ days: 7 })),
+        settle(gwApi.configGet()),
+      ]);
+      if (abortRef.current) return;
+
+      let cfgObj = gwCfgRes.data?.config || gwCfgRes.data;
+      if (!cfgObj || typeof cfgObj !== 'object' || !cfgObj.models) {
+        const localCfgRes = await settle(configApi.get());
+        cfgObj = localCfgRes.data?.config || localCfgRes.data;
+      }
+      if (abortRef.current) return;
+
+      const results = [sessRes, modelsRes, skillsRes, agentsRes, cronRes, costRes];
+      const hadFailure = results.some((r) => !r.ok);
+      if (hadFailure) setHasPartialFailure(true);
+
+      setDs(prev => ({
+        ...prev,
+        sessions: sessRes.data ? (Array.isArray(sessRes.data) ? sessRes.data : sessRes.data?.sessions || []) : prev.sessions,
+        models: modelsRes.data ? (Array.isArray(modelsRes.data) ? modelsRes.data : modelsRes.data?.list || modelsRes.data?.models || []) : prev.models,
+        skills: skillsRes.data ? (Array.isArray(skillsRes.data) ? skillsRes.data : skillsRes.data?.skills || []) : prev.skills,
+        agents: agentsRes.data ? (Array.isArray(agentsRes.data) ? agentsRes.data : agentsRes.data?.agents || []) : prev.agents,
+        cronStatus: cronRes.data ?? prev.cronStatus,
+        usageCost: costRes.data ?? prev.usageCost,
+        userConfig: cfgObj ?? prev.userConfig,
+      }));
+    } finally {
+      slowFetchingRef.current = false;
+    }
+  }, []);
+
+  const fetchHostInfo = useCallback(async () => {
+    if (hostFetchingRef.current) return;
+    hostFetchingRef.current = true;
+    try {
+      const hostRes = await hostInfoApi.get();
+      if (abortRef.current || !hostRes) return;
+      setDs(prev => ({ ...prev, hostInfo: hostRes }));
+      writeCachedHostInfo(hostRes);
+    } catch {
+      setHasPartialFailure(true);
+    } finally {
+      hostFetchingRef.current = false;
+    }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await fetchFast();
+      void fetchSlow();
+      void fetchHostInfo();
+    } finally {
+      if (!abortRef.current) setRefreshing(false);
+    }
+  }, [fetchFast, fetchHostInfo, fetchSlow, refreshing]);
 
   useEffect(() => {
     abortRef.current = false;
-    fetchAll();
-    let timer: ReturnType<typeof setInterval> | null = setInterval(fetchAll, 15000);
-    // O5: Debounced visibility handler — prevents double fetch when tab becomes visible
+    fetchFast();
+    // Defer heavier requests to keep first paint responsive.
+    const slowBootTimer = setTimeout(() => { fetchSlow(); }, 300);
+    const hostBootTimer = setTimeout(() => { fetchHostInfo(); }, 800);
+    let fastTimer: ReturnType<typeof setInterval> | null = setInterval(fetchFast, 15000);
+    let slowTimer: ReturnType<typeof setInterval> | null = setInterval(fetchSlow, 90000);
+    let hostTimer: ReturnType<typeof setInterval> | null = setInterval(fetchHostInfo, 300000);
     const onVisibility = () => {
       if (document.hidden) {
-        if (timer) { clearInterval(timer); timer = null; }
+        if (fastTimer) { clearInterval(fastTimer); fastTimer = null; }
+        if (slowTimer) { clearInterval(slowTimer); slowTimer = null; }
+        if (hostTimer) { clearInterval(hostTimer); hostTimer = null; }
       } else {
-        if (!timer) timer = setInterval(fetchAll, 15000);
-        fetchAll();
+        if (!fastTimer) fastTimer = setInterval(fetchFast, 15000);
+        if (!slowTimer) slowTimer = setInterval(fetchSlow, 90000);
+        if (!hostTimer) hostTimer = setInterval(fetchHostInfo, 300000);
+        fetchFast();
+        setTimeout(() => { if (!abortRef.current) fetchSlow(); }, 200);
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      // O3: Signal abort so in-flight fetchAll skips setState
       abortRef.current = true;
-      fetchingRef.current = false;
-      if (timer) clearInterval(timer);
+      fastFetchingRef.current = false;
+      slowFetchingRef.current = false;
+      hostFetchingRef.current = false;
+      clearTimeout(slowBootTimer);
+      clearTimeout(hostBootTimer);
+      if (fastTimer) clearInterval(fastTimer);
+      if (slowTimer) clearInterval(slowTimer);
+      if (hostTimer) clearInterval(hostTimer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [fetchAll]);
+  }, [fetchFast, fetchHostInfo, fetchSlow]);
 
-  // Real-time Gateway events: shutdown → mark offline, health → update snapshot
+  // Real-time gateway events: shutdown marks offline, health updates snapshot.
   useGatewayEvents(useMemo(() => ({
     shutdown: () => {
       setDs(prev => ({ ...prev, gwStatus: { ...prev.gwStatus, running: false, connected: false }, health: null }));
@@ -206,18 +325,57 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
   const uptimeMs = health?.snapshot?.uptimeMs || health?.uptimeMs || 0;
   const tickMs = health?.snapshot?.policy?.tickIntervalMs || 0;
   const alerts = (data?.recent_alerts || []).slice(0, 4);
-  const secScore = data?.security_score ?? null;
   const dailyCost = usageCost?.daily || [];
   const totalCostVal = usageCost?.totals?.totalCost || 0;
   const totalTokensVal = usageCost?.totals?.totalTokens || 0;
   const todayCostEntry = dailyCost.length > 0 ? dailyCost[dailyCost.length - 1] : null;
-  const channelsList = channels?.channels || channels?.list || (Array.isArray(channels) ? channels : []);
-  const activeChannels = Array.isArray(channelsList) ? channelsList.filter((c: any) => c.connected || c.enabled || c.status === 'connected').length : 0;
+  const channelsRaw = channels?.channels ?? channels?.list ?? channels;
+  const channelsList = useMemo(() => {
+    if (Array.isArray(channelsRaw)) return channelsRaw;
+    if (channelsRaw && typeof channelsRaw === 'object') {
+      return Object.entries(channelsRaw).map(([name, item]) => (
+        item && typeof item === 'object'
+          ? { name, ...(item as Record<string, any>) }
+          : { name, value: item }
+      ));
+    }
+    return [];
+  }, [channelsRaw]);
+  const configuredChannels = useMemo(() => {
+    const cfgChannels = userConfig?.channels;
+    if (!cfgChannels || typeof cfgChannels !== 'object') return [];
+    return Object.keys(cfgChannels).filter((k) => cfgChannels[k]?.enabled !== false);
+  }, [userConfig]);
+  const activeChannels = channelsList.filter((c: any) => {
+    const s = String(c?.status || c?.state || '').toLowerCase();
+    return c?.enabled !== false && (c?.connected || c?.running || s === 'connected' || s === 'running' || s === 'ready' || s === 'online');
+  }).length;
+  const totalChannels = channelsList.length > 0 ? channelsList.length : configuredChannels.length;
   const cronJobs = cronStatus?.jobs || cronStatus?.schedules || [];
   const cronEnabled = cronStatus?.enabled ?? (Array.isArray(cronJobs) && cronJobs.length > 0);
   const eligibleSkills = Array.isArray(skills) ? skills.filter((s: any) => s.eligible || s.enabled).length : 0;
+  const presenceLabels = {
+    justNow: d.presenceJustNow,
+    minAgo: d.presenceMinAgo,
+    hourAgo: d.presenceHourAgo,
+    dayAgo: d.presenceDayAgo,
+  };
+  const uptimeUnits = {
+    d: d.unitDay,
+    h: d.unitHour,
+    m: d.unitMinute,
+    s: d.unitSecond,
+  };
+  const timeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }),
+    [locale],
+  );
+  const dateTimeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+    [locale],
+  );
 
-  // 用户配置的模型（从 openclaw.json 提取）
+  // User-configured models (from openclaw.json).
   const userProviderModels = useMemo(() => {
     const result: { provider: string; models: { id: string; name?: string }[] }[] = [];
     const providers = userConfig?.models?.providers;
@@ -235,21 +393,27 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
   return (
     <main className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-start sm:items-center justify-between gap-2 mb-4">
         <div>
           <h1 className="text-base font-bold dark:text-white/90 text-slate-800">{d.overview}</h1>
-          {lastUpdate && <p className="text-[10px] text-slate-400 dark:text-white/35 mt-0.5">{d.lastUpdate}: {lastUpdate.toLocaleTimeString()}</p>}
+          {lastUpdate && <p className="text-[10px] text-slate-400 dark:text-white/35 mt-0.5">{d.lastUpdate}: {timeFormatter.format(lastUpdate)}</p>}
         </div>
-        <button onClick={fetchAll} disabled={loading} className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-40">
+        <button aria-label={d.refresh} title={d.refresh} onClick={refreshAll} disabled={loading} className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-40 shrink-0">
           <span className={`material-symbols-outlined text-[18px] ${loading ? 'animate-spin' : ''}`}>refresh</span>
         </button>
       </div>
+      {(hasFetchError || hasPartialFailure) && (
+        <div className={`mb-4 rounded-xl border px-3 py-2 text-[11px] flex items-start sm:items-center gap-2 ${hasFetchError ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'}`}>
+          <span className="material-symbols-outlined text-[14px] mt-0.5 sm:mt-0">{hasFetchError ? 'error' : 'info'}</span>
+          <span className="leading-4">{hasFetchError ? d.fetchFailed : d.partialData}</span>
+        </div>
+      )}
 
       <div className="space-y-4 max-w-6xl mx-auto">
         {/* Gateway Status Hero */}
-        <div className={`relative overflow-hidden rounded-2xl border p-5 ${gwRunning ? 'border-mac-green/20 bg-gradient-to-r from-emerald-50/80 to-white dark:from-emerald-500/[0.06] dark:to-transparent' : 'border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02]'}`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner ${gwRunning ? 'bg-mac-green/15' : 'bg-slate-100 dark:bg-white/5'}`}>
+        <div className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 ${gwRunning ? 'border-mac-green/20 bg-gradient-to-r from-emerald-50/80 to-white dark:from-emerald-500/[0.06] dark:to-transparent' : 'border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02]'}`}>
+          <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+            <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shadow-inner shrink-0 ${gwRunning ? 'bg-mac-green/15' : 'bg-slate-100 dark:bg-white/5'}`}>
               <span className={`material-symbols-outlined text-[28px] ${gwRunning ? 'text-mac-green' : 'text-slate-400'}`}>router</span>
             </div>
             <div className="flex-1 min-w-0">
@@ -261,9 +425,9 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-x-5 gap-y-1 mt-1.5 text-[11px]">
-                {uptimeMs > 0 && <span className="text-slate-500 dark:text-white/40">{d.uptime}: <b className="text-slate-700 dark:text-white/70 font-mono">{fmtUptime(uptimeMs)}</b></span>}
-                {tickMs > 0 && <span className="text-slate-500 dark:text-white/40">Tick: <b className="text-slate-700 dark:text-white/70 font-mono">{tickMs}ms</b></span>}
-                {gwStatus?.runtime && <span className="text-slate-500 dark:text-white/40">Runtime: <b className="text-slate-700 dark:text-white/70 font-mono">{gwStatus.runtime}</b></span>}
+                {uptimeMs > 0 && <span className="text-slate-500 dark:text-white/40">{d.uptime}: <b className="text-slate-700 dark:text-white/70 font-mono">{fmtUptime(uptimeMs, uptimeUnits)}</b></span>}
+                {tickMs > 0 && <span className="text-slate-500 dark:text-white/40">{d.tickLabel}: <b className="text-slate-700 dark:text-white/70 font-mono">{tickMs}{d.unitMillisecond}</b></span>}
+                {gwStatus?.runtime && <span className="text-slate-500 dark:text-white/40">{d.runtimeLabel}: <b className="text-slate-700 dark:text-white/70 font-mono">{gwStatus.runtime}</b></span>}
               </div>
             </div>
             {/* Mini cost sparkline */}
@@ -290,7 +454,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-medium text-slate-400 dark:text-white/40 uppercase tracking-wider">{kpi.label}</p>
-                  <p className="text-lg font-black tabular-nums mt-0.5 dark:text-white text-slate-800">{kpi.value}</p>
+                  <p className="text-base sm:text-lg font-black tabular-nums mt-0.5 dark:text-white text-slate-800">{kpi.value}</p>
                 </div>
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${kpi.color}15` }}>
                   <span className="material-symbols-outlined text-[16px]" style={{ color: kpi.color }}>{kpi.icon}</span>
@@ -300,7 +464,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
           ))}
         </div>
 
-        {/* Host Info Card — O6: always mounted, skeleton when loading */}
+        {/* Host Info Card - O6: always mounted, skeleton while loading */}
         {(() => {
           const hi = (t as any).hi as any;
           if (!hostInfo) {
@@ -351,7 +515,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
               </div>
 
               <div className="p-4">
-                {/* CPU + System Memory + Disk Gauges — 3 columns */}
+                {/* CPU + system memory + disk gauges in 3 columns */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   {/* CPU Usage Gauge */}
                   {(() => {
@@ -457,7 +621,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
                     <p className="text-[10px] font-bold text-slate-400 dark:text-white/35 uppercase mt-0.5">{hi.goroutines}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 p-3 text-center">
-                    <p className="text-lg font-black text-amber-500 tabular-nums">{fmtUptime(hostInfo.uptimeMs || 0)}</p>
+                    <p className="text-lg font-black text-amber-500 tabular-nums">{fmtUptime(hostInfo.uptimeMs || 0, uptimeUnits)}</p>
                     <p className="text-[10px] font-bold text-slate-400 dark:text-white/35 uppercase mt-0.5">{hi.uptime}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5 p-3 text-center">
@@ -520,9 +684,9 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
           );
         })()}
 
-        {/* System Health + Alerts Row — items-stretch for bottom alignment */}
+        {/* System Health + Alerts row uses items-stretch for bottom alignment */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-          {/* System Health Panel — expanded */}
+          {/* Expanded System Health panel */}
           <div className="lg:col-span-2 rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
             <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span className="material-symbols-outlined text-[14px] text-primary">monitoring</span>
@@ -556,7 +720,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
                   <HealthDot ok={activeChannels > 0} />
                   <span className="text-[10px] font-bold text-slate-600 dark:text-white/50 uppercase">{d.channels}</span>
                 </div>
-                <p className="text-xs font-bold text-slate-700 dark:text-white/70">{activeChannels}/{Array.isArray(channelsList) ? channelsList.length : 0}</p>
+                <p className="text-xs font-bold text-slate-700 dark:text-white/70">{activeChannels}/{totalChannels}</p>
               </div>
             </div>
 
@@ -585,7 +749,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase">{d.todayCost} {d.trend}</span>
                   <div className="flex items-center gap-3 text-[11px]">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />Token</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />{d.tokenLegend}</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-0.5 bg-amber-500 rounded" style={{ width: 8 }} />{(t as any).menu?.cost}</span>
                   </div>
                 </div>
@@ -626,7 +790,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
             )}
           </div>
 
-          {/* Right Column: Alerts — flex-col h-full to stretch to bottom */}
+          {/* Right column alerts uses flex-col h-full to stretch to bottom */}
           <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4 flex flex-col">
             <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span className="material-symbols-outlined text-[14px] text-mac-yellow">notifications_active</span>
@@ -640,7 +804,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
                       <div className={`w-2 h-2 rounded-full mt-1 shrink-0 ${alert.risk === 'critical' || alert.risk === 'high' ? 'bg-mac-red' : alert.risk === 'medium' ? 'bg-mac-yellow' : 'bg-mac-green'}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-semibold text-slate-700 dark:text-white/70 truncate">{alert.message || alert.title}</p>
-                        <p className="text-[10px] text-slate-400 dark:text-white/35 mt-0.5">{alert.created_at ? new Date(alert.created_at).toLocaleString() : ''}</p>
+                        <p className="text-[10px] text-slate-400 dark:text-white/35 mt-0.5">{alert.created_at ? dateTimeFormatter.format(new Date(alert.created_at)) : ''}</p>
                       </div>
                     </div>
                   ))}
@@ -649,6 +813,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-white/20">
                   <span className="material-symbols-outlined text-xl mb-1">check_circle</span>
                   <span className="text-[10px]">{d.noAlerts}</span>
+                  <span className="text-[10px] mt-1 opacity-75 text-center">{d.noAlertsHint}</span>
                 </div>
               )}
             </div>
@@ -656,7 +821,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
             {totalTokensVal > 0 && (
               <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400 dark:text-white/35 flex items-center gap-1"><span className="material-symbols-outlined text-[11px] text-violet-500">token</span>7d Token</span>
+                  <span className="text-slate-400 dark:text-white/35 flex items-center gap-1"><span className="material-symbols-outlined text-[11px] text-violet-500">token</span>{d.tokens7d}</span>
                   <span className="font-bold text-slate-600 dark:text-white/60 font-mono">{fmtTokens(totalTokensVal)}</span>
                   <span className="font-mono text-amber-500">{fmtCost(totalCostVal)}</span>
                 </div>
@@ -665,8 +830,8 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
           </div>
         </div>
 
-        {/* Connected Instances — full width like gateway status */}
-        {instances.length > 0 && (
+        {/* Connected Instances - full width like gateway status */}
+        {instances.length > 0 ? (
           <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
             <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span className="material-symbols-outlined text-[14px] text-sky-500">devices</span>
@@ -679,8 +844,10 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
                 const version = inst.version || '';
                 const roles: string[] = Array.isArray(inst.roles) ? inst.roles.filter(Boolean) : [];
                 const scopes: string[] = Array.isArray(inst.scopes) ? inst.scopes.filter(Boolean) : [];
-                const lastInput = inst.lastInputSeconds != null ? `${inst.lastInputSeconds}s` : null;
-                const age = inst.ts ? fmtPresenceAge(inst.ts) : null;
+                const rolesVisible = roles.slice(0, 2);
+                const rolesOverflow = roles.length - rolesVisible.length;
+                const lastInput = inst.lastInputSeconds != null ? `${inst.lastInputSeconds}${d.unitSecond}` : null;
+                const age = inst.ts ? fmtPresenceAge(inst.ts, presenceLabels) : null;
                 return (
                   <div key={inst.instanceId || i} className="rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 p-3">
                     <div className="flex items-center gap-2 mb-1.5">
@@ -693,17 +860,18 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
                         <p className="text-[11px] font-bold text-slate-700 dark:text-white/70 truncate">{host}</p>
                         {inst.ip && <p className="text-[11px] text-slate-400 dark:text-white/35 font-mono">{inst.ip}</p>}
                       </div>
-                      <div className="w-2 h-2 rounded-full bg-mac-green animate-pulse shrink-0" />
+                      <div className="w-2 h-2 rounded-full bg-mac-green shrink-0" />
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {mode && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold">{mode}</span>}
-                      {roles.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold">{r}</span>)}
+                      {rolesVisible.map(r => <span key={r} className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold">{r}</span>)}
+                      {rolesOverflow > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold">+{rolesOverflow}</span>}
                       {inst.platform && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">{inst.platform}</span>}
                       {inst.deviceFamily && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">{inst.deviceFamily}</span>}
                       {version && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">v{version}</span>}
                     </div>
-                    <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400 dark:text-white/35">
-                      {scopes.length > 0 && <span>{scopes.length > 3 ? `${scopes.length} ${d.scopes}` : scopes.join(', ')}</span>}
+                    <div className="flex flex-wrap items-center gap-2.5 mt-1.5 text-[11px] text-slate-400 dark:text-white/35">
+                      {scopes.length > 0 && <span>{scopes.length > 2 ? `${scopes.length} ${d.scopes}` : scopes.join(', ')}</span>}
                       {lastInput && <span>{d.lastInput}: {lastInput}</span>}
                       {age && <span>{age}</span>}
                     </div>
@@ -712,10 +880,20 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
               })}
             </div>
           </div>
+        ) : (
+          <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-700 dark:text-white/70">{d.connectedInstances}: 0</p>
+              <p className="text-[11px] text-slate-400 dark:text-white/35 mt-1">{d.instancesEmptyHint}</p>
+            </div>
+            <button onClick={refreshAll} className="shrink-0 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-white/10 text-[11px] font-medium text-slate-600 dark:text-white/65 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+              {d.refresh}
+            </button>
+          </div>
         )}
 
-        {/* Recent Sessions — full width */}
-        {sessions.length > 0 && (
+        {/* Recent Sessions - full width */}
+        {sessions.length > 0 ? (
           <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
             <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span className="material-symbols-outlined text-[14px] text-indigo-500">forum</span>
@@ -723,15 +901,22 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
             </h3>
             <div className="space-y-1.5">
               {sessions.slice(0, 6).map((s: any, i: number) => {
-                const label = s.label || s.key || s.id || `Session ${i + 1}`;
+                const label = s.label || s.key || s.id || `${d.sessionDefault} ${i + 1}`;
                 return (
                   <div key={i} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                     <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center text-[10px] font-bold text-indigo-500">{i + 1}</div>
                     <span className="text-[11px] font-medium text-slate-700 dark:text-white/60 truncate flex-1">{label}</span>
-                    {(s.lastActiveAt || s.updatedAt) && <span className="text-[11px] text-slate-400 dark:text-white/35 shrink-0">{new Date(s.lastActiveAt || s.updatedAt).toLocaleTimeString()}</span>}
+                    {(s.lastActiveAt || s.updatedAt) && <span className="text-[11px] text-slate-400 dark:text-white/35 shrink-0">{timeFormatter.format(new Date(s.lastActiveAt || s.updatedAt))}</span>}
                   </div>
                 );
               })}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-5">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-700 dark:text-white/70">{d.recentSessions}</p>
+              <p className="text-[11px] text-slate-400 dark:text-white/35 mt-1">{d.sessionsEmptyHint}</p>
             </div>
           </div>
         )}

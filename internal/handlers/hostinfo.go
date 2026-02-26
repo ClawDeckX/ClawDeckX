@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"ClawDeckX/internal/openclaw"
@@ -20,11 +21,23 @@ import (
 // HostInfoHandler collects host machine info.
 type HostInfoHandler struct {
 	startTime time.Time
+	cacheMu   sync.RWMutex
+	cachedAt  time.Time
+	cached    HostInfoResponse
+	cacheOK   bool
+	staticAt  time.Time
+	static    HostInfoResponse
+	staticOK  bool
 }
 
 func NewHostInfoHandler() *HostInfoHandler {
 	return &HostInfoHandler{startTime: time.Now()}
 }
+
+const (
+	hostInfoCacheTTL       = 2 * time.Second
+	hostInfoStaticCacheTTL = 10 * time.Minute
+)
 
 // HostInfoResponse is the host hardware info response.
 type HostInfoResponse struct {
@@ -173,10 +186,56 @@ func parseSemverParts(v string) [3]int {
 
 // Get returns host machine info.
 func (h *HostInfoHandler) Get(w http.ResponseWriter, r *http.Request) {
-	hostname, _ := os.Hostname()
+	h.cacheMu.RLock()
+	if h.cacheOK && time.Since(h.cachedAt) < hostInfoCacheTTL {
+		cached := h.cached
+		h.cacheMu.RUnlock()
+		web.OK(w, r, cached)
+		return
+	}
+	h.cacheMu.RUnlock()
+
+	staticInfo := h.getStaticInfo()
 
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
+
+	resp := staticInfo
+	resp.Uptime = time.Since(h.startTime).Milliseconds()
+	resp.ServerUptimeMs = collectOsUptime()
+	resp.NumGoroutine = runtime.NumGoroutine()
+	resp.MemStats = MemInfo{
+		Alloc:      memStats.Alloc,
+		TotalAlloc: memStats.TotalAlloc,
+		Sys:        memStats.Sys,
+		HeapAlloc:  memStats.HeapAlloc,
+		HeapSys:    memStats.HeapSys,
+		HeapInuse:  memStats.HeapInuse,
+		StackInuse: memStats.StackInuse,
+		NumGC:      memStats.NumGC,
+	}
+	resp.SysMem = collectSysMemory()
+	resp.CpuUsage = collectCpuUsage()
+
+	h.cacheMu.Lock()
+	h.cached = resp
+	h.cachedAt = time.Now()
+	h.cacheOK = true
+	h.cacheMu.Unlock()
+
+	web.OK(w, r, resp)
+}
+
+func (h *HostInfoHandler) getStaticInfo() HostInfoResponse {
+	h.cacheMu.RLock()
+	if h.staticOK && time.Since(h.staticAt) < hostInfoStaticCacheTTL {
+		static := h.static
+		h.cacheMu.RUnlock()
+		return static
+	}
+	h.cacheMu.RUnlock()
+
+	hostname, _ := os.Hostname()
 
 	home, _ := os.UserHomeDir()
 	wd, _ := os.Getwd()
@@ -233,48 +292,33 @@ func (h *HostInfoHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Platform:     platform,
 		NumCPU:       runtime.NumCPU(),
 		GoVersion:    runtime.Version(),
-		Uptime:       time.Since(h.startTime).Milliseconds(),
-		NumGoroutine: runtime.NumGoroutine(),
-		MemStats: MemInfo{
-			Alloc:      memStats.Alloc,
-			TotalAlloc: memStats.TotalAlloc,
-			Sys:        memStats.Sys,
-			HeapAlloc:  memStats.HeapAlloc,
-			HeapSys:    memStats.HeapSys,
-			HeapInuse:  memStats.HeapInuse,
-			StackInuse: memStats.StackInuse,
-			NumGC:      memStats.NumGC,
-		},
-		EnvInfo: envInfo,
+		EnvInfo:      envInfo,
 	}
 
-	// system uptime
-	resp.ServerUptimeMs = collectOsUptime()
-
-	// disk info
+	// Disk usage is relatively expensive and low-frequency; compute in static cache.
 	resp.DiskUsage = collectDiskUsage(home)
 
-	// system memory
-	resp.SysMem = collectSysMemory()
-
-	// CPU usage
-	resp.CpuUsage = collectCpuUsage()
-
-	// Node version
+	// Node version is static and costly to spawn repeatedly.
 	if out, err := exec.Command("node", "--version").Output(); err == nil {
 		resp.NodeVersion = strings.TrimSpace(string(out))
 	}
 
-	// OpenClaw version
+	// OpenClaw version rarely changes during runtime.
 	if _, ver, ok := openclaw.DetectOpenClawBinary(); ok {
 		resp.OpenClawVersion = ver
 	}
 
-	// database path & config path
+	// Paths are static enough for dashboard display.
 	resp.DbPath = filepath.Join(wd, "data", "ClawDeckX.db")
 	if home != "" {
 		resp.ConfigPath = filepath.Join(home, ".openclaw", "openclaw.json")
 	}
 
-	web.OK(w, r, resp)
+	h.cacheMu.Lock()
+	h.static = resp
+	h.staticAt = time.Now()
+	h.staticOK = true
+	h.cacheMu.Unlock()
+
+	return resp
 }

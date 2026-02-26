@@ -1,10 +1,11 @@
 
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import CustomSelect from '../components/CustomSelect';
+import { subscribeManagerWS } from '../services/manager-ws';
 
 interface AlertsProps { language: Language; }
 
@@ -29,10 +30,10 @@ function fmtRemaining(ms: number) {
 function fmtRelative(ts?: number, a?: any) {
   if (!ts) return '-';
   const diff = Date.now() - ts;
-  if (diff < 60_000) return a?.justNow || 'just now';
+  if (diff < 60_000) return a?.justNow;
   const mins = Math.round(diff / 60_000);
-  if (mins < 60) return `${mins} ${a?.minutesAgo || 'min ago'}`;
-  return `${Math.round(mins / 60)} ${a?.hoursAgo || 'hr ago'}`;
+  if (mins < 60) return `${mins} ${a?.minutesAgo}`;
+  return `${Math.round(mins / 60)} ${a?.hoursAgo}`;
 }
 
 interface PendingApproval {
@@ -56,8 +57,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
   const a = (t as any).alrt as any;
   const { toast } = useToast();
 
-  // WS connection (via Manager's own /api/ws)
-  const wsRef = useRef<WebSocket | null>(null);
+  // Shared Manager WS subscription
   const [wsConnected, setWsConnected] = useState(false);
   const [wsConnecting, setWsConnecting] = useState(false);
   const [wsError, setWsError] = useState<string | null>(null);
@@ -83,35 +83,24 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
   const [fwdSessionFilter, setFwdSessionFilter] = useState('');
   const [fwdSaving, setFwdSaving] = useState(false);
   const [fwdNewTarget, setFwdNewTarget] = useState('');
+  const [fwdLoaded, setFwdLoaded] = useState(false);
 
-  // Connect to Manager's /api/ws for real-time exec approval events
+  // Subscribe to shared Manager WS for real-time exec approval events
   // (Gateway events are forwarded by backend GWCollector → wsHub "gw_event" channel)
   useEffect(() => {
     setWsConnecting(true);
     setWsError(null);
 
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/v1/ws`);
-
+    let opened = false;
     const connectTimeout = setTimeout(() => {
-      if (ws.readyState !== WebSocket.OPEN) {
+      if (!opened) {
         setWsConnecting(false);
         setWsError(a.wsError);
       }
-    }, 12000);
+    }, 3000);
 
-    ws.onopen = () => {
-      clearTimeout(connectTimeout);
-      setWsConnected(true);
-      setWsConnecting(false);
-      setWsError(null);
-      // Subscribe to gw_event channel to receive gateway-forwarded events
-      ws.send(JSON.stringify({ action: 'subscribe', channels: ['gw_event'] }));
-    };
-
-    ws.onmessage = (evt) => {
+    const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
-        const msg = JSON.parse(evt.data);
         if (msg.type === 'exec.approval.requested') {
           const p = msg.data as PendingApproval | undefined;
           if (p?.id) {
@@ -127,28 +116,30 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
           }
         }
       } catch { /* ignore */ }
-    };
+    }, (status) => {
+      if (status === 'open') {
+        opened = true;
+        clearTimeout(connectTimeout);
+        setWsConnected(true);
+        setWsConnecting(false);
+        setWsError(null);
+      } else if (status === 'closed') {
+        setWsConnected(false);
+      }
+    });
 
-    ws.onclose = () => {
-      clearTimeout(connectTimeout);
-      setWsConnected(false);
-      setWsConnecting(false);
-    };
-
-    wsRef.current = ws;
     return () => {
       clearTimeout(connectTimeout);
-      ws.close();
-      wsRef.current = null;
+      unsubscribe();
     };
   }, []);
 
   // Auto-expire timer: refresh pending queue display every second
   useEffect(() => {
-    if (pendingQueue.length === 0) return;
+    if (tab !== 'pending' || pendingQueue.length === 0) return;
     const timer = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(timer);
-  }, [pendingQueue.length]);
+  }, [tab, pendingQueue.length]);
 
   // Auto-remove expired items after 10s past expiry
   useEffect(() => {
@@ -184,10 +175,15 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
         setFwdAgentFilter(Array.isArray(exec.agentFilter) ? exec.agentFilter.join(', ') : (exec.agentFilter || ''));
         setFwdSessionFilter(Array.isArray(exec.sessionFilter) ? exec.sessionFilter.join(', ') : (exec.sessionFilter || ''));
       }
+      setFwdLoaded(true);
     } catch { /* gateway not connected, ignore */ }
   }, []);
 
-  useEffect(() => { loadApprovals(); loadFwdConfig(); }, [loadApprovals, loadFwdConfig]);
+  useEffect(() => { loadApprovals(); }, [loadApprovals]);
+  useEffect(() => {
+    if (tab !== 'notify' || fwdLoaded) return;
+    loadFwdConfig();
+  }, [tab, fwdLoaded, loadFwdConfig]);
 
   // Save a single forwarding config field via gwApi.configSet
   const saveFwdField = useCallback(async (key: string, value: any) => {
@@ -265,6 +261,27 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
   const isDefaults = selectedScope === '__defaults__';
   const scopeData = isDefaults ? defaults : (agents[selectedScope] || {});
   const allowlist: any[] = isDefaults ? [] : (scopeData.allowlist || []);
+  const securityLabel = (v?: string) => {
+    if (v === 'deny') return a.optDeny;
+    if (v === 'allowlist') return a.optAllowlist;
+    if (v === 'full') return a.optFull;
+    return v || '';
+  };
+  const askLabel = (v?: string) => {
+    if (v === 'off') return a.optAskOff;
+    if (v === 'on-miss') return a.optAskOnMiss;
+    if (v === 'always') return a.optAskAlways;
+    return v || '';
+  };
+  const askFallbackLabel = (v?: string) => {
+    if (v === 'deny') return a.optFallbackDeny;
+    if (v === 'allowlist') return a.optFallbackAllowlist;
+    return v || '';
+  };
+  const renderedPendingQueue = useMemo(() => pendingQueue.slice(0, 120), [pendingQueue]);
+  const omittedPendingCount = Math.max(0, pendingQueue.length - renderedPendingQueue.length);
+  const renderedAllowlist = useMemo(() => allowlist.slice(0, 180), [allowlist]);
+  const omittedAllowlistCount = Math.max(0, allowlist.length - renderedAllowlist.length);
 
   return (
     <main className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
@@ -381,7 +398,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
               </div>
             ) : (
               <div className="space-y-3">
-                {pendingQueue.map((item: any) => {
+                {renderedPendingQueue.map((item: any) => {
                   const req = item.request || {};
                   const remainMs = (item.expiresAtMs || 0) - Date.now();
                   const isExpired = remainMs <= 0;
@@ -424,6 +441,11 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                     </div>
                   );
                 })}
+                {omittedPendingCount > 0 && (
+                  <div className="text-[10px] text-center text-slate-400 dark:text-white/30 py-1">
+                    +{omittedPendingCount}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -450,7 +472,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold text-slate-700 dark:text-white/70">{a.security}</p>
                     <p className="text-[11px] text-slate-400 dark:text-white/35 mt-0.5">{a.securityDesc}</p>
-                    {!isDefaults && <p className="text-[11px] text-slate-400 dark:text-white/20 mt-0.5">{a.defaults}: {defaults.security || 'deny'}</p>}
+                    {!isDefaults && <p className="text-[11px] text-slate-400 dark:text-white/20 mt-0.5">{a.defaults}: {securityLabel(defaults.security || 'deny')}</p>}
                   </div>
                   <CustomSelect
                     value={isDefaults ? (scopeData.security || 'deny') : (scopeData.security ?? '__default__')}
@@ -460,7 +482,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                       else patchForm([...base, 'security'], v);
                     }}
                     options={[
-                      ...(!isDefaults ? [{ value: '__default__', label: `${a.useDefault} (${defaults.security || 'deny'})` }] : []),
+                      ...(!isDefaults ? [{ value: '__default__', label: `${a.useDefault} (${securityLabel(defaults.security || 'deny')})` }] : []),
                       { value: 'deny', label: a.optDeny },
                       { value: 'allowlist', label: a.optAllowlist },
                       { value: 'full', label: a.optFull },
@@ -472,7 +494,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold text-slate-700 dark:text-white/70">{a.ask}</p>
                     <p className="text-[11px] text-slate-400 dark:text-white/35 mt-0.5">{a.askDesc}</p>
-                    {!isDefaults && <p className="text-[11px] text-slate-400 dark:text-white/20 mt-0.5">{a.defaults}: {defaults.ask || 'on-miss'}</p>}
+                    {!isDefaults && <p className="text-[11px] text-slate-400 dark:text-white/20 mt-0.5">{a.defaults}: {askLabel(defaults.ask || 'on-miss')}</p>}
                   </div>
                   <CustomSelect
                     value={isDefaults ? (scopeData.ask || 'on-miss') : (scopeData.ask ?? '__default__')}
@@ -482,7 +504,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                       else patchForm([...base, 'ask'], v);
                     }}
                     options={[
-                      ...(!isDefaults ? [{ value: '__default__', label: `${a.useDefault} (${defaults.ask || 'on-miss'})` }] : []),
+                      ...(!isDefaults ? [{ value: '__default__', label: `${a.useDefault} (${askLabel(defaults.ask || 'on-miss')})` }] : []),
                       { value: 'off', label: a.optAskOff },
                       { value: 'on-miss', label: a.optAskOnMiss },
                       { value: 'always', label: a.optAskAlways },
@@ -494,7 +516,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold text-slate-700 dark:text-white/70">{a.askFallback}</p>
                     <p className="text-[11px] text-slate-400 dark:text-white/35 mt-0.5">{a.askFallbackDesc}</p>
-                    {!isDefaults && <p className="text-[11px] text-slate-400 dark:text-white/20 mt-0.5">{a.defaults}: {defaults.askFallback || 'deny'}</p>}
+                    {!isDefaults && <p className="text-[11px] text-slate-400 dark:text-white/20 mt-0.5">{a.defaults}: {askFallbackLabel(defaults.askFallback || 'deny')}</p>}
                   </div>
                   <CustomSelect
                     value={isDefaults ? (scopeData.askFallback || 'deny') : (scopeData.askFallback ?? '__default__')}
@@ -504,7 +526,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                       else patchForm([...base, 'askFallback'], v);
                     }}
                     options={[
-                      ...(!isDefaults ? [{ value: '__default__', label: `${a.useDefault} (${defaults.askFallback || 'deny'})` }] : []),
+                      ...(!isDefaults ? [{ value: '__default__', label: `${a.useDefault} (${askFallbackLabel(defaults.askFallback || 'deny')})` }] : []),
                       { value: 'deny', label: a.optFallbackDeny },
                       { value: 'allowlist', label: a.optFallbackAllowlist },
                     ]}
@@ -669,14 +691,14 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                   <p className="text-[10px] text-slate-400 dark:text-white/20 py-4 text-center">{a.noPatterns}</p>
                 ) : (
                   <div className="space-y-2">
-                    {allowlist.map((entry: any, i: number) => (
+                    {renderedAllowlist.map((entry: any, i: number) => (
                       <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5">
                         <div className="flex-1 min-w-0">
-                          <input value={entry.pattern || ''} placeholder="e.g. git *"
+                          <input value={entry.pattern || ''} placeholder={a.patternPlaceholder}
                             onChange={e => patchForm(['agents', selectedScope, 'allowlist', String(i), 'pattern'], e.target.value)}
                             className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] font-mono text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-primary/30" />
                           <div className="flex gap-3 mt-1 text-[11px] text-slate-400 dark:text-white/35">
-                            <span>{a.lastUsed}: {entry.lastUsedAt ? fmtRelative(entry.lastUsedAt) : a.never}</span>
+                            <span>{a.lastUsed}: {entry.lastUsedAt ? fmtRelative(entry.lastUsedAt, a) : a.never}</span>
                             {entry.lastUsedCommand && <span className="font-mono truncate">{entry.lastUsedCommand}</span>}
                           </div>
                         </div>
@@ -686,6 +708,11 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                         }} className="text-[11px] px-2 py-1 rounded-lg bg-mac-red/10 text-mac-red shrink-0">{a.removePattern}</button>
                       </div>
                     ))}
+                    {omittedAllowlistCount > 0 && (
+                      <div className="text-[10px] text-center text-slate-400 dark:text-white/30 py-1">
+                        +{omittedAllowlistCount}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -16,12 +16,12 @@ const REASONING_LEVELS = ['', 'off', 'on', 'stream'];
 function fmtRelative(ms?: number | null, a?: any) {
   if (!ms || !Number.isFinite(ms)) return '-';
   const diff = Date.now() - ms;
-  if (diff < 60_000) return a?.justNow || '<1m';
+  if (diff < 60_000) return a?.justNow;
   const mins = Math.round(diff / 60_000);
-  if (mins < 60) return `${mins} ${a?.minutesAgo || 'm'}`;
+  if (mins < 60) return `${mins} ${a?.minutesAgo}`;
   const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs} ${a?.hoursAgo || 'h'}`;
-  return `${Math.round(hrs / 24)} ${a?.daysAgo || 'd'}`;
+  if (hrs < 24) return `${hrs} ${a?.hoursAgo}`;
+  return `${Math.round(hrs / 24)} ${a?.daysAgo}`;
 }
 
 function fmtTokens(row: any) {
@@ -47,13 +47,14 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [preview, setPreview] = useState<any>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('');
 
   const loadSessions = useCallback(async () => {
     setLoading(true); setError(null);
@@ -64,7 +65,15 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadSessions(); }, [loadSessions]);
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchKeyword(searchInput.trim().toLowerCase()), 140);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => { loadSessions(); });
+    return () => cancelAnimationFrame(raf);
+  }, [loadSessions]);
 
   const sessions: any[] = result?.sessions || [];
   const storePath = result?.path || '';
@@ -72,8 +81,8 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
   const filtered = useMemo(() => {
     let list = sessions;
     if (kindFilter) list = list.filter((s: any) => s.kind === kindFilter);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
+    if (searchKeyword) {
+      const q = searchKeyword;
       list = list.filter((s: any) =>
         (s.key || '').toLowerCase().includes(q) ||
         (s.label || '').toLowerCase().includes(q) ||
@@ -81,7 +90,10 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
       );
     }
     return list;
-  }, [sessions, kindFilter, search]);
+  }, [sessions, kindFilter, searchKeyword]);
+
+  const renderedSessions = useMemo(() => filtered.slice(0, 260), [filtered]);
+  const omittedSessions = Math.max(0, filtered.length - renderedSessions.length);
 
   const selected = selectedKey ? sessions.find((s: any) => s.key === selectedKey) : null;
 
@@ -177,7 +189,7 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
           <div className="flex gap-1.5">
             <div className="relative flex-1">
               <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[14px]">search</span>
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder={a.search}
+              <input value={searchInput} onChange={e => setSearchInput(e.target.value)} placeholder={a.search}
                 className="w-full h-7 pl-7 pr-2 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-primary/30" />
             </div>
             <CustomSelect value={kindFilter} onChange={v => setKindFilter(v)}
@@ -196,7 +208,7 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
               <p className="text-[11px] font-bold mb-1">{a.noSessions}</p>
               <p className="text-[10px] text-center px-4">{a.noSessionsHint}</p>
             </div>
-          ) : filtered.map((row: any) => {
+          ) : renderedSessions.map((row: any) => {
             const isSelected = row.key === selectedKey;
             const displayName = row.displayName?.trim() || row.label?.trim() || '';
             return (
@@ -215,6 +227,11 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
               </button>
             );
           })}
+          {omittedSessions > 0 && (
+            <div className="px-3 py-2 text-[10px] text-center text-slate-400 dark:text-white/30 border-t border-slate-100/60 dark:border-white/[0.03]">
+              +{omittedSessions}
+            </div>
+          )}
         </div>
       </div>
 

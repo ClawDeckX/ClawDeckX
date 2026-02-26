@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
@@ -109,7 +109,7 @@ function fmtDate(d: string): string {
   return d;
 }
 
-function fmtTimestamp(ts: string | number | undefined | null): string {
+function fmtTimestamp(ts: string | number | undefined | null, u?: any): string {
   if (!ts) return '-';
   const date = typeof ts === 'number' ? new Date(ts) : new Date(ts);
   if (isNaN(date.getTime())) return String(ts);
@@ -120,23 +120,23 @@ function fmtTimestamp(ts: string | number | undefined | null): string {
   const isYesterday = date.toDateString() === yesterday.toDateString();
   const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   if (isToday) return time;
-  if (isYesterday) return `昨天 ${time}`;
+  if (isYesterday) return `${u?.yesterday} ${time}`;
   return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
 }
 
-function fmtRelativeTime(ts: string | number | undefined | null): string {
+function fmtRelativeTime(ts: string | number | undefined | null, u?: any): string {
   if (!ts) return '-';
   const date = typeof ts === 'number' ? new Date(ts) : new Date(ts);
   if (isNaN(date.getTime())) return String(ts);
   const now = Date.now();
   const diff = now - date.getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return '刚刚';
-  if (mins < 60) return `${mins}分钟前`;
+  if (mins < 1) return u?.justNow;
+  if (mins < 60) return `${mins}${u?.minutesAgo}`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}小时前`;
+  if (hours < 24) return `${hours}${u?.hoursAgo}`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}天前`;
+  if (days < 7) return `${days}${u?.daysAgo}`;
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
@@ -346,8 +346,10 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
 
   // Cost trend view
   const [trendView, setTrendView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const fetchSeqRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -356,16 +358,21 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
         gwApi.sessionsUsage({ startDate, endDate, limit: 200 }),
         gwApi.usageCost({ startDate, endDate }),
       ]);
+      if (seq !== fetchSeqRef.current) return;
       setUsageData(sessionsRes as any);
       setCostData(costRes as any);
     } catch (err: any) {
+      if (seq !== fetchSeqRef.current) return;
       setError(err?.message || String(err));
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
   }, [range, customStart, customEnd]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => { fetchData(); });
+    return () => cancelAnimationFrame(raf);
+  }, [fetchData]);
 
   // Fetch timeseries for a specific session
   const fetchTimeseries = useCallback(async (key?: string) => {
@@ -417,7 +424,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
   const tokenSegments = models.slice(0, 6).map((m, i) => ({
     value: m.totals?.totalTokens || 0,
     color: MODEL_COLORS[i % MODEL_COLORS.length],
-    label: m.model || m.provider || 'unknown',
+    label: m.model || m.provider || u.unknown,
   }));
 
   // Aggregate daily data by week/month for trend view
@@ -654,12 +661,12 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                       <span className={`material-symbols-outlined text-[16px] ${isOverDaily || isOverMonthly ? 'text-red-500' : isNearDaily || isNearMonthly ? 'text-amber-500' : 'text-emerald-500'}`}>
                         {isOverDaily || isOverMonthly ? 'warning' : 'account_balance_wallet'}
                       </span>
-                      <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{es?.budget || 'Budget'}</h3>
+                      <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{es.budget}</h3>
                     </div>
                     <button onClick={() => { setEditBudget(budget); setShowBudgetModal(true); }}
                       className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
                       <span className="material-symbols-outlined text-[12px]">settings</span>
-                      {es?.setBudget || 'Set Budget'}
+                      {es.setBudget}
                     </button>
                   </div>
                   
@@ -669,7 +676,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                       {budget.dailyLimit > 0 && (
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] text-slate-400 dark:text-white/40">{es?.dailyBudget || 'Daily'}</span>
+                            <span className="text-[10px] text-slate-400 dark:text-white/40">{es.dailyBudget}</span>
                             <span className={`text-[10px] font-bold ${isOverDaily ? 'text-red-500' : isNearDaily ? 'text-amber-500' : 'text-slate-600 dark:text-white/60'}`}>
                               {fmtCost(todayCost)} / {fmtCost(budget.dailyLimit)}
                             </span>
@@ -684,7 +691,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                       {budget.monthlyLimit > 0 && (
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] text-slate-400 dark:text-white/40">{es?.monthlyBudget || 'Monthly'}</span>
+                            <span className="text-[10px] text-slate-400 dark:text-white/40">{es.monthlyBudget}</span>
                             <span className={`text-[10px] font-bold ${isOverMonthly ? 'text-red-500' : isNearMonthly ? 'text-amber-500' : 'text-slate-600 dark:text-white/60'}`}>
                               {fmtCost(monthCost)} / {fmtCost(budget.monthlyLimit)}
                             </span>
@@ -697,7 +704,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                       )}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-slate-400 dark:text-white/40 text-center py-2">{es?.noBudgetSet || 'No budget limit set'}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-white/40 text-center py-2">{es.noBudgetSet}</p>
                   )}
                 </div>
               );
@@ -709,14 +716,14 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
               <div className="lg:col-span-2 rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{u.costTrend || '费用趋势'}</h3>
+                    <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{u.costTrend}</h3>
                     <div className="flex bg-slate-100 dark:bg-white/[0.06] p-0.5 rounded-md">
                       {(['daily', 'weekly', 'monthly'] as const).map(v => (
                         <button key={v} onClick={() => setTrendView(v)}
                           className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${
                             trendView === v ? 'bg-white dark:bg-primary shadow-sm text-slate-700 dark:text-white' : 'text-slate-400 hover:text-slate-600'
                           }`}>
-                          {v === 'daily' ? '日' : v === 'weekly' ? '周' : '月'}
+                          {v === 'daily' ? u.day : v === 'weekly' ? u.week : u.month}
                         </button>
                       ))}
                     </div>
@@ -748,7 +755,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                   {selectedModel && (
                     <button onClick={() => setSelectedModel(null)}
                       className="text-[9px] px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
-                      ✕ 清除筛选
+                      ✕ {u.clearFilter}
                     </button>
                   )}
                 </div>
@@ -831,7 +838,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-3 h-3 rounded-full" style={{ background: MODEL_COLORS[i % MODEL_COLORS.length] }} />
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-[12px] font-bold dark:text-white/90 text-slate-700 truncate">{m.model || 'unknown'}</h4>
+                      <h4 className="text-[12px] font-bold dark:text-white/90 text-slate-700 truncate">{m.model || u.unknown}</h4>
                       <p className="text-[10px] text-slate-400 dark:text-white/40">{m.provider || ''} · {m.count} {u.count}</p>
                     </div>
                     <div className="text-right">
@@ -855,13 +862,13 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
             <div className="flex items-center justify-between px-1 mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-slate-500 dark:text-white/50">
-                  共 {filteredSessions.length} 个会话
-                  {selectedModel && <span className="text-primary ml-1">· 筛选: {selectedModel}</span>}
+                  {u.sessionsCount}: {filteredSessions.length}
+                  {selectedModel && <span className="text-primary ml-1">· {u.filterByModel}: {selectedModel}</span>}
                 </span>
               </div>
               {totalSessionPages > 1 && (
                 <span className="text-[10px] text-slate-400 dark:text-white/40">
-                  第 {sessionsPage}/{totalSessionPages} 页
+                  {u.pageXofY?.replace('{current}', String(sessionsPage)).replace('{total}', String(totalSessionPages)) || `${sessionsPage}/${totalSessionPages}`}
                 </span>
               )}
             </div>
@@ -879,7 +886,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-[11px] font-bold dark:text-white/80 text-slate-700 truncate">{s.label || s.key}</p>
-                          {getSessionLastActive(s) && <span className="text-[10px] text-slate-400 dark:text-white/35">{fmtRelativeTime(getSessionLastActive(s))}</span>}
+                          {getSessionLastActive(s) && <span className="text-[10px] text-slate-400 dark:text-white/35">{fmtRelativeTime(getSessionLastActive(s), u)}</span>}
                         </div>
                         <div className="flex gap-3 mt-0.5 text-[10px] text-slate-400 dark:text-white/35">
                           <span>{u.messages}: {getSessionMessages(s).total || 0}</span>
@@ -905,7 +912,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                         {onNavigateToSession && (
                           <button onClick={() => onNavigateToSession(s.key)}
                             className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 flex items-center justify-center transition-colors"
-                            title={u.goToSession || '跳转到会话'}>
+                            title={u.goToSession}>
                             <span className="material-symbols-outlined text-[14px]">chat</span>
                           </button>
                         )}
@@ -924,7 +931,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                 <div className="flex items-center justify-center gap-2 pt-4">
                   <button onClick={() => setSessionsPage(p => Math.max(1, p - 1))} disabled={sessionsPage === 1}
                     className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/[0.1] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    ← 上一页
+                    ← {u.prevPage}
                   </button>
                   <div className="flex items-center gap-1">
                     {Array.from({ length: Math.min(5, totalSessionPages) }, (_, i) => {
@@ -947,7 +954,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                   </div>
                   <button onClick={() => setSessionsPage(p => Math.min(totalSessionPages, p + 1))} disabled={sessionsPage === totalSessionPages}
                     className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/[0.1] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    下一页 →
+                    {u.nextPage} →
                   </button>
                 </div>
               )}
@@ -982,7 +989,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
               <div className="space-y-1">
                 {filtered.map((pt: any, i: number) => (
                   <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
-                    <span className="text-[10px] font-mono text-slate-400 dark:text-white/40 w-32 shrink-0">{fmtTimestamp(pt.timestamp || pt.date || pt.t)}</span>
+                    <span className="text-[10px] font-mono text-slate-400 dark:text-white/40 w-32 shrink-0">{fmtTimestamp(pt.timestamp || pt.date || pt.t, u)}</span>
                     <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] overflow-hidden">
                       <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min(100, ((pt.tokens || pt.value || 0) / maxVal) * 100)}%` }} />
                     </div>
@@ -1010,7 +1017,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                 </button>
                 <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/80">{u.usageLogs}</h3>
                 {selectedSessionKey && <span className="text-[10px] font-mono text-slate-400 dark:text-white/35 truncate max-w-[200px]">{selectedSessionKey}</span>}
-                {filtered.length > 0 && <span className="text-[10px] text-slate-400 dark:text-white/40">({filtered.length} 条)</span>}
+                {filtered.length > 0 && <span className="text-[10px] text-slate-400 dark:text-white/40">({filtered.length} {u.rowsCount})</span>}
               </div>
               <button onClick={() => { setLogsData(null); setLogsPage(1); fetchLogs(); }} disabled={logsLoading}
                 className="text-[10px] text-primary hover:underline disabled:opacity-40">{u.loadLogs}</button>
@@ -1026,7 +1033,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                 {paginatedLogs.map((log: any, i: number) => (
                   <div key={i} className="px-3 py-2 rounded-lg bg-white dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
                     <div className="flex items-center gap-2 text-[10px]">
-                      <span className="font-mono text-slate-400 dark:text-white/40 w-32 shrink-0">{fmtTimestamp(log.timestamp || log.date || log.ts)}</span>
+                      <span className="font-mono text-slate-400 dark:text-white/40 w-32 shrink-0">{fmtTimestamp(log.timestamp || log.date || log.ts, u)}</span>
                       {log.model && <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 font-bold truncate max-w-[100px]">{log.model}</span>}
                       {log.session && <span className="text-slate-400 dark:text-white/35 truncate max-w-[100px]">{log.session}</span>}
                       <span className="ml-auto font-mono font-bold text-slate-600 dark:text-white/60">{fmtTokens(log.tokens || 0)}</span>
@@ -1041,14 +1048,14 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                 <div className="flex items-center justify-center gap-2 pt-4">
                   <button onClick={() => setLogsPage(p => Math.max(1, p - 1))} disabled={logsPage === 1}
                     className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/[0.1] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    ← 上一页
+                    ← {u.prevPage}
                   </button>
                   <span className="text-[10px] text-slate-400 dark:text-white/40">
                     {logsPage} / {totalLogsPages}
                   </span>
                   <button onClick={() => setLogsPage(p => Math.min(totalLogsPages, p + 1))} disabled={logsPage === totalLogsPages}
                     className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/[0.1] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    下一页 →
+                    {u.nextPage} →
                   </button>
                 </div>
               )}
@@ -1066,45 +1073,45 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
           <div className="bg-white dark:bg-[#1e2028] rounded-xl shadow-2xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px] text-amber-500">account_balance_wallet</span>
-              <h3 className="text-sm font-bold text-slate-800 dark:text-white">{es?.budget || 'Budget Settings'}</h3>
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">{es.budget}</h3>
             </div>
             
             <div className="space-y-4">
               {/* Daily Limit */}
               <div>
-                <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es?.dailyBudget || 'Daily Budget'} ($)</label>
+                <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.dailyBudget} ($)</label>
                 <input type="number" step="0.01" min="0" value={editBudget.dailyLimit || ''} 
                   onChange={e => setEditBudget({ ...editBudget, dailyLimit: Number(e.target.value) || 0 })}
                   placeholder="0.00"
                   className="w-full h-9 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg px-3 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-primary" />
-                <p className="text-[10px] text-slate-400 mt-0.5">{language === 'zh' ? '每日费用上限，设为 0 表示不限制' : 'Daily spending limit, set to 0 for unlimited'}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{es.budgetDailyHint}</p>
               </div>
 
               {/* Monthly Limit */}
               <div>
-                <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es?.monthlyBudget || 'Monthly Budget'} ($)</label>
+                <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.monthlyBudget} ($)</label>
                 <input type="number" step="0.01" min="0" value={editBudget.monthlyLimit || ''} 
                   onChange={e => setEditBudget({ ...editBudget, monthlyLimit: Number(e.target.value) || 0 })}
                   placeholder="0.00"
                   className="w-full h-9 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg px-3 text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-primary" />
-                <p className="text-[10px] text-slate-400 mt-0.5">{language === 'zh' ? '每月费用上限，设为 0 表示不限制' : 'Monthly spending limit, set to 0 for unlimited'}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{es.budgetMonthlyHint}</p>
               </div>
 
               {/* Alert Threshold */}
               <div>
-                <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es?.budgetThreshold || 'Alert Threshold'} (%)</label>
+                <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.budgetThreshold} (%)</label>
                 <div className="flex items-center gap-3">
                   <input type="range" min="50" max="100" step="5" value={editBudget.alertThreshold}
                     onChange={e => setEditBudget({ ...editBudget, alertThreshold: Number(e.target.value) })}
                     className="flex-1 h-2 bg-slate-200 dark:bg-white/10 rounded-full appearance-none cursor-pointer accent-primary" />
                   <span className="text-xs font-bold text-slate-600 dark:text-white/60 w-10 text-right">{editBudget.alertThreshold}%</span>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-0.5">{language === 'zh' ? '达到此百分比时显示警告' : 'Show warning when reaching this percentage'}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{es.budgetThresholdHint}</p>
               </div>
 
               {/* Action */}
               <div>
-                <label className="text-[10px] font-bold text-slate-500 mb-1.5 block">{es?.budgetAction || 'Over-limit Action'}</label>
+                <label className="text-[10px] font-bold text-slate-500 mb-1.5 block">{es.budgetAction}</label>
                 <div className="flex gap-2">
                   {(['warn', 'pause', 'continue'] as const).map(action => (
                     <button key={action} onClick={() => setEditBudget({ ...editBudget, action })}
@@ -1113,9 +1120,9 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                           ? 'border-primary bg-primary/5 text-primary' 
                           : 'border-slate-200 dark:border-white/10 text-slate-500 hover:border-slate-300'
                       }`}>
-                      {action === 'warn' ? (es?.budgetActionWarn || 'Warn') : 
-                       action === 'pause' ? (es?.budgetActionPause || 'Pause') : 
-                       (es?.budgetActionContinue || 'Continue')}
+                      {action === 'warn' ? es.budgetActionWarn : 
+                       action === 'pause' ? es.budgetActionPause : 
+                       es.budgetActionContinue}
                     </button>
                   ))}
                 </div>
@@ -1125,11 +1132,11 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
               <button onClick={() => setShowBudgetModal(false)} 
                 className="px-4 h-9 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
-                {language === 'zh' ? '取消' : 'Cancel'}
+                {es.cancel}
               </button>
               <button onClick={saveBudget} 
                 className="px-5 h-9 bg-primary text-white text-[11px] font-bold rounded-lg hover:bg-primary/90 transition-colors">
-                {language === 'zh' ? '保存' : 'Save'}
+                {es.save}
               </button>
             </div>
           </div>

@@ -14,14 +14,12 @@ import (
 type DashboardHandler struct {
 	svc       *openclaw.Service
 	alertRepo *database.AlertRepo
-	ruleRepo  *database.RiskRuleRepo
 }
 
 func NewDashboardHandler(svc *openclaw.Service) *DashboardHandler {
 	return &DashboardHandler{
 		svc:       svc,
 		alertRepo: database.NewAlertRepo(),
-		ruleRepo:  database.NewRiskRuleRepo(),
 	}
 }
 
@@ -31,7 +29,6 @@ type DashboardResponse struct {
 	Onboarding     OnboardingStatus      `json:"onboarding"`
 	MonitorSummary MonitorSummary        `json:"monitor_summary"`
 	RecentAlerts   []database.Alert      `json:"recent_alerts"`
-	SecurityScore  int                   `json:"security_score"`
 	WSClients      int                   `json:"ws_clients"`
 }
 
@@ -75,15 +72,11 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 		recentAlerts = []database.Alert{}
 	}
 
-	// security score
-	securityScore := h.calcSecurityScore(st, summary)
-
 	web.OK(w, r, DashboardResponse{
 		Gateway:        gwStatus,
 		Onboarding:     onboarding,
 		MonitorSummary: summary,
 		RecentAlerts:   recentAlerts,
-		SecurityScore:  securityScore,
 	})
 }
 
@@ -134,75 +127,4 @@ func (h *DashboardHandler) getMonitorSummary() MonitorSummary {
 		Events24h:   events24h,
 		RiskCounts:  riskCounts,
 	}
-}
-
-// calcSecurityScore computes a security score (0-100).
-// Components: base env (20), rule enablement (40), risk coverage (20), recent alerts (20).
-func (h *DashboardHandler) calcSecurityScore(st openclaw.Status, summary MonitorSummary) int {
-	// 1. base environment (20 pts)
-	baseScore := 20
-	if !openclaw.CommandExists("openclaw") {
-		baseScore -= 10
-	}
-	if !openclaw.ConfigFileExists() {
-		baseScore -= 6
-	}
-	if !st.Running {
-		baseScore -= 4
-	}
-	if baseScore < 0 {
-		baseScore = 0
-	}
-
-	// 2. rule enablement (40 pts), weighted by risk level
-	ruleScore := 0
-	totalByRisk, enabledByRisk, err := h.ruleRepo.CountByRiskLevel()
-	if err == nil {
-		// weights: critical=4, high=3, medium=2, low=1
-		weights := map[string]int{"critical": 4, "high": 3, "medium": 2, "low": 1}
-		var totalWeight, enabledWeight int
-		for risk, total := range totalByRisk {
-			w := weights[risk]
-			if w == 0 {
-				w = 1
-			}
-			totalWeight += int(total) * w
-			enabledWeight += int(enabledByRisk[risk]) * w
-		}
-		if totalWeight > 0 {
-			ruleScore = enabledWeight * 40 / totalWeight
-		} else {
-			ruleScore = 0 // no rules = no score
-		}
-	}
-
-	// 3. risk coverage (20 pts): 5 pts per level
-	coverageScore := 0
-	for _, risk := range []string{"critical", "high", "medium", "low"} {
-		if enabledByRisk[risk] > 0 {
-			coverageScore += 5
-		}
-	}
-
-	// 4. recent alerts (20 pts): fewer critical/high alerts = better
-	alertScore := 20
-	highAlerts := summary.RiskCounts["critical"] + summary.RiskCounts["high"]
-	if highAlerts >= 10 {
-		alertScore = 0
-	} else if highAlerts >= 5 {
-		alertScore = 5
-	} else if highAlerts >= 2 {
-		alertScore = 10
-	} else if highAlerts >= 1 {
-		alertScore = 15
-	}
-
-	score := baseScore + ruleScore + coverageScore + alertScore
-	if score > 100 {
-		score = 100
-	}
-	if score < 0 {
-		score = 0
-	}
-	return score
 }

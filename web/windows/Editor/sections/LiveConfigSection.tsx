@@ -42,28 +42,28 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
       setRawText(typeof res?.raw === 'string' ? res.raw : JSON.stringify(res?.config || res, null, 2));
       setBaseHash(res?.hash || res?.baseHash || '');
     } catch (err: any) {
-      setConfigError(err?.message || 'Failed to load config');
+      setConfigError(err?.message || es.fetchFailed);
     }
     setConfigLoading(false);
-  }, []);
+  }, [es]);
 
   const loadSchema = useCallback(async () => {
     try {
       const res = await gwApi.configSchema() as any;
       setSchema(res);
     } catch { /* ignore */ }
-  }, []);
+  }, [es]);
 
   const handleApply = useCallback(async () => {
     if (!rawText.trim()) return;
     setConfigResult(null);
     try {
       await gwApi.configApply(rawText, baseHash);
-      setConfigResult({ ok: true, text: es.configApplyOk || 'Config applied' });
+      setConfigResult({ ok: true, text: es.configApplyOk });
       setTimeout(() => setConfigResult(null), 3000);
       loadConfig();
     } catch (err: any) {
-      setConfigResult({ ok: false, text: (es.configApplyFailed || 'Apply failed') + ': ' + (err?.message || '') });
+      setConfigResult({ ok: false, text: `${es.configApplyFailed}: ${err?.message || ''}` });
     }
   }, [rawText, baseHash, es, loadConfig]);
 
@@ -72,11 +72,11 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
     setConfigResult(null);
     try {
       await gwApi.configPatch(rawText, baseHash);
-      setConfigResult({ ok: true, text: es.configPatchOk || 'Config patched' });
+      setConfigResult({ ok: true, text: es.configPatchOk });
       setTimeout(() => setConfigResult(null), 3000);
       loadConfig();
     } catch (err: any) {
-      setConfigResult({ ok: false, text: (es.configPatchFailed || 'Patch failed') + ': ' + (err?.message || '') });
+      setConfigResult({ ok: false, text: `${es.configPatchFailed}: ${err?.message || ''}` });
     }
   }, [rawText, baseHash, es, loadConfig]);
 
@@ -89,12 +89,12 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
       let val: any = setVal.trim();
       try { val = JSON.parse(val); } catch { /* keep as string */ }
       await gwApi.configSet(setKey.trim(), val);
-      setSetResult({ ok: true, text: (es.configSetOk || 'Key set') + ': ' + setKey.trim() });
+      setSetResult({ ok: true, text: `${es.configSetOk}: ${setKey.trim()}` });
       setSetKey('');
       setSetVal('');
       setTimeout(() => setSetResult(null), 3000);
     } catch (err: any) {
-      setSetResult({ ok: false, text: (es.configSetFailed || 'Failed') + ': ' + (err?.message || '') });
+      setSetResult({ ok: false, text: `${es.configSetFailed}: ${err?.message || ''}` });
     }
     setSetSending(false);
   }, [setKey, setVal, setSending, es]);
@@ -110,7 +110,7 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
       setWizardSessionId(res?.sessionId || '');
       setWizardStep(res);
     } catch (err: any) {
-      setWizardError(err?.message || 'Failed to start wizard');
+      setWizardError(err?.message || es.failed);
     }
     setWizardLoading(false);
   }, []);
@@ -129,10 +129,10 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
         setWizardSessionId('');
       }
     } catch (err: any) {
-      setWizardError(err?.message || 'Wizard step failed');
+      setWizardError(err?.message || es.failed);
     }
     setWizardLoading(false);
-  }, [wizardSessionId, wizardInput]);
+  }, [wizardSessionId, wizardInput, es]);
 
   const handleWizardCancel = useCallback(async () => {
     if (!wizardSessionId) return;
@@ -151,16 +151,16 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
         <div className="px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[16px] text-amber-500">data_object</span>
-            <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.liveConfig || 'Gateway Live Config'}</h3>
+            <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.liveConfig}</h3>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={loadSchema} className="text-[10px] text-slate-400 hover:text-primary transition-colors">
-              {es.viewSchema || 'Schema'}
+              {es.viewSchema}
             </button>
             <button onClick={loadConfig} disabled={configLoading}
               className="h-7 px-3 bg-primary/10 text-primary text-[10px] font-bold rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-40 flex items-center gap-1">
               <span className="material-symbols-outlined text-[12px]">{configLoading ? 'progress_activity' : 'download'}</span>
-              {configLoading ? '...' : (es.liveLoadConfig || 'Load')}
+              {configLoading ? '...' : es.liveLoadConfig}
             </button>
           </div>
         </div>
@@ -188,12 +188,12 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
               <button onClick={handleApply}
                 className="h-7 px-3 bg-primary text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all hover:bg-primary/90">
                 <span className="material-symbols-outlined text-[12px]">check</span>
-                {es.configApplyBtn || 'Apply (Full)'}
+                {es.configApplyBtn}
               </button>
               <button onClick={handlePatch}
                 className="h-7 px-3 bg-amber-500 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all hover:bg-amber-600">
                 <span className="material-symbols-outlined text-[12px]">edit_note</span>
-                {es.configPatchBtn || 'Patch (Merge)'}
+                {es.configPatchBtn}
               </button>
               <button onClick={loadConfig} disabled={configLoading}
                 className="h-7 px-3 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 text-[10px] font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 transition-colors">
@@ -211,7 +211,7 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
         {!rawText && !configLoading && !configError && (
           <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-white/20">
             <span className="material-symbols-outlined text-3xl mb-2">data_object</span>
-            <p className="text-[11px]">{es.loadConfigHint || 'Click Load to fetch the live Gateway config'}</p>
+            <p className="text-[11px]">{es.loadConfigHint}</p>
           </div>
         )}
       </div>
@@ -222,7 +222,7 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
           <div className="px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[16px] text-sky-500">schema</span>
-              <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.configSchema || 'Config Schema'}</h3>
+              <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.configSchema}</h3>
             </div>
             <button onClick={() => setSchema(null)} className="text-[10px] text-slate-400 hover:text-red-500 transition-colors">
               <span className="material-symbols-outlined text-[14px]">close</span>
@@ -239,19 +239,19 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
         <div className="px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[16px] text-violet-500">auto_fix_high</span>
-            <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.wizardTitle || 'Configuration Wizard'}</h3>
+            <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.wizardTitle}</h3>
           </div>
           {!wizardSessionId ? (
             <button onClick={handleWizardStart} disabled={wizardLoading}
               className="h-7 px-3 bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[10px] font-bold rounded-lg hover:bg-violet-500/20 transition-colors disabled:opacity-40 flex items-center gap-1">
               <span className="material-symbols-outlined text-[12px]">{wizardLoading ? 'progress_activity' : 'play_arrow'}</span>
-              {es.wizardStart || 'Start Wizard'}
+              {es.wizardStart}
             </button>
           ) : (
             <button onClick={handleWizardCancel}
               className="h-7 px-3 bg-red-500/10 text-red-500 text-[10px] font-bold rounded-lg hover:bg-red-500/20 transition-colors flex items-center gap-1">
               <span className="material-symbols-outlined text-[12px]">close</span>
-              {es.wizardCancel || 'Cancel'}
+              {es.wizardCancel}
             </button>
           )}
         </div>
@@ -285,19 +285,19 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
               <div className="flex gap-2">
                 <input value={wizardInput} onChange={e => setWizardInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleWizardNext()}
-                  placeholder={es.wizardInputPlaceholder || 'Enter value...'}
+                  placeholder={es.wizardInputPlaceholder}
                   className="flex-1 h-8 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] text-slate-700 dark:text-white/70 outline-none" />
                 <button onClick={handleWizardNext} disabled={wizardLoading}
                   className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1">
                   <span className="material-symbols-outlined text-[12px]">{wizardLoading ? 'progress_activity' : 'arrow_forward'}</span>
-                  {es.wizardNext || 'Next'}
+                  {es.wizardNext}
                 </button>
               </div>
             )}
             {(wizardStep.done || wizardStep.complete) && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-mac-green/10 text-mac-green text-[11px] font-bold">
                 <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                {es.wizardDone || 'Wizard completed'}
+                {es.wizardDone}
               </div>
             )}
             {wizardStep.result && (
@@ -311,7 +311,7 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
         {!wizardSessionId && !wizardStep && (
           <div className="flex flex-col items-center justify-center py-8 text-slate-400 dark:text-white/20">
             <span className="material-symbols-outlined text-3xl mb-2">auto_fix_high</span>
-            <p className="text-[11px]">{es.wizardHint || 'Start the wizard to configure your Gateway step by step'}</p>
+            <p className="text-[11px]">{es.wizardHint}</p>
           </div>
         )}
       </div>
@@ -320,22 +320,22 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
       <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center gap-2">
           <span className="material-symbols-outlined text-[16px] text-teal-500">edit_attributes</span>
-          <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.configSetTitle || 'Set Config Key'}</h3>
+          <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.configSetTitle}</h3>
         </div>
         <div className="p-4 space-y-2">
-          <p className="text-[10px] text-slate-400 dark:text-white/35">{es.configSetDesc || 'Set a single configuration key on the Gateway (dot-path notation)'}</p>
+          <p className="text-[10px] text-slate-400 dark:text-white/35">{es.configSetDesc}</p>
           <div className="flex gap-2">
             <input value={setKey} onChange={e => setSetKey(e.target.value)}
-              placeholder={es.configSetKeyPlaceholder || 'e.g. models.primary'}
+              placeholder={es.configSetKeyPlaceholder}
               className="flex-1 h-8 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none" />
             <input value={setVal} onChange={e => setSetVal(e.target.value)}
-              placeholder={es.configSetValPlaceholder || 'value (JSON or string)'}
+              placeholder={es.configSetValPlaceholder}
               onKeyDown={e => e.key === 'Enter' && handleConfigSet()}
               className="flex-1 h-8 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none" />
             <button onClick={handleConfigSet} disabled={setSending || !setKey.trim()}
               className="h-8 px-3 bg-teal-500 text-white text-[10px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1 transition-all hover:bg-teal-600">
               <span className="material-symbols-outlined text-[12px]">{setSending ? 'progress_activity' : 'check'}</span>
-              {es.configSetBtn || 'Set'}
+              {es.configSetBtn}
             </button>
           </div>
           {setResult && (
