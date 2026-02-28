@@ -451,6 +451,10 @@
   "serve.port_conflict_http": "127.0.0.1:{{.Port}} 返回 HTTP {{.Code}}（响应片段: {{.Body}}）",
   "serve.port_conflict_request_failed": "127.0.0.1:{{.Port}} 请求失败（{{.Error}}）",
 
+  "diagnostics.level_warning": "警告",
+  "diagnostics.gateway_status_placeholder": "网关状态未检查（占位）",
+  "diagnostics.implement_health_check": "实现网关健康检查",
+
   "service.get_gateway_config_failed": "获取网关配置失败: {{.Error}}",
   "service.gateway_restart_failed": "网关重启失败: {{.Error}}",
   "service.start_gateway_process_failed": "启动网关进程失败: {{.Error}}",
