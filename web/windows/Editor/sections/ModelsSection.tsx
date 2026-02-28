@@ -778,6 +778,19 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, setField, getFie
                       className="w-full h-8 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-md px-3 text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-primary" />
                   </div>
                 )}
+                {preset.id === 'custom' && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.apiType}</label>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {API_OPTIONS.slice(0, 3).map(o => (
+                        <button key={o.value} onClick={() => setWizApiType(o.value)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium border-2 transition-all ${wizApiType === o.value ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 dark:border-white/10 text-slate-500'}`}>
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-end">
                   <button onClick={() => setWizardStep(2)} className="px-4 py-1.5 bg-primary text-white text-[11px] font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1">
                     {es.next}<span className="material-symbols-outlined text-[14px]">chevron_right</span>
@@ -968,18 +981,20 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, setField, getFie
           <AccordionStep stepNum={4} icon="tune" title={es.confirmConfig} summary={stepSummaries[3]} open={wizardStep === 3} done={false} onToggle={() => wizFinalModel && setWizardStep(3)}>
             {preset && (
               <div className="space-y-3 pt-3">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.apiType}</label>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {API_OPTIONS.slice(0, 3).map(o => (
-                      <button key={o.value} onClick={() => setWizApiType(o.value)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium border-2 transition-all ${wizApiType === o.value ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 dark:border-white/10 text-slate-500'}`}>
-                        {o.label}
-                      </button>
-                    ))}
+                {preset.id !== 'custom' && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.apiType}</label>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {API_OPTIONS.slice(0, 3).map(o => (
+                        <button key={o.value} onClick={() => setWizApiType(o.value)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium border-2 transition-all ${wizApiType === o.value ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 dark:border-white/10 text-slate-500'}`}>
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                {!preset.needsBaseUrl && preset.category !== 'local' && (
+                )}
+                {!preset.needsBaseUrl && preset.category !== 'local' && preset.id !== 'custom' && (
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.baseUrlOptional}</label>
                     <input type="text" value={wizBaseUrl} onChange={e => setWizBaseUrl(e.target.value)} placeholder={selectedProviderDefaults.baseUrl}
