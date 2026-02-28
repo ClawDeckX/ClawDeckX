@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"ClawDeckX/internal/i18n"
 	"bufio"
 	"fmt"
 	"os"
@@ -46,11 +47,11 @@ func AskOptionalString(label string) (string, error) {
 }
 
 func AskBool(label string, defaultValue bool) (bool, error) {
-	defaultText := "否"
+	defaultText := i18n.T(i18n.MsgPromptDefaultNo)
 	if defaultValue {
-		defaultText = "是"
+		defaultText = i18n.T(i18n.MsgPromptDefaultYes)
 	}
-	fmt.Printf("%s [默认:%s]: ", label, defaultText)
+	fmt.Print(i18n.T(i18n.MsgPromptDefaultLabel, map[string]interface{}{"Label": label, "Default": defaultText}))
 
 	reader := bufio.NewReader(os.Stdin)
 	text, err := reader.ReadString('\n')
@@ -61,10 +62,10 @@ func AskBool(label string, defaultValue bool) (bool, error) {
 	if text == "" {
 		return defaultValue, nil
 	}
-	if text == "y" || text == "yes" || text == "是" || text == "true" {
+	if text == "y" || text == "yes" || text == i18n.T(i18n.MsgPromptDefaultYes) || text == "true" {
 		return true, nil
 	}
-	if text == "n" || text == "no" || text == "否" || text == "false" {
+	if text == "n" || text == "no" || text == i18n.T(i18n.MsgPromptDefaultNo) || text == "false" {
 		return false, nil
 	}
 	return defaultValue, nil
@@ -88,15 +89,15 @@ func AskSelect(label string, options []Option, defaultValue string) (string, err
 			line += "  - " + opt.Hint
 		}
 		if opt.Value == defaultValue {
-			line += " [默认]"
+			line += i18n.T(i18n.MsgPromptDefaultMarker)
 			defaultIndex = i + 1
 		}
 		fmt.Println(line)
 	}
 	if defaultIndex > 0 {
-		fmt.Printf("输入序号 [%d]: ", defaultIndex)
+		fmt.Print(i18n.T(i18n.MsgPromptEnterNumberWithDefault, map[string]interface{}{"Default": defaultIndex}))
 	} else {
-		fmt.Printf("输入序号: ")
+		fmt.Print(i18n.T(i18n.MsgPromptEnterNumber))
 	}
 
 	reader := bufio.NewReader(os.Stdin)
