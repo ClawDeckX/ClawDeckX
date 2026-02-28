@@ -15,10 +15,10 @@ import (
 )
 
 type InstallConfig struct {
-	Provider string `json:"provider"` // anthropic | openai | ...
-	APIKey   string `json:"apiKey"`
-	Model    string `json:"model,omitempty"`
-	BaseURL  string `json:"baseUrl,omitempty"`
+	Provider          string `json:"provider"` // anthropic | openai | ...
+	APIKey            string `json:"apiKey"`
+	Model             string `json:"model,omitempty"`
+	BaseURL           string `json:"baseUrl,omitempty"`
 	Version           string `json:"version,omitempty"`           // "openclaw"
 	Registry          string `json:"registry,omitempty"`          // npm 镜像源
 	SkipConfig        bool   `json:"skipConfig,omitempty"`        // 跳过配置
@@ -67,37 +67,37 @@ func (i *Installer) newSC(phase, step string) *StreamCommand {
 
 func (i *Installer) InstallNode(ctx context.Context) error {
 	if i.env.Tools["node"].Installed {
-		i.emitter.EmitLog("Node.js 已安装，跳过")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodeAlreadyInstalled))
 		return nil
 	}
 
-	i.emitter.EmitStep("install", "install-node", "正在安装 Node.js...", 10)
+	i.emitter.EmitStep("install", "install-node", i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": "Node.js"}), 10)
 
-	i.emitter.EmitLog("尝试使用系统包管理器安装...")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodeTryingPkgManager))
 	if err := i.installNodeViaPackageManager(ctx); err == nil {
 		if i.verifyNodeInstalled() {
-			i.emitter.EmitLog("✓ Node.js 通过系统包管理器安装成功")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodePkgManagerSuccess))
 			return nil
 		}
-		i.emitter.EmitLog("⚠ 系统包管理器安装完成但未检测到命令，可能需要重启")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodePkgManagerRestart))
 	} else {
-		i.emitter.EmitLog(fmt.Sprintf("系统包管理器安装失败: %v", err))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodePkgManagerFailed, map[string]interface{}{"Error": err.Error()}))
 	}
 
 	if runtime.GOOS != "linux" || i.env.HasSudo {
-		i.emitter.EmitLog("尝试使用 fnm 安装...")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodeTryingFnm))
 		if err := i.installNodeViaFnm(ctx); err == nil {
 			if i.verifyNodeInstalled() {
-				i.emitter.EmitLog("✓ Node.js 通过 fnm 安装成功")
+				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodeFnmSuccess))
 				return nil
 			}
-			i.emitter.EmitLog("⚠ fnm 安装完成但未检测到命令，可能需要重启")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodeFnmRestart))
 		} else {
-			i.emitter.EmitLog(fmt.Sprintf("fnm 安装失败: %v", err))
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodeFnmFailed, map[string]interface{}{"Error": err.Error()}))
 		}
 	}
 
-	i.emitter.EmitLog("自动安装失败，请手动安装 Node.js")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodeManualRequired))
 	return i.provideNodeInstallGuide()
 }
 
@@ -196,11 +196,11 @@ func (i *Installer) provideNodeInstallGuide() error {
 
 func (i *Installer) InstallGit(ctx context.Context) error {
 	if i.env.Tools["git"].Installed {
-		i.emitter.EmitLog("Git 已安装，跳过")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGitAlreadyInstalled))
 		return nil
 	}
 
-	i.emitter.EmitStep("install", "install-git", "正在安装 Git...", 15)
+	i.emitter.EmitStep("install", "install-git", i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": "Git"}), 15)
 
 	cmd := getGitInstallCommand(i.env)
 	if cmd == "" {
@@ -212,13 +212,13 @@ func (i *Installer) InstallGit(ctx context.Context) error {
 		return fmt.Errorf(i18n.T(i18n.MsgErrGitInstallFailed), err)
 	}
 
-	i.emitter.EmitLog("Git 安装成功")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGitSuccess))
 	return nil
 }
 
 func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 	if i.env.OpenClawInstalled {
-		i.emitter.EmitLog("OpenClaw 已安装，跳过")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawAlreadyInstalled))
 		return nil
 	}
 
@@ -226,7 +226,7 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 
 	npmAvailable := i.env.Tools["npm"].Installed || detectTool("npm", "--version").Installed
 	if npmAvailable {
-		i.emitter.EmitLog("尝试使用 npm 安装...")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawTryingNpm))
 		if err := i.installViaNpm(ctx); err == nil {
 			if i.verifyOpenClawInstalled() {
 				i.emitter.EmitLog("✓ OpenClaw 通过 npm 安装成功")
@@ -239,15 +239,15 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 	}
 
 	if i.env.RecommendedMethod == "installer-script" || i.env.Tools["curl"].Installed {
-		i.emitter.EmitLog("尝试使用官方安装脚本...")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawTryingScript))
 		if err := i.installViaScript(ctx); err == nil {
 			if i.verifyOpenClawInstalled() {
-				i.emitter.EmitLog("✓ OpenClaw 通过安装脚本安装成功")
+				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawScriptSuccess))
 				return nil
 			}
-			i.emitter.EmitLog("⚠ 安装脚本完成但未检测到命令，可能需要重启")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawScriptRestart))
 		} else {
-			i.emitter.EmitLog(fmt.Sprintf("安装脚本失败: %v", err))
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawScriptFailed, map[string]interface{}{"Error": err.Error()}))
 		}
 	}
 
@@ -257,27 +257,27 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 
 func (i *Installer) InstallClawHub(ctx context.Context, registry string) error {
 	if detectTool("clawhub", "--version").Installed {
-		i.emitter.EmitLog("ClawHub CLI 已安装，跳过")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubAlreadyInstalled))
 		return nil
 	}
 
-	i.emitter.EmitStep("install", "install-clawhub", "正在安装 ClawHub CLI...", 40)
+	i.emitter.EmitStep("install", "install-clawhub", i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": "ClawHub CLI"}), 40)
 
 	if !i.env.Tools["npm"].Installed {
-		i.emitter.EmitLog("⚠️ npm 不可用，跳过 ClawHub CLI 安装")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubNpmUnavailable))
 		return nil // 非致命错误
 	}
 
-	i.emitter.EmitLog("使用 npm 全局安装 clawhub...")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubInstalling))
 	if err := i.installViaNpmWithOptions(ctx, "clawhub", registry); err != nil {
 		i.emitter.EmitLog(fmt.Sprintf("⚠️ ClawHub CLI 安装失败: %v（跳过）", err))
 		return nil // 非致命错误，不阻断安装流程
 	}
 
 	if detectTool("clawhub", "--version").Installed {
-		i.emitter.EmitLog("✓ ClawHub CLI 安装成功")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubSuccess))
 	} else {
-		i.emitter.EmitLog("⚠️ ClawHub CLI 安装完成但未检测到命令，可能需要重启")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubRestart))
 	}
 	return nil
 }
