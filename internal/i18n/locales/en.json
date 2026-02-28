@@ -470,6 +470,8 @@
 
   "output.debug_prefix": "[Debug] ",
 
+  "cli.default_config_generated": "Default configuration generated via config set",
+
   "service.get_gateway_config_failed": "Failed to get gateway config: {{.Error}}",
   "service.gateway_restart_failed": "Gateway restart failed: {{.Error}}",
   "service.start_gateway_process_failed": "Failed to start gateway process: {{.Error}}",
