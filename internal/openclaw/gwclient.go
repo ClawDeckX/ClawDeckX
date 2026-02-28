@@ -18,7 +18,6 @@ import (
 	"ClawDeckX/internal/logger"
 )
 
-
 type RequestFrame struct {
 	Type   string      `json:"type"`   // "req"
 	ID     string      `json:"id"`     // uuid
@@ -77,7 +76,6 @@ type ConnectAuth struct {
 	Password string `json:"password,omitempty"`
 }
 
-
 type GWClientConfig struct {
 	Host  string // Gateway 地址
 	Port  int    // Gateway 端口
@@ -85,7 +83,6 @@ type GWClientConfig struct {
 }
 
 type GWEventHandler func(event string, payload json.RawMessage)
-
 
 type GWClient struct {
 	cfg       GWClientConfig
@@ -368,7 +365,7 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 			return nil, errors.New(i18n.T(i18n.MsgErrConnectionClosed))
 		}
 		if !resp.OK {
-			msg := "未知错误"
+			msg := i18n.T(i18n.MsgGwclientUnknownError)
 			if resp.Error != nil {
 				msg = resp.Error.Message
 			}
@@ -384,7 +381,6 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 		return nil, errors.New(i18n.T(i18n.MsgErrClientStopped))
 	}
 }
-
 
 func (c *GWClient) connectLoop() {
 	for {
