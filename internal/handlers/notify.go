@@ -6,6 +6,7 @@ import (
 
 	"ClawDeckX/internal/constants"
 	"ClawDeckX/internal/database"
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/notify"
 	"ClawDeckX/internal/openclaw"
@@ -130,7 +131,7 @@ func (h *NotifyHandler) TestSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Message == "" {
-		req.Message = "🔔 ClawDeckX 通知测试 / Notification Test"
+		req.Message = i18n.T(i18n.MsgNotifyTestMessage)
 	}
 
 	if !h.manager.HasChannels() {
