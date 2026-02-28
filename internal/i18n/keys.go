@@ -540,6 +540,10 @@ const (
 	MsgTrayOpenWebUI = "tray.open_web_ui"
 	MsgTrayAddress   = "tray.address"
 	MsgTrayQuit      = "tray.quit"
+
+	// Auth messages
+	MsgAuthUsernameTooShort = "auth.username_too_short"
+	MsgAuthUsernameExists   = "auth.username_exists"
 )
 
 // CLI messages (openclaw cli wrapper)
