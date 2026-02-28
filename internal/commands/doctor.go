@@ -306,17 +306,17 @@ func runDoctorFixes(configPath string, report doctorReport) error {
 
 func renderReport(report doctorReport) string {
 	b := &strings.Builder{}
-	fmt.Fprintln(b, output.Colorize("title", "诊断"))
+	fmt.Fprintln(b, output.Colorize("title", i18n.T(i18n.MsgDoctorTitle)))
 	fmt.Fprintln(b, output.Colorize("dim", "===="))
 	if len(report.Issues) == 0 {
-		fmt.Fprintln(b, output.Colorize("success", "未发现问题。"))
+		fmt.Fprintln(b, output.Colorize("success", i18n.T(i18n.MsgDoctorNoIssues)))
 		return b.String()
 	}
 
 	for _, issue := range report.Issues {
 		fmt.Fprintf(b, "%s %s\n", colorDoctorLevel(issue.Level), issue.Message)
 		if issue.Suggestion != "" {
-			fmt.Fprintf(b, "  %s %s\n", output.Colorize("dim", "建议:"), issue.Suggestion)
+			fmt.Fprintf(b, "  %s %s\n", output.Colorize("dim", i18n.T(i18n.MsgDoctorSuggestion)), issue.Suggestion)
 		}
 	}
 	return b.String()
@@ -324,12 +324,12 @@ func renderReport(report doctorReport) string {
 
 func colorDoctorLevel(level string) string {
 	switch strings.TrimSpace(level) {
-	case "错误":
-		return output.Colorize("danger", "[错误]")
-	case "警告":
-		return output.Colorize("warning", "[警告]")
-	case "信息":
-		return output.Colorize("accent", "[信息]")
+	case "error":
+		return output.Colorize("danger", i18n.T(i18n.MsgDoctorLevelError))
+	case "warning":
+		return output.Colorize("warning", i18n.T(i18n.MsgDoctorLevelWarning))
+	case "info":
+		return output.Colorize("accent", i18n.T(i18n.MsgDoctorLevelInfo))
 	default:
 		return "[" + level + "]"
 	}
