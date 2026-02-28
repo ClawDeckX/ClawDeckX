@@ -280,12 +280,12 @@ func (c *GWClient) healthCheckLoop() {
 					if restartErr := restartFn(); restartErr != nil {
 						logger.Gateway.Error().Err(restartErr).Msg(i18n.T(i18n.MsgLogHeartbeatRestartFailed))
 						if notifyFn != nil {
-							go notifyFn("\U0001f6a8 OpenClaw Gateway 心跳检测失败，自动重启也失败: " + restartErr.Error())
+							go notifyFn(i18n.T(i18n.MsgNotifyHeartbeatRestartFailed) + restartErr.Error())
 						}
 					} else {
 						logger.Gateway.Info().Msg(i18n.T(i18n.MsgLogHeartbeatRestartSuccess))
 						if notifyFn != nil {
-							go notifyFn("\u26a0\ufe0f OpenClaw Gateway 心跳检测失败，已自动重启成功")
+							go notifyFn(i18n.T(i18n.MsgNotifyHeartbeatRestartSuccess))
 						}
 					}
 					continue

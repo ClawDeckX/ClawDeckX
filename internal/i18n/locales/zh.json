@@ -488,5 +488,8 @@
   "error.config_set_fallback_failed": "config set 降级也失败: onboard 错误: %v, config set 错误: %w",
   "error.parse_pairing_list_failed": "解析配对列表失败: %w",
   "error.gateway_cli_not_found": "未找到 OpenClaw gateway-cli 文件: %s",
-  "error.target_fragment_not_found": "文件未找到目标片段: %s"
+  "error.target_fragment_not_found": "文件未找到目标片段: %s",
+
+  "notify.heartbeat_restart_failed": "🚨 OpenClaw Gateway 心跳检测失败，自动重启也失败: ",
+  "notify.heartbeat_restart_success": "⚠️ OpenClaw Gateway 心跳检测失败，已自动重启成功"
 }

@@ -583,3 +583,9 @@ const (
 	MsgErrGatewayCliNotFound           = "error.gateway_cli_not_found"
 	MsgErrTargetFragmentNotFound       = "error.target_fragment_not_found"
 )
+
+// Notification messages
+const (
+	MsgNotifyHeartbeatRestartFailed  = "notify.heartbeat_restart_failed"
+	MsgNotifyHeartbeatRestartSuccess = "notify.heartbeat_restart_success"
+)

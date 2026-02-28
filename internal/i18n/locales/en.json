@@ -488,5 +488,8 @@
   "error.config_set_fallback_failed": "config set fallback also failed: onboard error: %v, config set error: %w",
   "error.parse_pairing_list_failed": "Failed to parse pairing list: %w",
   "error.gateway_cli_not_found": "OpenClaw gateway-cli file not found: %s",
-  "error.target_fragment_not_found": "Target fragment not found in file: %s"
+  "error.target_fragment_not_found": "Target fragment not found in file: %s",
+
+  "notify.heartbeat_restart_failed": "🚨 OpenClaw Gateway heartbeat check failed, auto-restart also failed: ",
+  "notify.heartbeat_restart_success": "⚠️ OpenClaw Gateway heartbeat check failed, auto-restart succeeded"
 }
