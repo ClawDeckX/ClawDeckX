@@ -415,6 +415,16 @@
   "scanner.warn_disk_space_low": "Disk space is low ({{.FreeGB}} GB), recommend at least 1 GB",
   "scanner.warn_wsl_environment": "WSL environment detected, some features may be limited",
 
+  "service.runtime_systemd": "Service: openclaw",
+  "service.runtime_docker_not_found": "openclaw container not found",
+  "service.runtime_docker_container": "Container: {{.Name}}",
+  "service.runtime_process": "Process mode",
+  "service.runtime_unknown": "OpenClaw installation or runtime not detected",
+  "service.runtime_running": " (running)",
+  "service.remote_gateway_unreachable": "Remote Gateway {{.Addr}} unreachable: {{.Error}}",
+  "service.remote_gateway_tcp_reachable": "Remote Gateway {{.Addr}} (TCP reachable)",
+  "service.remote_gateway_http_ok": "Remote Gateway {{.Addr}} (HTTP OK, status {{.Code}})",
+
   "service.get_gateway_config_failed": "Failed to get gateway config: {{.Error}}",
   "service.gateway_restart_failed": "Gateway restart failed: {{.Error}}",
   "service.start_gateway_process_failed": "Failed to start gateway process: {{.Error}}",
