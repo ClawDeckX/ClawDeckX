@@ -605,12 +605,10 @@ func RunServe(args []string) int {
 	// 警告1：绑定 0.0.0.0 有访问风险
 	if cfg.Server.Bind == "0.0.0.0" || cfg.Server.Bind == "" {
 		fmt.Printf("  ╠════════════════════════════════════════════════════════════╣\n")
-		fmt.Printf("  ║  %s║\n", padLine("⚠️  访问风险提示 / Access Risk Warning"))
-		fmt.Printf("  ║  %s║\n", padLine("当前绑定 0.0.0.0，局域网内任何设备均可访问"))
-		fmt.Printf("  ║  %s║\n", padLine("Binding 0.0.0.0 - accessible from any device on LAN"))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServeAccessWarning)))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServeBindAllWarning)))
 		fmt.Printf("  ║  %s║\n", padLine(""))
-		fmt.Printf("  ║  %s║\n", padLine("💡 可在 系统设置 → 账户安全 中修改绑定配置"))
-		fmt.Printf("  ║  %s║\n", padLine("   Settings → Account Security to change binding"))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServeChangeBindingHint)))
 		hasWarning = true
 	}
 
@@ -621,15 +619,13 @@ func RunServe(args []string) int {
 		} else {
 			fmt.Printf("  ╟────────────────────────────────────────────────────────────╢\n")
 		}
-		fmt.Printf("  ║  %s║\n", padLine("🔐 首次启动已自动创建管理员账户"))
-		fmt.Printf("  ║  %s║\n", padLine("   First-time setup: admin account created"))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServeFirstTimeSetup)))
 		fmt.Printf("  ║  %s║\n", padLine(""))
-		fmt.Printf("  ║  %s║\n", padLine(fmt.Sprintf("   用户名 / Username: %s", generatedUsername)))
-		fmt.Printf("  ║  %s║\n", padLine(fmt.Sprintf("   密码 / Password:   %s", generatedPassword)))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServeUsernameLabel, map[string]interface{}{"Username": generatedUsername})))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServePasswordLabel, map[string]interface{}{"Password": generatedPassword})))
 		fmt.Printf("  ║  %s║\n", padLine(""))
-		fmt.Printf("  ║  %s║\n", padLine("⚠️  请登录后立即修改用户名和密码！"))
-		fmt.Printf("  ║  %s║\n", padLine("   Please change username & password after login!"))
-		fmt.Printf("  ║  %s║\n", padLine("   系统设置 → 账户安全 / Settings → Account Security"))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServeChangePasswordWarning)))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServeChangePasswordHint)))
 		hasWarning = true
 	}
 
@@ -642,7 +638,7 @@ func RunServe(args []string) int {
 
 	if cfg.Server.Bind == "0.0.0.0" || cfg.Server.Bind == "" {
 		// 绑定所有接口，显示所有本机 IP
-		fmt.Printf("  ║  %s║\n", padLine("可通过以下地址访问 / Access URLs:"))
+		fmt.Printf("  ║  %s║\n", padLine(i18n.T(i18n.MsgServeAccessUrls)))
 		fmt.Printf("  ╟────────────────────────────────────────────────────────────╢\n")
 		fmt.Printf("  ║  %s║\n", padLine(fmt.Sprintf("➜ http://localhost:%d", cfg.Server.Port)))
 		fmt.Printf("  ║  %s║\n", padLine(fmt.Sprintf("➜ http://127.0.0.1:%d", cfg.Server.Port)))

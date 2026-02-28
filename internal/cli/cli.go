@@ -8,8 +8,11 @@ import (
 
 	"ClawDeckX/internal/appconfig"
 	"ClawDeckX/internal/commands"
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/output"
 	"ClawDeckX/internal/version"
+
+	"golang.org/x/term"
 )
 
 func Run(args []string) int {
@@ -21,6 +24,17 @@ func Run(args []string) int {
 	}
 	output.SetDebug(cfg.IsDebug())
 	output.Debugf("已加载配置: %s mode=%s\n", cfgPath, cfg.Mode)
+
+	// Initialize i18n
+	i18n.Init()
+
+	// Language selection for interactive terminal mode (serve command only)
+	if isInteractiveMode(args) && isTerminal() {
+		i18n.SelectLanguageWithTimeout(5)
+	} else {
+		// Non-interactive: use system language
+		i18n.SetLanguage(i18n.DetectSystemLanguage())
+	}
 
 	if len(args) < 2 {
 		return commands.RunServe(nil)
@@ -117,4 +131,25 @@ func PrintError(err error) {
 	}
 	output.Printf("错误: %s\n", err)
 	os.Exit(1)
+}
+
+// isInteractiveMode checks if the CLI is running in interactive mode (serve command).
+func isInteractiveMode(args []string) bool {
+	if len(args) < 2 {
+		return true // Default to serve
+	}
+	cmd := args[1]
+	// Non-interactive commands
+	nonInteractive := []string{"-h", "--help", "help", "-v", "--version", "version", "doctor", "settings", "reset-password"}
+	for _, ni := range nonInteractive {
+		if cmd == ni {
+			return false
+		}
+	}
+	return true
+}
+
+// isTerminal checks if stdin is a terminal (not piped or redirected).
+func isTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
