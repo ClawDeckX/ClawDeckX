@@ -494,22 +494,25 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
               <p className="text-[9px] text-slate-400 dark:text-white/30">{text.riskHint || '24小时内'}</p>
             </div>
             {totalRisk > 0 ? (
-              <>
-                <div className="h-3 rounded-full overflow-hidden flex">
-                  <div className="bg-emerald-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.low || 0) / totalRisk) * 100 : 0}%` }} title={`${text.riskLow}: ${overview?.riskCounts?.low || 0}`} />
-                  <div className="bg-amber-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.medium || 0) / totalRisk) * 100 : 0}%` }} title={`${text.riskMedium}: ${overview?.riskCounts?.medium || 0}`} />
-                  <div className="bg-orange-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.high || 0) / totalRisk) * 100 : 0}%` }} title={`${text.riskHigh}: ${overview?.riskCounts?.high || 0}`} />
-                  <div className="bg-red-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.critical || 0) / totalRisk) * 100 : 0}%` }} title={`${text.riskCritical}: ${overview?.riskCounts?.critical || 0}`} />
-                </div>
-                <div className="mt-3 space-y-1.5 text-[11px]">
-                  <div className="flex items-center justify-between"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span><span className="text-slate-600 dark:text-white/70">{text.riskLow}</span></span><span className="font-bold text-slate-700 dark:text-white/80">{overview?.riskCounts?.low || 0}</span></div>
-                  <div className="flex items-center justify-between"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span><span className="text-slate-600 dark:text-white/70">{text.riskMedium}</span></span><span className="font-bold text-slate-700 dark:text-white/80">{overview?.riskCounts?.medium || 0}</span></div>
-                  <div className="flex items-center justify-between"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span><span className="text-slate-600 dark:text-white/70">{text.riskHigh}</span></span><span className="font-bold text-slate-700 dark:text-white/80">{overview?.riskCounts?.high || 0}</span></div>
-                  <div className="flex items-center justify-between"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span><span className="text-slate-600 dark:text-white/70">{text.riskCritical}</span></span><span className="font-bold text-slate-700 dark:text-white/80">{overview?.riskCounts?.critical || 0}</span></div>
-                </div>
-              </>
+              <div className="space-y-2">
+                {[
+                  { key: 'low', color: 'bg-emerald-500', label: text.riskLow, count: overview?.riskCounts?.low || 0 },
+                  { key: 'medium', color: 'bg-amber-500', label: text.riskMedium, count: overview?.riskCounts?.medium || 0 },
+                  { key: 'high', color: 'bg-orange-500', label: text.riskHigh, count: overview?.riskCounts?.high || 0 },
+                  { key: 'critical', color: 'bg-red-500', label: text.riskCritical, count: overview?.riskCounts?.critical || 0 },
+                ].map(({ key, color, label, count }) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${color} shrink-0`}></span>
+                    <span className="text-[11px] text-slate-600 dark:text-white/70 w-8">{label}</span>
+                    <div className="flex-1 h-4 bg-slate-100 dark:bg-white/[0.04] rounded overflow-hidden">
+                      <div className={`h-full ${color} transition-all`} style={{ width: `${Math.min(100, (count / totalRisk) * 100)}%` }} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-700 dark:text-white/80 w-10 text-right">{count}</span>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <p className="text-[11px] text-slate-400 dark:text-white/40 py-6 text-center">{text.noRiskData || '暂无数据'}</p>
+              <p className="text-[11px] text-slate-400 dark:text-white/40 py-4 text-center">{text.noRiskData || '暂无数据'}</p>
             )}
           </div>
         </div>

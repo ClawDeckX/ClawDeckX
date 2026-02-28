@@ -119,6 +119,27 @@ type overviewResponse struct {
 	Actions    []overviewAction     `json:"actions"`
 }
 
+// dedupeCheckItems removes duplicate check items by ID, keeping the first occurrence.
+func dedupeCheckItems(items []CheckItem) []CheckItem {
+	seen := make(map[string]bool)
+	result := make([]CheckItem, 0, len(items))
+	for _, item := range items {
+		key := item.ID
+		if key == "" {
+			key = item.Code
+		}
+		if key == "" {
+			key = item.Name
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, item)
+	}
+	return result
+}
+
 // Run executes diagnostics.
 func (h *DoctorHandler) Run(w http.ResponseWriter, r *http.Request) {
 	var items []CheckItem
@@ -130,6 +151,9 @@ func (h *DoctorHandler) Run(w http.ResponseWriter, r *http.Request) {
 	items = append(items, h.checkPort())
 	items = append(items, h.checkDisk())
 	items = append(items, h.gatewayDiagnoseChecks()...)
+
+	// Deduplicate items by ID, keeping the first occurrence
+	items = dedupeCheckItems(items)
 
 	// compute score
 	score := 100
@@ -228,6 +252,7 @@ func (h *DoctorHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		"critical": int(riskMap24h["critical"]),
 	}
 	errors1h := int(riskMap1h["high"] + riskMap1h["critical"])
+	errors24h := int(riskMap24h["high"] + riskMap24h["critical"])
 
 	// Resource pressure from host memory percentage.
 	memUsedPct := collectSysMemory().UsedPct
@@ -251,7 +276,7 @@ func (h *DoctorHandler) Overview(w http.ResponseWriter, r *http.Request) {
 			ID:     "events24h",
 			Label:  "Events 24h",
 			Value:  float64(events24h),
-			Status: ternaryStatus(events24h < 20, events24h < 60),
+			Status: ternaryStatus(errors24h == 0, errors24h <= 5), // Status based on error count, not total events
 		},
 		{
 			ID:     "errors1h",
