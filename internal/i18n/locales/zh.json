@@ -309,6 +309,7 @@
   "installer.openclaw_post_install": "\n\n安装完成后:\n  1. 运行 'openclaw config set gateway.mode local' 初始化配置\n  2. 重启 ClawDeckX 应用\n  3. 访问文档: https://docs.openclaw.ai",
   "installer.openclaw_post_install_short": "\n\n安装完成后:\n  1. 运行 'openclaw config set gateway.mode local' 初始化配置\n  2. 重启 ClawDeckX 应用",
   "installer.executing_command": "执行: {{.Command}}",
+  "installer.configuring_openclaw": "正在配置 OpenClaw...",
 
   "service.get_gateway_config_failed": "获取网关配置失败: {{.Error}}",
   "service.gateway_restart_failed": "网关重启失败: {{.Error}}",

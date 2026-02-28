@@ -329,7 +329,7 @@ func (i *Installer) installViaScriptWithConfig(ctx context.Context, config Insta
 			return fmt.Errorf(i18n.T(i18n.MsgErrPowershellNotDetected))
 		}
 		cmd := fmt.Sprintf("iwr -useb %s.ps1 | iex -Command '& { $input | iex } --no-onboard'", scriptURL)
-		i.emitter.EmitLog(fmt.Sprintf("执行: %s", cmd))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerExecutingCommand, map[string]interface{}{"Command": cmd}))
 		return sc.RunShell(ctx, cmd)
 	}
 
@@ -338,7 +338,7 @@ func (i *Installer) installViaScriptWithConfig(ctx context.Context, config Insta
 	}
 
 	cmd := fmt.Sprintf("curl -fsSL %s.sh | bash -s -- --no-onboard", scriptURL)
-	i.emitter.EmitLog(fmt.Sprintf("执行: %s", cmd))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerExecutingCommand, map[string]interface{}{"Command": cmd}))
 	return sc.RunShell(ctx, cmd)
 }
 
@@ -350,13 +350,13 @@ func (i *Installer) installViaNpmWithOptions(ctx context.Context, version string
 	sc := i.newSC("install", "install-"+version)
 
 	pkgName := version + "@latest"
-	i.emitter.EmitLog(fmt.Sprintf("安装 %s...", version))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": version}))
 
 	cmd := "npm install -g " + pkgName
 
 	if registry != "" {
 		cmd += " --registry=" + registry
-		i.emitter.EmitLog(fmt.Sprintf("使用镜像源: %s", registry))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerUsingRegistry, map[string]interface{}{"Registry": registry}))
 	}
 
 	if runtime.GOOS != "windows" && os.Getuid() != 0 {
@@ -367,10 +367,10 @@ func (i *Installer) installViaNpmWithOptions(ctx context.Context, version string
 }
 
 func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig) error {
-	i.emitter.EmitStep("configure", "configure-openclaw", "正在配置 OpenClaw...", 60)
+	i.emitter.EmitStep("configure", "configure-openclaw", i18n.T(i18n.MsgInstallerConfiguringOpenclaw), 60)
 
 	cmdName := resolveOpenClawFullPath("openclaw")
-	i.emitter.EmitLog(fmt.Sprintf("使用命令: %s", cmdName))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerUsingCommand, map[string]interface{}{"Command": cmdName}))
 
 	args := []string{
 		"onboard",
@@ -385,7 +385,7 @@ func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig)
 	}
 
 	if config.Provider == "custom" || config.BaseURL != "" {
-		i.emitter.EmitLog("自定义服务商/端点，直接写入配置...")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerCustomProviderConfig))
 		return i.writeMinimalConfig(config)
 	}
 
@@ -404,7 +404,7 @@ func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig)
 		case "xai":
 			args = append(args, "--xai-api-key", config.APIKey)
 		case "deepseek", "together", "groq":
-			i.emitter.EmitLog(fmt.Sprintf("%s 使用 OpenAI 兼容 API，直接写入配置...", config.Provider))
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenaiCompatConfig, map[string]interface{}{"Provider": config.Provider}))
 			return i.writeMinimalConfig(config)
 		default:
 			args = append(args, "--auth-choice", "skip")
@@ -413,15 +413,15 @@ func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig)
 		args = append(args, "--auth-choice", "skip")
 	}
 
-	i.emitter.EmitLog(fmt.Sprintf("执行: %s %s", cmdName, strings.Join(maskSensitiveArgs(args), " ")))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerExecutingCommand, map[string]interface{}{"Command": cmdName + " " + strings.Join(maskSensitiveArgs(args), " ")}))
 
 	sc := NewStreamCommand(i.emitter, "configure", "onboard")
 	if err := sc.Run(ctx, cmdName, args...); err != nil {
-		i.emitter.EmitLog("onboard 命令失败，尝试写入最小配置...")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOnboardFailedFallback))
 		return i.writeMinimalConfig(config)
 	}
 
-	i.emitter.EmitLog("onboard 配置完成")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOnboardComplete))
 	return nil
 }
 

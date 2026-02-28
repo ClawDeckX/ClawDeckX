@@ -376,6 +376,7 @@ const (
 	MsgInstallerOpenclawPostInstall      = "installer.openclaw_post_install"
 	MsgInstallerOpenclawPostInstallShort = "installer.openclaw_post_install_short"
 	MsgInstallerExecutingCommand         = "installer.executing_command"
+	MsgInstallerConfiguringOpenclaw      = "installer.configuring_openclaw"
 )
 
 // Service messages
