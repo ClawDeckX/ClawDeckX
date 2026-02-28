@@ -9,34 +9,35 @@ import (
 	"strings"
 	"time"
 
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/openclaw"
 	"ClawDeckX/internal/output"
 )
 
 func Doctor(args []string) int {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
-	fix := fs.Bool("fix", false, "尝试安全修复")
-	fixRuntime := fs.Bool("fix-runtime", false, "修复 OpenClaw 运行时启动崩溃（networkInterfaces）")
-	rollbackRuntimeFix := fs.Bool("rollback-runtime-fix", false, "回滚 OpenClaw 运行时热修复（恢复最近备份）")
-	path := fs.String("path", "~/.openclaw/openclaw.json", "配置路径")
+	fix := fs.Bool("fix", false, i18n.T(i18n.MsgDoctorFixFlag))
+	fixRuntime := fs.Bool("fix-runtime", false, i18n.T(i18n.MsgDoctorFixRuntimeFlag))
+	rollbackRuntimeFix := fs.Bool("rollback-runtime-fix", false, i18n.T(i18n.MsgDoctorRollbackRuntimeFlag))
+	path := fs.String("path", "~/.openclaw/openclaw.json", i18n.T(i18n.MsgDoctorPathFlag))
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return 0
 		}
-		output.Printf("错误: %s\n", err)
+		output.Println(i18n.T(i18n.MsgCliError, map[string]interface{}{"Error": err.Error()}))
 		return 2
 	}
 
 	if *fixRuntime {
 		changed, err := fixOpenclawRuntimeNetworkInterfaces()
 		if err != nil {
-			output.Printf("运行时修复失败: %s\n", err)
+			output.Println(i18n.T(i18n.MsgDoctorRuntimeFixFailed, map[string]interface{}{"Error": err.Error()}))
 			return 1
 		}
 		if changed {
-			output.Println("运行时修复完成。")
+			output.Println(i18n.T(i18n.MsgDoctorRuntimeFixDone))
 		} else {
-			output.Println("运行时修复已是最新状态，无需修改。")
+			output.Println(i18n.T(i18n.MsgDoctorRuntimeFixUptodate))
 		}
 		if !*fix {
 			return 0
@@ -46,13 +47,13 @@ func Doctor(args []string) int {
 	if *rollbackRuntimeFix {
 		changed, err := rollbackOpenclawRuntimeFix()
 		if err != nil {
-			output.Printf("运行时回滚失败: %s\n", err)
+			output.Println(i18n.T(i18n.MsgDoctorRuntimeRollbackFailed, map[string]interface{}{"Error": err.Error()}))
 			return 1
 		}
 		if changed {
-			output.Println("运行时回滚完成。")
+			output.Println(i18n.T(i18n.MsgDoctorRuntimeRollbackDone))
 		} else {
-			output.Println("未找到可回滚的运行时备份。")
+			output.Println(i18n.T(i18n.MsgDoctorRuntimeRollbackNotfound))
 		}
 		if !*fix && !*fixRuntime {
 			return 0
@@ -65,10 +66,10 @@ func Doctor(args []string) int {
 
 	if *fix {
 		if err := runDoctorFixes(configPath, report); err != nil {
-			output.Printf("\n自动修复失败: %s\n", err)
+			output.Println("\n" + i18n.T(i18n.MsgDoctorAutofixFailed, map[string]interface{}{"Error": err.Error()}))
 			return 1
 		}
-		output.Println("\n自动修复完成。")
+		output.Println("\n" + i18n.T(i18n.MsgDoctorAutofixDone))
 		report = runDoctorChecks(configPath)
 		output.Println(renderReport(report))
 	}
@@ -298,7 +299,7 @@ func runDoctorFixes(configPath string, report doctorReport) error {
 	if changed, err := fixEnvConfig(expandPath("~/.openclaw/env")); err != nil {
 		return err
 	} else if changed {
-		output.Println("已自动修复环境变量配置。")
+		output.Println(i18n.T(i18n.MsgDoctorEnvFixDone))
 	}
 	return nil
 }
