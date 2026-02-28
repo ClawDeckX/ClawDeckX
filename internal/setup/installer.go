@@ -573,7 +573,7 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 		return fmt.Errorf(i18n.T(i18n.MsgErrWriteConfigFailed), err)
 	}
 
-	i.emitter.EmitLog(fmt.Sprintf("配置已写入: %s", configPath))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerConfigWritten, map[string]interface{}{"Path": configPath}))
 	return nil
 }
 
@@ -582,62 +582,62 @@ func (i *Installer) StartGateway(ctx context.Context) error {
 }
 
 func (i *Installer) StartGatewayWithConfig(ctx context.Context, config InstallConfig) error {
-	i.emitter.EmitStep("start", "check-config", "检查配置文件...", 76)
+	i.emitter.EmitStep("start", "check-config", i18n.T(i18n.MsgInstallerCheckingConfig), 76)
 
 	cfgPath := GetOpenClawConfigPath()
 	cfgExists, cfgValid, cfgDetail := checkConfigFileValid(cfgPath)
 	if !cfgExists {
-		i.emitter.EmitLog("⚠️ 配置文件不存在，跳过启动 Gateway")
-		i.emitter.EmitLog("请先在配置器中添加服务商和模型，再启动 Gateway")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerConfigNotExist))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerAddProviderFirst))
 		return nil
 	}
 	if !cfgValid {
-		i.emitter.EmitLog(fmt.Sprintf("⚠️ 配置文件异常: %s", cfgDetail))
-		i.emitter.EmitLog("请在配置器中修复配置后再启动 Gateway")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerConfigInvalid, map[string]interface{}{"Detail": cfgDetail}))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerFixConfigFirst))
 		return nil
 	}
-	i.emitter.EmitLog(fmt.Sprintf("✅ 配置文件正常: %s", cfgPath))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerConfigOk, map[string]interface{}{"Path": cfgPath}))
 
 	if checkOpenClawConfigured(cfgPath) {
-		i.emitter.EmitLog("✅ 模型服务商已配置")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerProviderConfigured))
 	} else {
-		i.emitter.EmitLog("⚠️ 尚未配置模型服务商，Gateway 启动后请在配置器中添加")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerProviderNotConfigured))
 	}
 
 	for countdown := 3; countdown > 0; countdown-- {
-		i.emitter.EmitLog(fmt.Sprintf("⏳ %d 秒后启动 Gateway...", countdown))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerCountdown, map[string]interface{}{"Seconds": countdown}))
 		time.Sleep(1 * time.Second)
 	}
 
-	i.emitter.EmitStep("start", "start-gateway", "正在启动 Gateway...", 80)
+	i.emitter.EmitStep("start", "start-gateway", i18n.T(i18n.MsgInstallerStartingGateway), 80)
 
 	svc := openclaw.NewService()
 	st := svc.Status()
 	if st.Running {
-		i.emitter.EmitLog(fmt.Sprintf("✅ Gateway 已在运行（%s）", st.Detail))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGatewayAlreadyRunning, map[string]interface{}{"Detail": st.Detail}))
 		return nil
 	}
 
-	i.emitter.EmitLog("正在启动 Gateway...")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerStartingGateway))
 	if err := svc.Start(); err != nil {
-		i.emitter.EmitLog(fmt.Sprintf("⚠️ 启动 Gateway 失败: %v", err))
-		i.emitter.EmitLog("可稍后在网关监控页面手动启动")
-		return nil // 不视为致命错误
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGatewayStartFailed, map[string]interface{}{"Error": err.Error()}))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGatewayManualStart))
+		return nil
 	}
 
-	i.emitter.EmitLog("⏳ 正在等待 Gateway 就绪...")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerWaitingGateway))
 	time.Sleep(2 * time.Second)
 	for attempt := 1; attempt <= 15; attempt++ {
 		st = svc.Status()
 		if st.Running {
-			i.emitter.EmitLog(fmt.Sprintf("✅ Gateway 已启动（%s）", st.Detail))
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGatewayStarted, map[string]interface{}{"Detail": st.Detail}))
 			return nil
 		}
-		i.emitter.EmitLog(fmt.Sprintf("⏳ 检测中...（%d/%d）", attempt, 15))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerCheckingGateway, map[string]interface{}{"Current": attempt, "Total": 15}))
 		time.Sleep(1 * time.Second)
 	}
 
-	i.emitter.EmitLog("⚠️ Gateway 30 秒内未就绪")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGatewayNotReady))
 	if stateDir := ResolveStateDir(); stateDir != "" {
 		logPath := filepath.Join(stateDir, "logs", "gateway.log")
 		if data, err := os.ReadFile(logPath); err == nil {
@@ -654,7 +654,7 @@ func (i *Installer) StartGatewayWithConfig(ctx context.Context, config InstallCo
 		}
 	}
 
-	i.emitter.EmitLog("可稍后在网关监控页面手动启动")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGatewayManualStart))
 	return nil
 }
 
