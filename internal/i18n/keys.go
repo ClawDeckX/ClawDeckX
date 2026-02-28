@@ -377,6 +377,8 @@ const (
 	MsgInstallerOpenclawPostInstallShort = "installer.openclaw_post_install_short"
 	MsgInstallerExecutingCommand         = "installer.executing_command"
 	MsgInstallerConfiguringOpenclaw      = "installer.configuring_openclaw"
+	MsgInstallerRunningDoctor            = "installer.running_doctor"
+	MsgInstallerVpnAlreadyInstalled      = "installer.vpn_already_installed"
 )
 
 // Service messages

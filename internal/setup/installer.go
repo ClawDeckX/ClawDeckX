@@ -194,7 +194,7 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 		return nil
 	}
 
-	i.emitter.EmitStep("install", "install-openclaw", "正在安装 OpenClaw...", 30)
+	i.emitter.EmitStep("install", "install-openclaw", i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": "OpenClaw"}), 30)
 
 	npmAvailable := i.env.Tools["npm"].Installed || detectTool("npm", "--version").Installed
 	if npmAvailable {
@@ -714,7 +714,7 @@ func getNpmGlobalBin() string {
 }
 
 func (i *Installer) RunDoctor(ctx context.Context) (*DoctorResult, error) {
-	i.emitter.EmitStep("verify", "doctor", "正在运行诊断...", 90)
+	i.emitter.EmitStep("verify", "doctor", i18n.T(i18n.MsgInstallerRunningDoctor), 90)
 
 	cmd := exec.CommandContext(ctx, "openclaw", "doctor")
 	output, err := cmd.CombinedOutput()
@@ -742,17 +742,17 @@ type DoctorResult struct {
 func (i *Installer) InstallVPNTool(ctx context.Context, tool string) error {
 	if tool == "zerotier" {
 		if detectTool("zerotier-cli", "--version").Installed {
-			i.emitter.EmitLog("ZeroTier 已安装，跳过")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerVpnAlreadyInstalled, map[string]interface{}{"Tool": "ZeroTier"}))
 			return nil
 		}
 	} else if tool == "tailscale" {
 		if detectTool("tailscale", "version").Installed {
-			i.emitter.EmitLog("Tailscale 已安装，跳过")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerVpnAlreadyInstalled, map[string]interface{}{"Tool": "Tailscale"}))
 			return nil
 		}
 	}
 
-	i.emitter.EmitStep("install", "install-"+tool, fmt.Sprintf("正在安装 %s...", tool), 45)
+	i.emitter.EmitStep("install", "install-"+tool, i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": tool}), 45)
 	sc := i.newSC("install", "install-"+tool)
 
 	switch tool {
