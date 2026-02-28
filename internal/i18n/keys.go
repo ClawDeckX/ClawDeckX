@@ -553,6 +553,9 @@ const (
 
 	// Owner messages
 	MsgOwnerUnknown = "owner.unknown"
+
+	// Output messages
+	MsgOutputDebugPrefix = "output.debug_prefix"
 )
 
 // CLI messages (openclaw cli wrapper)
