@@ -21,7 +21,7 @@ import (
 type RequestFrame struct {
 	Type   string      `json:"type"`   // "req"
 	ID     string      `json:"id"`     // uuid
-	Method string      `json:"method"` // 方法名
+	Method string      `json:"method"` // method name
 	Params interface{} `json:"params,omitempty"`
 }
 
@@ -77,9 +77,9 @@ type ConnectAuth struct {
 }
 
 type GWClientConfig struct {
-	Host  string // Gateway 地址
-	Port  int    // Gateway 端口
-	Token string // 鉴权 Token
+	Host  string // Gateway address
+	Port  int    // Gateway port
+	Token string // auth token
 }
 
 type GWEventHandler func(event string, payload json.RawMessage)
@@ -98,15 +98,15 @@ type GWClient struct {
 	backoffMs      int
 
 	healthMu        sync.Mutex
-	healthEnabled   bool          // 是否启用心跳自动重启
-	healthInterval  time.Duration // 探测间隔（默认 30s）
-	healthMaxFails  int           // 连续失败阈值（默认 3）
-	healthFailCount int           // 当前连续失败次数
-	healthLastOK    time.Time     // 上次成功时间
+	healthEnabled   bool          // enable heartbeat auto-restart
+	healthInterval  time.Duration // probe interval (default 30s)
+	healthMaxFails  int           // consecutive failure threshold (default 3)
+	healthFailCount int           // current consecutive failure count
+	healthLastOK    time.Time     // last success time
 	healthStopCh    chan struct{}
 	healthRunning   bool
-	onRestart       func() error // 重启回调（由外部注入）
-	onNotify        func(string) // 通知回调（由外部注入）
+	onRestart       func() error // restart callback (injected externally)
+	onNotify        func(string) // notify callback (injected externally)
 }
 
 func NewGWClient(cfg GWClientConfig) *GWClient {
@@ -647,7 +647,7 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 				Int("port", c.cfg.Port).
 				Msg(i18n.T(i18n.MsgLogGatewayWsConnected))
 		} else {
-			msg := "未知错误"
+			msg := i18n.T(i18n.MsgGwclientUnknownError)
 			if resp != nil && resp.Error != nil {
 				msg = resp.Error.Message
 			}

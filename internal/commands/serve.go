@@ -499,7 +499,7 @@ func RunServe(args []string) int {
 		fmt.Println("\n" + i18n.T(i18n.MsgServeLoopbackConflict, map[string]interface{}{"Detail": detail, "Port": cfg.Server.Port}))
 	}
 
-	const boxWidth = 60 // 内容区域宽度（不含边框字符）
+	const boxWidth = 60
 
 	padLine := func(content string) string {
 		displayWidth := 0

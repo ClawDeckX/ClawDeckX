@@ -150,7 +150,7 @@ func getCurrentUser() string {
 
 func isRoot() bool {
 	if runtime.GOOS == "windows" {
-		return false // Windows 不使用 root 概念
+		return false
 	}
 	return os.Getuid() == 0
 }

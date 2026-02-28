@@ -40,7 +40,7 @@ type Service struct {
 	GatewayHost      string
 	GatewayPort      int
 	GatewayToken     string
-	gwClient         *GWClient // 远程模式下通过 JSON-RPC 控制网关
+	gwClient         *GWClient // control gateway via JSON-RPC in remote mode
 	runtimeCache     Runtime
 	runtimeCacheTime time.Time
 	runtimeCacheTTL  time.Duration
@@ -50,7 +50,7 @@ func NewService() *Service {
 	return &Service{
 		GatewayHost:     "127.0.0.1",
 		GatewayPort:     18789,
-		runtimeCacheTTL: 1 * time.Hour, // 运行时类型缓存 1 小时（几乎不会变化）
+		runtimeCacheTTL: 1 * time.Hour, // runtime type cache 1 hour (rarely changes)
 	}
 }
 
@@ -537,12 +537,12 @@ func (s *Service) startWindowsGateway(cmdName, bind, port string) error {
 	for i := 0; i < 30; i++ {
 		time.Sleep(500 * time.Millisecond)
 		if gatewayPortListening() {
-			output.Debugf("网关已在端口 %s 上启动\n", port)
+			output.Debugf("Gateway started on port %s\n", port)
 			return nil
 		}
 	}
 
-	output.Debugf("网关启动命令已执行，日志: %s\n", logPath)
+	output.Debugf("Gateway start command executed, log: %s\n", logPath)
 	return nil
 }
 
@@ -574,7 +574,7 @@ func runOk(cmd string, args ...string) bool {
 	c := exec.CommandContext(ctx, cmd, args...)
 	err := c.Run()
 	if err != nil {
-		output.Debugf("命令失败: %s %s err=%s\n", cmd, strings.Join(args, " "), err)
+		output.Debugf("Command failed: %s %s err=%s\n", cmd, strings.Join(args, " "), err)
 		return false
 	}
 	return true
@@ -588,7 +588,7 @@ func runCommand(cmd string, args ...string) error {
 	if err != nil {
 		return fmt.Errorf(i18n.T(i18n.MsgErrCommandFailed), cmd, strings.Join(args, " "), strings.TrimSpace(string(out)))
 	}
-	output.Debugf("命令成功: %s %s\n", cmd, strings.Join(args, " "))
+	output.Debugf("Command succeeded: %s %s\n", cmd, strings.Join(args, " "))
 	return nil
 }
 

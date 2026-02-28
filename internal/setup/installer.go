@@ -20,19 +20,19 @@ type InstallConfig struct {
 	Model             string `json:"model,omitempty"`
 	BaseURL           string `json:"baseUrl,omitempty"`
 	Version           string `json:"version,omitempty"`           // "openclaw"
-	Registry          string `json:"registry,omitempty"`          // npm 镜像源
-	SkipConfig        bool   `json:"skipConfig,omitempty"`        // 跳过配置
-	SkipGateway       bool   `json:"skipGateway,omitempty"`       // 跳过启动 Gateway
-	InstallZeroTier   bool   `json:"installZeroTier,omitempty"`   // 安装 ZeroTier
+	Registry          string `json:"registry,omitempty"`          // npm registry
+	SkipConfig        bool   `json:"skipConfig,omitempty"`        // skip config
+	SkipGateway       bool   `json:"skipGateway,omitempty"`       // skip starting Gateway
+	InstallZeroTier   bool   `json:"installZeroTier,omitempty"`   // install ZeroTier
 	ZerotierNetworkId string `json:"zerotierNetworkId,omitempty"` // ZeroTier Network ID
-	InstallTailscale  bool   `json:"installTailscale,omitempty"`  // 安装 Tailscale
-	SudoPassword      string `json:"sudoPassword,omitempty"`      // sudo 密码（非 root 且需要密码时）
+	InstallTailscale  bool   `json:"installTailscale,omitempty"`  // install Tailscale
+	SudoPassword      string `json:"sudoPassword,omitempty"`      // sudo password (when non-root and password required)
 }
 
 type InstallSummaryItem struct {
-	Label    string `json:"label"`              // 显示名称
+	Label    string `json:"label"`              // display name
 	Status   string `json:"status"`             // ok | warn | fail | skip
-	Detail   string `json:"detail,omitempty"`   // 版本号、路径等详情
+	Detail   string `json:"detail,omitempty"`   // version, path, etc.
 	Category string `json:"category,omitempty"` // deps | optional | config | gateway
 }
 
@@ -48,7 +48,7 @@ type InstallResult struct {
 type Installer struct {
 	emitter      *EventEmitter
 	env          *EnvironmentReport
-	sudoPassword string // sudo 密码（非 root 且需要密码时使用）
+	sudoPassword string // sudo password (when non-root and password required)
 }
 
 func NewInstaller(emitter *EventEmitter, env *EnvironmentReport) *Installer {
@@ -103,7 +103,7 @@ func (i *Installer) InstallNode(ctx context.Context) error {
 
 func (i *Installer) installNodeViaPackageManager(ctx context.Context) error {
 	cmd := getNodeInstallCommand(i.env)
-	if cmd == "" || strings.Contains(cmd, "请访问") {
+	if cmd == "" {
 		return fmt.Errorf(i18n.T(i18n.MsgErrNoPackageManager))
 	}
 
@@ -237,7 +237,7 @@ func (i *Installer) InstallClawHub(ctx context.Context, registry string) error {
 
 	if !i.env.Tools["npm"].Installed {
 		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubNpmUnavailable))
-		return nil // 非致命错误
+		return nil // non-fatal error
 	}
 
 	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubInstalling))
@@ -948,7 +948,7 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 	needsRestart := false
 
 	if config.Version == "" {
-		config.Version = "openclaw" // 默认国际版
+		config.Version = "openclaw" // default international version
 	}
 
 	if config.SudoPassword != "" {

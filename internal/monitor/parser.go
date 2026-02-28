@@ -37,7 +37,7 @@ type NormalizedEvent struct {
 
 type SessionParser struct {
 	sessionsDir string
-	offsets     map[string]int64 // 文件名 → 已读取偏移量
+	offsets     map[string]int64 // filename -> read offset
 }
 
 func NewSessionParser(openclawDir string) *SessionParser {
@@ -105,7 +105,7 @@ func (p *SessionParser) readFile(filePath string) ([]NormalizedEvent, error) {
 		}
 	}
 
-	newOffset, _ := f.Seek(0, 1) // 获取当前位置
+	newOffset, _ := f.Seek(0, 1) // get current position
 	p.offsets[fileName] = newOffset
 
 	return events, scanner.Err()
@@ -206,7 +206,7 @@ func buildSummary(raw RawEvent) string {
 		if len(cmd) > 120 {
 			cmd = cmd[:120] + "..."
 		}
-		return "执行 " + cmd
+		return "Execute " + cmd
 	}
 
 	if path, ok := raw.Input["path"].(string); ok {

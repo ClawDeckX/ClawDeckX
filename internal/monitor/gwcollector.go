@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"ClawDeckX/internal/database"
-	"ClawDeckX/internal/i18n" // 添加 i18n 包导入
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/openclaw"
 	"ClawDeckX/internal/web"
@@ -116,9 +116,9 @@ func (c *GWCollector) handleChatStreamEvent(payload json.RawMessage) {
 	state := strings.TrimSpace(data.State)
 	switch state {
 	case "final", "aborted":
-		c.writeActivity("Message", "low", fmt.Sprintf("会话回复完成: %s", data.SessionKey), string(payload), "chat", "allow", "")
+		c.writeActivity("Message", "low", fmt.Sprintf("Session reply completed: %s", data.SessionKey), string(payload), "chat", "allow", "")
 	case "error":
-		summary := "会话回复失败"
+		summary := "Session reply failed"
 		if data.ErrorMessage != "" {
 			summary += ": " + data.ErrorMessage
 		}
@@ -137,7 +137,7 @@ func (c *GWCollector) handleSessionEvent(event string, payload json.RawMessage) 
 		return
 	}
 
-	summary := fmt.Sprintf("会话 %s: %s", strings.TrimPrefix(event, "session."), data.Key)
+	summary := fmt.Sprintf("Session %s: %s", strings.TrimPrefix(event, "session."), data.Key)
 	c.writeActivity("Session", "low", summary, string(payload), data.Key, "allow", data.SessionID)
 }
 
@@ -186,7 +186,7 @@ func (c *GWCollector) handleToolEvent(event string, payload json.RawMessage) {
 		input = input[:300] + "..."
 	}
 
-	summary := fmt.Sprintf("工具调用: %s", toolName)
+	summary := fmt.Sprintf("Tool call: %s", toolName)
 	if input != "" {
 		summary += " → " + input
 	}
@@ -203,7 +203,7 @@ func (c *GWCollector) handleErrorEvent(payload json.RawMessage) {
 		return
 	}
 
-	summary := fmt.Sprintf("Gateway 错误: %s (code=%d)", data.Message, data.Code)
+	summary := fmt.Sprintf("Gateway error: %s (code=%d)", data.Message, data.Code)
 	c.writeActivity("System", "medium", summary, string(payload), "gateway", "alert", "")
 }
 
@@ -220,7 +220,7 @@ func (c *GWCollector) handleCronEvent(event string, payload json.RawMessage) {
 	if name == "" {
 		name = data.Key
 	}
-	summary := fmt.Sprintf("定时任务 %s: %s", strings.TrimPrefix(event, "cron."), name)
+	summary := fmt.Sprintf("Cron task %s: %s", strings.TrimPrefix(event, "cron."), name)
 	c.writeActivity("System", "low", summary, string(payload), "cron", "allow", "")
 }
 
@@ -280,7 +280,7 @@ func (c *GWCollector) poll() {
 			}
 
 			if firstRun {
-				summary := fmt.Sprintf("会话: %s | %d tokens | 模型: %s",
+				summary := fmt.Sprintf("Session: %s | %d tokens | Model: %s",
 					displayName, sess.TotalTokens, sess.Model)
 				detail, _ := json.Marshal(map[string]interface{}{
 					"key":           sess.Key,
@@ -294,7 +294,7 @@ func (c *GWCollector) poll() {
 				})
 				c.writeActivity("Session", "low", summary, string(detail), source, "allow", sess.SessionID)
 			} else {
-				summary := fmt.Sprintf("新会话: %s (%s)", displayName, sess.Model)
+				summary := fmt.Sprintf("New session: %s (%s)", displayName, sess.Model)
 				c.writeActivity("Session", "low", summary, "", sess.Key, "allow", sess.SessionID)
 			}
 			newCount++
@@ -311,7 +311,7 @@ func (c *GWCollector) poll() {
 				displayName = sess.Key
 			}
 
-			summary := fmt.Sprintf("会话活动: %s | +%d tokens (输入 +%d, 输出 +%d) | 模型: %s",
+			summary := fmt.Sprintf("Session activity: %s | +%d tokens (input +%d, output +%d) | Model: %s",
 				displayName, deltaTokens, deltaInput, deltaOutput, sess.Model)
 
 			detail, _ := json.Marshal(map[string]interface{}{

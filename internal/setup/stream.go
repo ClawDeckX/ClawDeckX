@@ -18,11 +18,11 @@ import (
 
 type SetupEvent struct {
 	Type     string      `json:"type"`               // "phase" | "step" | "progress" | "log" | "success" | "error" | "complete"
-	Phase    string      `json:"phase,omitempty"`    // 当前阶段
-	Step     string      `json:"step,omitempty"`     // 当前步骤
-	Message  string      `json:"message"`            // 消息内容
-	Progress int         `json:"progress,omitempty"` // 进度百分比 0-100
-	Data     interface{} `json:"data,omitempty"`     // 附加数据
+	Phase    string      `json:"phase,omitempty"`    // current phase
+	Step     string      `json:"step,omitempty"`     // current step
+	Message  string      `json:"message"`            // message content
+	Progress int         `json:"progress,omitempty"` // progress percentage 0-100
+	Data     interface{} `json:"data,omitempty"`     // additional data
 }
 
 type EventEmitter struct {
@@ -40,7 +40,7 @@ func NewEventEmitter(w http.ResponseWriter) (*EventEmitter, error) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // 禁用 nginx 缓冲
+	w.Header().Set("X-Accel-Buffering", "no") // disable nginx buffering
 
 	return &EventEmitter{
 		w:       w,
@@ -127,7 +127,7 @@ type StreamCommand struct {
 	emitter      *EventEmitter
 	phase        string
 	step         string
-	sudoPassword string // sudo 密码（可选）
+	sudoPassword string // sudo password (optional)
 }
 
 func NewStreamCommand(emitter *EventEmitter, phase, step string) *StreamCommand {
