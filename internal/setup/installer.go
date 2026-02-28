@@ -229,12 +229,12 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawTryingNpm))
 		if err := i.installViaNpm(ctx); err == nil {
 			if i.verifyOpenClawInstalled() {
-				i.emitter.EmitLog("✓ OpenClaw 通过 npm 安装成功")
+				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawNpmSuccess))
 				return nil
 			}
-			i.emitter.EmitLog("⚠ npm 安装完成但未检测到命令，可能需要重启")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawNpmRestart))
 		} else {
-			i.emitter.EmitLog(fmt.Sprintf("npm 安装失败: %v", err))
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawNpmFailed, map[string]interface{}{"Error": err.Error()}))
 		}
 	}
 
