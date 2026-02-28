@@ -497,11 +497,9 @@ const (
 	MsgServiceRemoteGatewayUnreachable  = "service.remote_gateway_unreachable"
 	MsgServiceRemoteGatewayTcpReachable = "service.remote_gateway_tcp_reachable"
 	MsgServiceRemoteGatewayHttpOk       = "service.remote_gateway_http_ok"
-)
 
-// Stream messages
-const (
-	MsgStreamCreateStdoutPipeFailed = "stream.create_stdout_pipe_failed"
+	// GWClient messages
+	MsgGwclientUnknownError         = "gwclient.unknown_error"
 	MsgStreamCreateStderrPipeFailed = "stream.create_stderr_pipe_failed"
 	MsgStreamStartCommandFailed     = "stream.start_command_failed"
 	MsgStreamCommandExecFailed      = "stream.command_exec_failed"
