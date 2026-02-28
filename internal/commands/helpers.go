@@ -1,6 +1,7 @@
 ﻿package commands
 
 import (
+	"ClawDeckX/internal/i18n"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -83,7 +84,7 @@ func writeEnvExports(path string, values map[string]string) error {
 	}
 	sort.Strings(keys)
 	b := &strings.Builder{}
-	fmt.Fprintln(b, "# OpenClaw 环境变量（由 ClawDeckX 生成）")
+	fmt.Fprintln(b, i18n.T(i18n.MsgHelpersEnvHeader))
 	for _, k := range keys {
 		fmt.Fprintf(b, "export %s=\"%s\"\n", k, strings.ReplaceAll(values[k], "\"", "\\\""))
 	}
