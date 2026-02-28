@@ -956,11 +956,11 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		i.env.HasSudo = true
 	}
 
-	i.emitter.EmitPhase("install", "开始安装依赖...", 0)
+	i.emitter.EmitPhase("install", i18n.T(i18n.MsgInstallerPhaseInstallDeps), 0)
 
 	if !i.env.Tools["node"].Installed {
 		if err := i.InstallNode(ctx); err != nil {
-			result.ErrorMessage = "Node.js 安装失败"
+			result.ErrorMessage = i18n.T(i18n.MsgInstallerNodeInstallFailed)
 			result.ErrorDetails = err.Error()
 			i.emitter.EmitError(result.ErrorMessage, result)
 			return result, err
@@ -969,30 +969,30 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 			i.env.Tools["node"] = nodeInfo
 			if npmInfo := detectTool("npm", "--version"); npmInfo.Installed {
 				i.env.Tools["npm"] = npmInfo
-				i.emitter.EmitLog(fmt.Sprintf("✓ npm %s 已就绪", npmInfo.Version))
+				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNpmReady, map[string]interface{}{"Version": npmInfo.Version}))
 			}
 		} else {
 			needsRestart = true
-			i.emitter.EmitLog("⚠️ Node.js 已安装但环境变量未生效，需要重启应用")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerEnvNotEffective, map[string]interface{}{"Tool": "Node.js"}))
 		}
 	}
 
 	if !i.env.OpenClawInstalled {
 		if err := i.InstallOpenClawWithConfig(ctx, config); err != nil {
-			result.ErrorMessage = "OpenClaw 安装失败"
+			result.ErrorMessage = i18n.T(i18n.MsgInstallerOpenclawInstallFailed)
 			result.ErrorDetails = err.Error()
 			i.emitter.EmitError(result.ErrorMessage, result)
 			return result, err
 		}
 		if !detectTool("openclaw", "--version").Installed {
 			needsRestart = true
-			i.emitter.EmitLog("⚠️ OpenClaw 已安装但环境变量未生效，需要重启应用")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerEnvNotEffective, map[string]interface{}{"Tool": "OpenClaw"}))
 		}
 	}
 
 	if !needsRestart {
 		if err := i.InstallClawHub(ctx, config.Registry); err != nil {
-			i.emitter.EmitLog(fmt.Sprintf("⚠️ ClawHub CLI 安装失败: %v（跳过）", err))
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerInstallFailedSkip, map[string]interface{}{"Tool": "ClawHub CLI", "Error": err.Error()}))
 		}
 	}
 
