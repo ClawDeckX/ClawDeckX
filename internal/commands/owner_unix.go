@@ -3,6 +3,7 @@
 package commands
 
 import (
+	"ClawDeckX/internal/i18n"
 	"fmt"
 	"os"
 	"os/user"
@@ -13,7 +14,7 @@ import (
 func lookupOwnerPlatform(info os.FileInfo) string {
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		return "未知"
+		return i18n.T(i18n.MsgOwnerUnknown)
 	}
 	uid := strconv.FormatUint(uint64(stat.Uid), 10)
 	userInfo, err := user.LookupId(uid)

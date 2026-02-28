@@ -2,8 +2,11 @@
 
 package commands
 
-import "os"
+import (
+	"ClawDeckX/internal/i18n"
+	"os"
+)
 
 func lookupOwnerPlatform(info os.FileInfo) string {
-	return "未知"
+	return i18n.T(i18n.MsgOwnerUnknown)
 }
