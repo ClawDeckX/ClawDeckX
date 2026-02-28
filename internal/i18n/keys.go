@@ -535,6 +535,11 @@ const (
 	MsgDiagnosticsLevelWarning             = "diagnostics.level_warning"
 	MsgDiagnosticsGatewayStatusPlaceholder = "diagnostics.gateway_status_placeholder"
 	MsgDiagnosticsImplementHealthCheck     = "diagnostics.implement_health_check"
+
+	// Tray messages
+	MsgTrayOpenWebUI = "tray.open_web_ui"
+	MsgTrayAddress   = "tray.address"
+	MsgTrayQuit      = "tray.quit"
 )
 
 // CLI messages (openclaw cli wrapper)
