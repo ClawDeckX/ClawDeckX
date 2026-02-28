@@ -550,6 +550,9 @@ const (
 
 	// Helpers messages
 	MsgHelpersEnvHeader = "helpers.env_header"
+
+	// Owner messages
+	MsgOwnerUnknown = "owner.unknown"
 )
 
 // CLI messages (openclaw cli wrapper)
