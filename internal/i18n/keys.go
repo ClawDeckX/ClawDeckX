@@ -467,11 +467,22 @@ const (
 	MsgDiagnoseTokenVerifyFailed         = "diagnose.token_verify_failed"
 	MsgDiagnoseTokenMismatchSuggestion   = "diagnose.token_mismatch_suggestion"
 	MsgDiagnoseTokenVerifyPassed         = "diagnose.token_verify_passed"
-)
 
-// Service messages
-const (
-	MsgServiceGetGatewayConfigFailed    = "service.get_gateway_config_failed"
+	// Scanner messages
+	MsgScannerStepConfigure             = "scanner.step_configure"
+	MsgScannerStepStartGateway          = "scanner.step_start_gateway"
+	MsgScannerStepInstallNode           = "scanner.step_install_node"
+	MsgScannerStepInstallGit            = "scanner.step_install_git"
+	MsgScannerStepInstallOpenclaw       = "scanner.step_install_openclaw"
+	MsgScannerStepConfigureProvider     = "scanner.step_configure_provider"
+	MsgScannerStepVerify                = "scanner.step_verify"
+	MsgScannerNodeManualInstall         = "scanner.node_manual_install"
+	MsgScannerGitManualInstall          = "scanner.git_manual_install"
+	MsgScannerWarnNodeVersionLow        = "scanner.warn_node_version_low"
+	MsgScannerWarnRootUser              = "scanner.warn_root_user"
+	MsgScannerWarnNoInternet            = "scanner.warn_no_internet"
+	MsgScannerWarnDiskSpaceLow          = "scanner.warn_disk_space_low"
+	MsgScannerWarnWslEnvironment        = "scanner.warn_wsl_environment"
 	MsgServiceGatewayRestartFailed      = "service.gateway_restart_failed"
 	MsgServiceStartGatewayProcessFailed = "service.start_gateway_process_failed"
 	MsgServiceCommandFailed             = "service.command_failed"
