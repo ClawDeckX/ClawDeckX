@@ -233,7 +233,7 @@ func runDoctorChecks(configPath string) doctorReport {
 func runDoctorFixes(configPath string, report doctorReport) error {
 	needFix := false
 	for _, issue := range report.Issues {
-		if issue.Level == "错误" || issue.Level == "警告" {
+		if issue.Level == "error" || issue.Level == "warning" {
 			needFix = true
 			break
 		}
