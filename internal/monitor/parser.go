@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ClawDeckX/internal/constants"
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 )
 
@@ -33,7 +34,7 @@ type NormalizedEvent struct {
 	Summary   string    `json:"summary"`
 	Detail    string    `json:"detail"`
 	Source    string    `json:"source"`
-	SessionID string   `json:"session_id"`
+	SessionID string    `json:"session_id"`
 }
 
 // SessionParser Sessions JSONL 增量解析器
@@ -61,7 +62,7 @@ func (p *SessionParser) ReadNewEvents() ([]NormalizedEvent, error) {
 	for _, filePath := range files {
 		events, err := p.readFile(filePath)
 		if err != nil {
-			logger.Monitor.Warn().Str("file", filePath).Err(err).Msg("解析 session 文件失败")
+			logger.Monitor.Warn().Str("file", filePath).Err(err).Msg(i18n.T(i18n.MsgLogParseSessionFileFailed))
 			continue
 		}
 		allEvents = append(allEvents, events...)
@@ -101,7 +102,7 @@ func (p *SessionParser) readFile(filePath string) ([]NormalizedEvent, error) {
 
 		var raw RawEvent
 		if err := json.Unmarshal([]byte(line), &raw); err != nil {
-			logger.Monitor.Debug().Str("line", line[:min(len(line), 100)]).Msg("跳过无法解析的行")
+			logger.Monitor.Debug().Str("line", line[:min(len(line), 100)]).Msg(i18n.T(i18n.MsgLogSkipUnparseableLine))
 			continue
 		}
 

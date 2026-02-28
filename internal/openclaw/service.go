@@ -1,6 +1,7 @@
 package openclaw
 
 import (
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/output"
 	"context"
@@ -71,7 +72,7 @@ func (s *Service) DetectRuntime() Runtime {
 		logger.Gateway.Debug().
 			Str("cached_runtime", string(s.runtimeCache)).
 			Dur("cache_age", time.Since(s.runtimeCacheTime)).
-			Msg("DetectRuntime: 使用缓存")
+			Msg(i18n.T(i18n.MsgLogDetectRuntimeUsingCache))
 		return s.runtimeCache
 	}
 
@@ -91,7 +92,7 @@ func (s *Service) detectRuntimeImpl() Runtime {
 	logger.Gateway.Debug().
 		Bool("hasSystemctl", hasSystemctl).
 		Bool("systemdActive", systemdRunning).
-		Msg("DetectRuntime: 检测 systemd")
+		Msg(i18n.T(i18n.MsgLogDetectRuntimeSystemd))
 	if hasSystemctl && systemdRunning {
 		return RuntimeSystemd
 	}
@@ -104,7 +105,7 @@ func (s *Service) detectRuntimeImpl() Runtime {
 	logger.Gateway.Debug().
 		Bool("hasDocker", hasDocker).
 		Str("containerName", dockerName).
-		Msg("DetectRuntime: 检测 docker")
+		Msg(i18n.T(i18n.MsgLogDetectRuntimeDocker))
 	if dockerName != "" {
 		s.dockerContainer = dockerName
 		return RuntimeDocker
@@ -117,12 +118,12 @@ func (s *Service) detectRuntimeImpl() Runtime {
 		Bool("processExists", procExists).
 		Bool("portListening", portListening).
 		Bool("hasOpenclawCmd", hasOpenclawCmd).
-		Msg("DetectRuntime: 检测进程/端口/命令")
+		Msg(i18n.T(i18n.MsgLogDetectRuntimeProcess))
 	if procExists || portListening || hasOpenclawCmd {
 		return RuntimeProcess
 	}
 
-	logger.Gateway.Warn().Msg("DetectRuntime: 所有检测均失败，返回 RuntimeUnknown")
+	logger.Gateway.Warn().Msg(i18n.T(i18n.MsgLogDetectRuntimeFailed))
 	return RuntimeUnknown
 }
 
@@ -313,7 +314,7 @@ func (s *Service) Restart() error {
 		return errors.New("远程网关未连接，无法重启")
 	}
 	rt := s.DetectRuntime()
-	logger.Gateway.Debug().Str("runtime", fmt.Sprintf("%v", rt)).Msg("Restart: 检测到的运行时环境")
+	logger.Gateway.Debug().Str("runtime", fmt.Sprintf("%v", rt)).Msg(i18n.T(i18n.MsgLogRestartDetectedRuntime))
 	switch rt {
 	case RuntimeSystemd:
 		return runCommand("systemctl", "restart", "openclaw")
@@ -334,7 +335,7 @@ func (s *Service) Restart() error {
 	default:
 		logger.Gateway.Error().
 			Str("runtime", fmt.Sprintf("%v", rt)).
-			Msg("Restart: 无法识别本地运行环境（详见上方 DetectRuntime DEBUG 日志）")
+			Msg(i18n.T(i18n.MsgLogRestartUnknownRuntime))
 		return errors.New("无法识别本地运行环境，无法重启")
 	}
 }

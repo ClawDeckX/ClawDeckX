@@ -39,7 +39,7 @@ func (s *Service) Start() {
 	s.running = true
 	logger.Monitor.Info().
 		Dur("interval", s.interval).
-		Msg("监控服务已启动")
+		Msg(i18n.T(i18n.MsgLogMonitorStarted))
 
 	// 首次立即扫描
 	s.scan()

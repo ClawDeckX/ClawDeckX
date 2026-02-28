@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/web"
 	"ClawDeckX/internal/webconfig"
@@ -78,7 +79,7 @@ func (h *ServerConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	logger.Log.Info().
 		Str("bind", bind).
 		Int("port", payload.Port).
-		Msg("服务器访问配置已更新，需重启生效")
+		Msg(i18n.T(i18n.MsgLogServerConfigUpdated))
 
 	web.OK(w, r, map[string]any{
 		"bind":         bind,

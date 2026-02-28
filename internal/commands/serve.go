@@ -139,7 +139,7 @@ func RunServe(args []string) int {
 				Str("name", activeProfile.Name).
 				Str("host", activeProfile.Host).
 				Int("port", activeProfile.Port).
-				Msg("使用已激活的网关配置档案")
+				Msg(i18n.T(i18n.MsgLogUsingGatewayProfile))
 		}
 	}
 
@@ -148,14 +148,14 @@ func RunServe(args []string) int {
 		logger.Log.Debug().
 			Str("configPath", cfg.OpenClaw.ConfigPath).
 			Bool("configPathEmpty", cfg.OpenClaw.ConfigPath == "").
-			Msg("gwToken 为空，尝试从 openclaw.json 读取 gateway auth token")
+			Msg(i18n.T(i18n.MsgLogTryingReadGwToken))
 		if t := readOpenClawGatewayToken(cfg.OpenClaw.ConfigPath); t != "" {
 			gwToken = t
 			logger.Log.Info().Int("tokenLen", len(t)).Msg(i18n.T(i18n.MsgLogGatewayTokenRead))
 		} else {
 			logger.Log.Warn().
 				Str("configPath", cfg.OpenClaw.ConfigPath).
-				Msg("未能从 openclaw.json 读取到 gateway auth token（详见上方 DEBUG 日志）")
+				Msg(i18n.T(i18n.MsgLogGwTokenReadFailed))
 		}
 	}
 
@@ -168,7 +168,7 @@ func RunServe(args []string) int {
 		logger.Log.Info().
 			Str("host", svc.GatewayHost).
 			Int("port", svc.GatewayPort).
-			Msg("远程 Gateway 模式")
+			Msg(i18n.T(i18n.MsgLogRemoteGatewayMode))
 	}
 
 	// 初始化 Gateway WebSocket 客户端（连接远程 Gateway 的 WS JSON-RPC）
@@ -529,7 +529,7 @@ func RunServe(args []string) int {
 	if cfg.Server.Bind != "127.0.0.1" && cfg.Server.Bind != "localhost" {
 		logger.Log.Warn().
 			Str("bind", cfg.Server.Bind).
-			Msg("⚠️  Web 服务绑定到非回环地址，请确保已配置防火墙规则")
+			Msg(i18n.T(i18n.MsgLogBindNonLoopbackWarning))
 	}
 
 	// 检测端口是否被占用
@@ -541,7 +541,7 @@ func RunServe(args []string) int {
 		fmt.Fprintf(os.Stderr, "  1. 关闭占用该端口的程序\n")
 		fmt.Fprintf(os.Stderr, "  2. 使用 --port 参数指定其他端口：./ClawDeckX serve --port 18792\n")
 		fmt.Fprintf(os.Stderr, "     (端口号会自动保存到配置文件，下次启动无需再次指定)\n\n")
-		logger.Log.Error().Int("port", cfg.Server.Port).Err(err).Msg("端口被占用")
+		logger.Log.Error().Int("port", cfg.Server.Port).Err(err).Msg(i18n.T(i18n.MsgLogPortInUse))
 		return 1
 	}
 	ln.Close()
@@ -551,7 +551,7 @@ func RunServe(args []string) int {
 
 	// 启动后快速自检：检测 127.0.0.1 是否被其他进程占用并劫持到非 ClawDeckX 服务
 	if conflict, detail := detectLoopbackRouteConflict(cfg.Server.Port); conflict {
-		logger.Log.Warn().Str("detail", detail).Msg("检测到本机回环地址冲突")
+		logger.Log.Warn().Str("detail", detail).Msg(i18n.T(i18n.MsgLogLoopbackConflict))
 		fmt.Printf("\n⚠️  检测到回环地址冲突: %s\n", detail)
 		fmt.Printf("   建议使用: http://localhost:%d/\n", cfg.Server.Port)
 	}

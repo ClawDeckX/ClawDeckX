@@ -256,7 +256,7 @@ func (c *GWClient) healthCheckLoop() {
 				if c.healthFailCount > 0 {
 					logger.Gateway.Info().
 						Int("prev_fails", c.healthFailCount).
-						Msg("心跳健康检查恢复正常")
+						Msg(i18n.T(i18n.MsgLogHeartbeatRecovered))
 				}
 				c.healthFailCount = 0
 				c.healthLastOK = time.Now()
@@ -266,24 +266,24 @@ func (c *GWClient) healthCheckLoop() {
 				logger.Gateway.Warn().
 					Int("fail_count", c.healthFailCount).
 					Int("max_fails", c.healthMaxFails).
-					Msg("心跳健康检查失败")
+					Msg(i18n.T(i18n.MsgLogHeartbeatFailed))
 
 				if c.healthFailCount >= c.healthMaxFails && c.onRestart != nil {
 					logger.Gateway.Warn().
 						Int("consecutive_fails", c.healthFailCount).
-						Msg("连续心跳失败达到阈值，正在自动重启网关")
+						Msg(i18n.T(i18n.MsgLogHeartbeatThresholdRestart))
 					c.healthFailCount = 0
 					restartFn := c.onRestart
 					notifyFn := c.onNotify
 					c.healthMu.Unlock()
 
 					if restartErr := restartFn(); restartErr != nil {
-						logger.Gateway.Error().Err(restartErr).Msg("心跳自动重启网关失败")
+						logger.Gateway.Error().Err(restartErr).Msg(i18n.T(i18n.MsgLogHeartbeatRestartFailed))
 						if notifyFn != nil {
 							go notifyFn("\U0001f6a8 OpenClaw Gateway 心跳检测失败，自动重启也失败: " + restartErr.Error())
 						}
 					} else {
-						logger.Gateway.Info().Msg("心跳自动重启网关成功")
+						logger.Gateway.Info().Msg(i18n.T(i18n.MsgLogHeartbeatRestartSuccess))
 						if notifyFn != nil {
 							go notifyFn("\u26a0\ufe0f OpenClaw Gateway 心跳检测失败，已自动重启成功")
 						}
@@ -328,7 +328,7 @@ func (c *GWClient) Reconnect(newCfg GWClientConfig) {
 	logger.Log.Info().
 		Str("host", newCfg.Host).
 		Int("port", newCfg.Port).
-		Msg("Gateway 配置已更新，正在重新连接")
+		Msg(i18n.T(i18n.MsgLogGatewayConfigUpdated))
 
 	// 先断开旧连接
 	c.mu.Lock()
@@ -441,7 +441,7 @@ func (c *GWClient) connectLoop() {
 			logger.Log.Debug().Err(err).
 				Str("host", c.cfg.Host).
 				Int("port", c.cfg.Port).
-				Msg("Gateway WS 连接失败")
+				Msg(i18n.T(i18n.MsgLogGatewayWsConnectFailed))
 		}
 
 		// 等待重连
@@ -662,7 +662,7 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 				}
 				logger.Log.Debug().
 					Str("deviceId", identity.DeviceID).
-					Msg("已添加 device identity 到 connect 请求")
+					Msg(i18n.T(i18n.MsgLogDeviceIdentityAdded))
 			}
 		}
 	}
@@ -672,7 +672,7 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 		Bool("hasDevice", params.Device != nil).
 		Str("clientId", params.Client.ID).
 		Str("role", params.Role).
-		Msg("sendConnect 参数")
+		Msg(i18n.T(i18n.MsgLogSendConnectParams))
 
 	id := uuid.New().String()
 	ch := make(chan *ResponseFrame, 1)
@@ -709,7 +709,7 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 			logger.Log.Info().
 				Str("host", c.cfg.Host).
 				Int("port", c.cfg.Port).
-				Msg("Gateway WS 连接成功")
+				Msg(i18n.T(i18n.MsgLogGatewayWsConnected))
 		} else {
 			msg := "未知错误"
 			if resp != nil && resp.Error != nil {

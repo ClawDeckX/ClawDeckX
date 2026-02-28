@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 )
 
@@ -177,7 +178,7 @@ func LoadOrCreateDeviceIdentity(filePath string) (*DeviceIdentity, error) {
 	logger.Log.Info().
 		Str("deviceId", identity.DeviceID).
 		Str("path", filePath).
-		Msg("生成新的 device identity")
+		Msg(i18n.T(i18n.MsgLogDeviceIdentityGenerated))
 
 	return identity, nil
 }

@@ -54,7 +54,7 @@ func (c *GWCollector) Start() {
 	c.running = true
 	logger.Monitor.Info().
 		Dur("interval", c.interval).
-		Msg("GW 事件采集器已启动（通过 WebSocket 采集）")
+		Msg(i18n.T(i18n.MsgLogGwCollectorStarted))
 
 	// 注册 Gateway WS 事件回调
 	c.client.SetEventHandler(c.handleEvent)
