@@ -1,6 +1,7 @@
 package output
 
 import (
+	"ClawDeckX/internal/i18n"
 	"fmt"
 	"os"
 	"strings"
@@ -29,7 +30,7 @@ func Debugf(format string, args ...any) {
 	if !debugMode {
 		return
 	}
-	fmt.Printf("[调试] "+format, args...)
+	fmt.Printf(i18n.T(i18n.MsgOutputDebugPrefix)+format, args...)
 }
 
 func SetColor(enabled bool) {
