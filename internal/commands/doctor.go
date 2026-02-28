@@ -390,17 +390,17 @@ func checkEnvConfig(envPath string) ([]doctorIssue, bool) {
 	values, err := readEnvExports(envPath)
 	if err != nil {
 		issues = append(issues, doctorIssue{
-			Level:      "错误",
-			Message:    "环境变量配置读取失败: " + envPath,
-			Suggestion: "检查文件权限或重新运行向导",
+			Level:      "error",
+			Message:    i18n.T(i18n.MsgDoctorEnvReadFailed, map[string]interface{}{"Path": envPath}),
+			Suggestion: i18n.T(i18n.MsgDoctorEnvReadSuggestion),
 		})
 		return issues, true
 	}
 	if len(values) == 0 {
 		issues = append(issues, doctorIssue{
-			Level:      "警告",
-			Message:    "未检测到环境变量配置",
-			Suggestion: "运行 `ClawDeckX model wizard` / `ClawDeckX channels wizard` 进行配置",
+			Level:      "warning",
+			Message:    i18n.T(i18n.MsgDoctorEnvNotConfigured),
+			Suggestion: i18n.T(i18n.MsgDoctorEnvSuggestion),
 		})
 		return issues, false
 	}
@@ -411,55 +411,55 @@ func checkEnvConfig(envPath string) ([]doctorIssue, bool) {
 	apiKey := strings.TrimSpace(values["OPENCLAW_API_KEY"])
 	if provider == "" || model == "" {
 		issues = append(issues, doctorIssue{
-			Level:      "错误",
-			Message:    "未配置 AI 模型",
-			Suggestion: "运行 `ClawDeckX model wizard` 配置模型",
+			Level:      "error",
+			Message:    i18n.T(i18n.MsgDoctorAiModelNotConfigured),
+			Suggestion: i18n.T(i18n.MsgDoctorAiModelSuggestion),
 		})
 		hasErrors = true
 	} else {
 		if provider == "custom" && baseURL == "" {
 			issues = append(issues, doctorIssue{
-				Level:      "错误",
-				Message:    "自定义模型未设置 Base URL",
-				Suggestion: "在模型配置中填写自定义端点",
+				Level:      "error",
+				Message:    i18n.T(i18n.MsgDoctorCustomBaseUrlMissing),
+				Suggestion: i18n.T(i18n.MsgDoctorCustomBaseUrlSuggestion),
 			})
 			hasErrors = true
 		}
 		if baseURL != "" && !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
 			issues = append(issues, doctorIssue{
-				Level:      "警告",
-				Message:    "Base URL 不是 http(s):// 开头",
-				Suggestion: "请检查自定义端点配置",
+				Level:      "warning",
+				Message:    i18n.T(i18n.MsgDoctorBaseUrlInvalid),
+				Suggestion: i18n.T(i18n.MsgDoctorBaseUrlCheck),
 			})
 		}
 		if requiresAPIKey(provider) && apiKey == "" {
 			issues = append(issues, doctorIssue{
-				Level:      "警告",
-				Message:    "模型提供商未配置 API Key",
-				Suggestion: "补充 API Key 或切换为无需密钥的模型",
+				Level:      "warning",
+				Message:    i18n.T(i18n.MsgDoctorApiKeyMissing),
+				Suggestion: i18n.T(i18n.MsgDoctorApiKeySuggestion),
 			})
 		}
 	}
 
 	if strings.TrimSpace(values["OPENCLAW_BOT_NAME"]) == "" {
 		issues = append(issues, doctorIssue{
-			Level:      "警告",
-			Message:    "未设置助手名称",
-			Suggestion: "运行 `ClawDeckX persona wizard` 设置助手风格",
+			Level:      "warning",
+			Message:    i18n.T(i18n.MsgDoctorBotNameMissing),
+			Suggestion: i18n.T(i18n.MsgDoctorPersonaSuggestion),
 		})
 	}
 	if strings.TrimSpace(values["OPENCLAW_USER_NAME"]) == "" {
 		issues = append(issues, doctorIssue{
-			Level:      "警告",
-			Message:    "未设置用户称呼",
-			Suggestion: "运行 `ClawDeckX persona wizard` 设置助手风格",
+			Level:      "warning",
+			Message:    i18n.T(i18n.MsgDoctorUserNameMissing),
+			Suggestion: i18n.T(i18n.MsgDoctorPersonaSuggestion),
 		})
 	}
 	if strings.TrimSpace(values["OPENCLAW_TIMEZONE"]) == "" {
 		issues = append(issues, doctorIssue{
-			Level:      "警告",
-			Message:    "未设置时区",
-			Suggestion: "运行 `ClawDeckX persona wizard` 设置时区",
+			Level:      "warning",
+			Message:    i18n.T(i18n.MsgDoctorTimezoneMissing),
+			Suggestion: i18n.T(i18n.MsgDoctorTimezoneSuggestion),
 		})
 	}
 
@@ -467,49 +467,49 @@ func checkEnvConfig(envPath string) ([]doctorIssue, bool) {
 	switch platform {
 	case "":
 		issues = append(issues, doctorIssue{
-			Level:      "警告",
-			Message:    "未配置通知平台",
-			Suggestion: "运行 `ClawDeckX channels wizard` 配置通知",
+			Level:      "warning",
+			Message:    i18n.T(i18n.MsgDoctorNotifyNotConfigured),
+			Suggestion: i18n.T(i18n.MsgDoctorNotifySuggestion),
 		})
 	case "telegram":
 		token := strings.TrimSpace(firstNonEmpty(os.Getenv("TELEGRAM_BOT_TOKEN"), values["TELEGRAM_BOT_TOKEN"]))
 		chatID := strings.TrimSpace(firstNonEmpty(os.Getenv("TELEGRAM_CHAT_ID"), values["TELEGRAM_CHAT_ID"]))
 		if token == "" || chatID == "" {
 			issues = append(issues, doctorIssue{
-				Level:      "警告",
-				Message:    "Telegram 通知未完整配置",
-				Suggestion: "设置 TELEGRAM_BOT_TOKEN 与 TELEGRAM_CHAT_ID",
+				Level:      "warning",
+				Message:    i18n.T(i18n.MsgDoctorTelegramIncomplete),
+				Suggestion: i18n.T(i18n.MsgDoctorTelegramSuggestion),
 			})
 		}
 	case "slack":
 		if strings.TrimSpace(firstNonEmpty(os.Getenv("SLACK_WEBHOOK_URL"), values["SLACK_WEBHOOK_URL"])) == "" {
 			issues = append(issues, doctorIssue{
-				Level:      "警告",
-				Message:    "Slack Webhook 未配置",
-				Suggestion: "运行 `ClawDeckX channels wizard` 配置",
+				Level:      "warning",
+				Message:    i18n.T(i18n.MsgDoctorSlackMissing),
+				Suggestion: i18n.T(i18n.MsgDoctorNotifyReconfigure),
 			})
 		}
 	case "feishu":
 		if strings.TrimSpace(firstNonEmpty(os.Getenv("FEISHU_WEBHOOK_URL"), values["FEISHU_WEBHOOK_URL"])) == "" {
 			issues = append(issues, doctorIssue{
-				Level:      "警告",
-				Message:    "飞书 Webhook 未配置",
-				Suggestion: "运行 `ClawDeckX channels wizard` 配置",
+				Level:      "warning",
+				Message:    i18n.T(i18n.MsgDoctorFeishuMissing),
+				Suggestion: i18n.T(i18n.MsgDoctorNotifyReconfigure),
 			})
 		}
 	case "custom":
 		if strings.TrimSpace(firstNonEmpty(os.Getenv("OPENCLAW_NOTIFY_WEBHOOK"), values["OPENCLAW_NOTIFY_WEBHOOK"])) == "" {
 			issues = append(issues, doctorIssue{
-				Level:      "警告",
-				Message:    "自定义 Webhook 未配置",
-				Suggestion: "运行 `ClawDeckX channels wizard` 配置",
+				Level:      "warning",
+				Message:    i18n.T(i18n.MsgDoctorCustomWebhookMissing),
+				Suggestion: i18n.T(i18n.MsgDoctorNotifyReconfigure),
 			})
 		}
 	default:
 		issues = append(issues, doctorIssue{
-			Level:      "警告",
-			Message:    "通知平台未识别: " + platform,
-			Suggestion: "运行 `ClawDeckX channels wizard` 重新配置",
+			Level:      "warning",
+			Message:    i18n.T(i18n.MsgDoctorNotifyUnknown) + platform,
+			Suggestion: i18n.T(i18n.MsgDoctorNotifyReconfigure),
 		})
 	}
 
