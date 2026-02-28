@@ -7,6 +7,7 @@ import (
 
 	"ClawDeckX/internal/constants"
 	"ClawDeckX/internal/database"
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/web"
 	"ClawDeckX/internal/webconfig"
@@ -281,7 +282,7 @@ func (h *AuthHandler) ChangeUsername(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(req.NewUsername) < 3 {
-		web.Fail(w, r, "USERNAME_TOO_SHORT", "用户名至少3个字符", http.StatusBadRequest)
+		web.Fail(w, r, "USERNAME_TOO_SHORT", i18n.T(i18n.MsgAuthUsernameTooShort), http.StatusBadRequest)
 		return
 	}
 
@@ -306,7 +307,7 @@ func (h *AuthHandler) ChangeUsername(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if existing, _ := h.userRepo.FindByUsername(req.NewUsername); existing != nil && existing.ID != user.ID {
-		web.Fail(w, r, "USERNAME_EXISTS", "用户名已存在", http.StatusBadRequest)
+		web.Fail(w, r, "USERNAME_EXISTS", i18n.T(i18n.MsgAuthUsernameExists), http.StatusBadRequest)
 		return
 	}
 
