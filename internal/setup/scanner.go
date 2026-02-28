@@ -1,6 +1,7 @@
 ﻿package setup
 
 import (
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/openclaw"
 	"context"
 	"encoding/json"
@@ -1030,14 +1031,14 @@ func generateRecommendedSteps(report *EnvironmentReport) []Step {
 		if !report.OpenClawConfigured {
 			steps = append(steps, Step{
 				Name:        "configure",
-				Description: "配置 OpenClaw",
+				Description: i18n.T(i18n.MsgScannerStepConfigure),
 				Required:    true,
 			})
 		}
 		if !report.GatewayRunning {
 			steps = append(steps, Step{
 				Name:        "start-gateway",
-				Description: "启动 Gateway",
+				Description: i18n.T(i18n.MsgScannerStepStartGateway),
 				Required:    true,
 			})
 		}
@@ -1047,7 +1048,7 @@ func generateRecommendedSteps(report *EnvironmentReport) []Step {
 	if !report.Tools["node"].Installed {
 		steps = append(steps, Step{
 			Name:        "install-node",
-			Description: "安装 Node.js 22+",
+			Description: i18n.T(i18n.MsgScannerStepInstallNode),
 			Command:     getNodeInstallCommand(report),
 			Required:    true,
 		})
@@ -1056,7 +1057,7 @@ func generateRecommendedSteps(report *EnvironmentReport) []Step {
 	if !report.Tools["git"].Installed {
 		steps = append(steps, Step{
 			Name:        "install-git",
-			Description: "安装 Git",
+			Description: i18n.T(i18n.MsgScannerStepInstallGit),
 			Command:     getGitInstallCommand(report),
 			Required:    false,
 		})
@@ -1064,26 +1065,26 @@ func generateRecommendedSteps(report *EnvironmentReport) []Step {
 
 	steps = append(steps, Step{
 		Name:        "install-openclaw",
-		Description: "安装 OpenClaw",
+		Description: i18n.T(i18n.MsgScannerStepInstallOpenclaw),
 		Command:     getOpenClawInstallCommand(report),
 		Required:    true,
 	})
 
 	steps = append(steps, Step{
 		Name:        "configure",
-		Description: "配置 AI 服务商和 API Key",
+		Description: i18n.T(i18n.MsgScannerStepConfigureProvider),
 		Required:    true,
 	})
 
 	steps = append(steps, Step{
 		Name:        "start-gateway",
-		Description: "启动 Gateway",
+		Description: i18n.T(i18n.MsgScannerStepStartGateway),
 		Required:    true,
 	})
 
 	steps = append(steps, Step{
 		Name:        "verify",
-		Description: "验证安装",
+		Description: i18n.T(i18n.MsgScannerStepVerify),
 		Command:     "openclaw doctor",
 		Required:    true,
 	})
@@ -1106,7 +1107,7 @@ func getNodeInstallCommand(report *EnvironmentReport) string {
 	case "choco":
 		return "choco install nodejs-lts"
 	default:
-		return "# 请访问 https://nodejs.org/en/download/ 下载安装 Node.js"
+		return i18n.T(i18n.MsgScannerNodeManualInstall)
 	}
 }
 
@@ -1125,7 +1126,7 @@ func getGitInstallCommand(report *EnvironmentReport) string {
 	case "choco":
 		return "choco install git"
 	default:
-		return "# 请访问 https://git-scm.com/downloads 下载安装 Git"
+		return i18n.T(i18n.MsgScannerGitManualInstall)
 	}
 }
 
@@ -1153,25 +1154,25 @@ func generateWarnings(report *EnvironmentReport) []string {
 		if version != "" {
 			major := extractMajorVersion(version)
 			if major > 0 && major < 22 {
-				warnings = append(warnings, fmt.Sprintf("Node.js 版本 %s 过低，OpenClaw 需要 Node.js 22+", version))
+				warnings = append(warnings, i18n.T(i18n.MsgScannerWarnNodeVersionLow, map[string]interface{}{"Version": version}))
 			}
 		}
 	}
 
 	if report.IsRoot {
-		warnings = append(warnings, "不建议以 root 用户运行 OpenClaw")
+		warnings = append(warnings, i18n.T(i18n.MsgScannerWarnRootUser))
 	}
 
 	if !report.InternetAccess {
-		warnings = append(warnings, "无法访问互联网，安装可能失败")
+		warnings = append(warnings, i18n.T(i18n.MsgScannerWarnNoInternet))
 	}
 
 	if report.DiskFreeGB > 0 && report.DiskFreeGB < 1 {
-		warnings = append(warnings, fmt.Sprintf("磁盘剩余空间不足 (%.1f GB)，建议至少 1 GB", report.DiskFreeGB))
+		warnings = append(warnings, i18n.T(i18n.MsgScannerWarnDiskSpaceLow, map[string]interface{}{"FreeGB": fmt.Sprintf("%.1f", report.DiskFreeGB)}))
 	}
 
 	if report.IsWSL {
-		warnings = append(warnings, "检测到 WSL 环境，部分功能可能受限")
+		warnings = append(warnings, i18n.T(i18n.MsgScannerWarnWslEnvironment))
 	}
 
 	return warnings
