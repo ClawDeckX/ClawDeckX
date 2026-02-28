@@ -277,7 +277,6 @@ func RunServe(args []string) int {
 
 	router.GET("/api/v1/monitor/stats", monitorHandler.Stats)
 
-
 	router.GET("/api/v1/settings", settingsHandler.GetAll)
 	router.PUT("/api/v1/settings", web.RequireAdmin(settingsHandler.Update))
 	router.GET("/api/v1/settings/language", settingsHandler.GetLanguage)
@@ -635,7 +634,7 @@ func serveIndex(w http.ResponseWriter, fsys fs.FS) {
 	if err != nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `<!DOCTYPE html><html><body><h1>ClawDeckX</h1><p>index.html 未找到</p></body></html>`)
+		fmt.Fprint(w, i18n.T(i18n.MsgServeHtmlIndexNotFound))
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -649,7 +648,7 @@ func spaHandler() http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, `<!DOCTYPE html><html><body><h1>ClawDeckX</h1><p>前端资源加载失败</p></body></html>`)
+			fmt.Fprint(w, i18n.T(i18n.MsgServeHtmlFrontendLoadFailed))
 		}
 	}
 	fileServer := http.FileServer(http.FS(fsys))
@@ -835,10 +834,10 @@ func detectLoopbackRouteConflict(port int) (bool, string) {
 		return false, ""
 	}
 	if ipCode == http.StatusUnauthorized {
-		return true, fmt.Sprintf("127.0.0.1:%d 返回 401 Unauthorized（可能命中 Gateway 而非 ClawDeckX）", port)
+		return true, i18n.T(i18n.MsgServePortConflict401, map[string]interface{}{"Port": port})
 	}
 	if ipCode != 0 {
-		return true, fmt.Sprintf("127.0.0.1:%d 返回 HTTP %d（响应片段: %.120s）", port, ipCode, ipBody)
+		return true, i18n.T(i18n.MsgServePortConflictHttp, map[string]interface{}{"Port": port, "Code": ipCode, "Body": ipBody})
 	}
-	return true, fmt.Sprintf("127.0.0.1:%d 请求失败（%s）", port, ipBody)
+	return true, i18n.T(i18n.MsgServePortConflictRequestFailed, map[string]interface{}{"Port": port, "Error": ipBody})
 }
