@@ -36,11 +36,11 @@ type Status struct {
 }
 
 type Service struct {
-	dockerContainer string
-	GatewayHost     string
-	GatewayPort     int
-	GatewayToken    string
-	gwClient        *GWClient // 远程模式下通过 JSON-RPC 控制网关
+	dockerContainer  string
+	GatewayHost      string
+	GatewayPort      int
+	GatewayToken     string
+	gwClient         *GWClient // 远程模式下通过 JSON-RPC 控制网关
 	runtimeCache     Runtime
 	runtimeCacheTime time.Time
 	runtimeCacheTTL  time.Duration
@@ -133,21 +133,21 @@ func (s *Service) Status() Status {
 	var detail string
 	switch rt {
 	case RuntimeSystemd:
-		detail = "服务名: openclaw"
+		detail = i18n.T(i18n.MsgServiceRuntimeSystemd)
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
-			return Status{Runtime: RuntimeUnknown, Running: false, Detail: "未找到 openclaw 容器"}
+			return Status{Runtime: RuntimeUnknown, Running: false, Detail: i18n.T(i18n.MsgServiceRuntimeDockerNotFound)}
 		}
-		detail = "容器: " + name
+		detail = i18n.T(i18n.MsgServiceRuntimeDockerContainer, map[string]interface{}{"Name": name})
 	case RuntimeProcess:
-		detail = "进程模式"
+		detail = i18n.T(i18n.MsgServiceRuntimeProcess)
 	default:
-		detail = "未检测到 OpenClaw 安装或运行时"
+		detail = i18n.T(i18n.MsgServiceRuntimeUnknown)
 	}
 
 	if running {
-		detail += "（运行中）"
+		detail += i18n.T(i18n.MsgServiceRuntimeRunning)
 	}
 
 	return Status{Runtime: rt, Running: running, Detail: detail}
@@ -169,19 +169,19 @@ func (s *Service) remoteStatus() Status {
 		return Status{
 			Runtime: RuntimeProcess,
 			Running: false,
-			Detail:  fmt.Sprintf("远程 Gateway %s 不可达: %v", addr, err),
+			Detail:  i18n.T(i18n.MsgServiceRemoteGatewayUnreachable, map[string]interface{}{"Addr": addr, "Error": err.Error()}),
 		}
 	}
 	conn.Close()
 
-	detail := fmt.Sprintf("远程 Gateway %s（TCP 可达）", addr)
+	detail := i18n.T(i18n.MsgServiceRemoteGatewayTcpReachable, map[string]interface{}{"Addr": addr})
 	client := &http.Client{Timeout: 3 * time.Second}
 	url := fmt.Sprintf("http://%s/health", addr)
 	resp, err := client.Get(url)
 	if err == nil {
 		resp.Body.Close()
 		if resp.StatusCode < 500 {
-			detail = fmt.Sprintf("远程 Gateway %s（HTTP 正常，状态码 %d）", addr, resp.StatusCode)
+			detail = i18n.T(i18n.MsgServiceRemoteGatewayHttpOk, map[string]interface{}{"Addr": addr, "Code": resp.StatusCode})
 		}
 	}
 
