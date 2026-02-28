@@ -438,6 +438,13 @@
   "verifier.err_health_check_failed": "Gateway 健康检查失败",
   "verifier.err_doctor_failed": "诊断失败: {{.Error}}",
 
+  "prompt.default_no": "否",
+  "prompt.default_yes": "是",
+  "prompt.default_label": "{{.Label}} [默认:{{.Default}}]: ",
+  "prompt.default_marker": " [默认]",
+  "prompt.enter_number_with_default": "输入序号 [{{.Default}}]: ",
+  "prompt.enter_number": "输入序号: ",
+
   "service.get_gateway_config_failed": "获取网关配置失败: {{.Error}}",
   "service.gateway_restart_failed": "网关重启失败: {{.Error}}",
   "service.start_gateway_process_failed": "启动网关进程失败: {{.Error}}",

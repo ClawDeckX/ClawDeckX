@@ -438,6 +438,13 @@
   "verifier.err_health_check_failed": "Gateway health check failed",
   "verifier.err_doctor_failed": "Diagnostics failed: {{.Error}}",
 
+  "prompt.default_no": "No",
+  "prompt.default_yes": "Yes",
+  "prompt.default_label": "{{.Label}} [default:{{.Default}}]: ",
+  "prompt.default_marker": " [default]",
+  "prompt.enter_number_with_default": "Enter number [{{.Default}}]: ",
+  "prompt.enter_number": "Enter number: ",
+
   "service.get_gateway_config_failed": "Failed to get gateway config: {{.Error}}",
   "service.gateway_restart_failed": "Gateway restart failed: {{.Error}}",
   "service.start_gateway_process_failed": "Failed to start gateway process: {{.Error}}",
