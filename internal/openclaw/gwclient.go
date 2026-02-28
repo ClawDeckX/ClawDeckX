@@ -372,7 +372,7 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 	c.mu.Lock()
 	if !c.connected || c.conn == nil {
 		c.mu.Unlock()
-		return nil, errors.New("gateway 未连接")
+		return nil, errors.New(i18n.T(i18n.MsgErrGatewayNotConnected))
 	}
 
 	id := uuid.New().String()
@@ -389,7 +389,7 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 	if err != nil {
 		delete(c.pending, id)
 		c.mu.Unlock()
-		return nil, fmt.Errorf("序列化请求失败: %w", err)
+		return nil, fmt.Errorf(i18n.T(i18n.MsgErrSerializeRequestFailed), err)
 	}
 
 	err = c.conn.WriteMessage(websocket.TextMessage, data)
@@ -406,7 +406,7 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 	select {
 	case resp := <-ch:
 		if resp == nil {
-			return nil, errors.New("连接已关闭")
+			return nil, errors.New(i18n.T(i18n.MsgErrConnectionClosed))
 		}
 		if !resp.OK {
 			msg := "未知错误"
@@ -420,9 +420,9 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 		c.mu.Lock()
 		delete(c.pending, id)
 		c.mu.Unlock()
-		return nil, fmt.Errorf("请求超时: %s", method)
+		return nil, fmt.Errorf(i18n.T(i18n.MsgErrRequestTimeout), method)
 	case <-c.stopCh:
-		return nil, errors.New("客户端已停止")
+		return nil, errors.New(i18n.T(i18n.MsgErrClientStopped))
 	}
 }
 

@@ -123,7 +123,7 @@ func subUsage(name string, lines []string) string {
 	return b.String()
 }
 
-var ErrInvalidArgs = errors.New("参数无效")
+var ErrInvalidArgs = errors.New(i18n.T(i18n.MsgErrInvalidArgs))
 
 func PrintError(err error) {
 	if err == nil {

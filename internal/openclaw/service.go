@@ -209,7 +209,7 @@ func (s *Service) remoteStatus() Status {
 func (s *Service) Start() error {
 	// 远程模式：OpenClaw 网关不支持通过 JSON-RPC 启动，需要在远程服务器上操作
 	if s.IsRemote() {
-		return errors.New("远程网关不支持远程启动，请在远程服务器上手动启动 OpenClaw 网关")
+		return errors.New(i18n.T(i18n.MsgErrRemoteGatewayNoStart))
 	}
 	switch s.DetectRuntime() {
 	case RuntimeSystemd:
@@ -217,13 +217,13 @@ func (s *Service) Start() error {
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
-			return errors.New("未找到 openclaw 容器")
+			return errors.New(i18n.T(i18n.MsgErrContainerNotFound))
 		}
 		return runCommand("docker", "start", name)
 	case RuntimeProcess:
 		cmdName := ResolveOpenClawCmd()
 		if cmdName == "" {
-			return errors.New("未找到 openclaw 命令")
+			return errors.New(i18n.T(i18n.MsgErrCommandNotFound))
 		}
 
 		// 读取配置中的端口和 bind
@@ -245,14 +245,14 @@ func (s *Service) Start() error {
 		// Unix: nohup 后台启动
 		return runCommand("sh", "-c", fmt.Sprintf("nohup %s gateway run --bind %s --port %s > /tmp/openclaw-gateway.log 2>&1 &", cmdName, bind, port))
 	default:
-		return errors.New("无法识别本地运行环境，无法启动")
+		return errors.New(i18n.T(i18n.MsgErrUnknownRuntimeStart))
 	}
 }
 
 func (s *Service) Stop() error {
 	// 远程模式：OpenClaw 网关不支持通过 JSON-RPC 停止，需要在远程服务器上操作
 	if s.IsRemote() {
-		return errors.New("远程网关不支持远程停止，请在远程服务器上手动停止 OpenClaw 网关")
+		return errors.New(i18n.T(i18n.MsgErrRemoteGatewayNoStop))
 	}
 	switch s.DetectRuntime() {
 	case RuntimeSystemd:
@@ -260,7 +260,7 @@ func (s *Service) Stop() error {
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
-			return errors.New("未找到 openclaw 容器")
+			return errors.New(i18n.T(i18n.MsgErrContainerNotFound))
 		}
 		return runCommand("docker", "stop", name)
 	case RuntimeProcess:
@@ -286,9 +286,9 @@ func (s *Service) Stop() error {
 		if waitGatewayDown(5, 700*time.Millisecond) {
 			return nil
 		}
-		return errors.New("停止 Gateway 超时")
+		return errors.New(i18n.T(i18n.MsgErrStopGatewayTimeout))
 	default:
-		return errors.New("无法识别本地运行环境，无法停止")
+		return errors.New(i18n.T(i18n.MsgErrUnknownRuntimeStop))
 	}
 }
 
@@ -311,7 +311,7 @@ func (s *Service) Restart() error {
 		return s.gwClientRestart()
 	}
 	if s.IsRemote() {
-		return errors.New("远程网关未连接，无法重启")
+		return errors.New(i18n.T(i18n.MsgErrRemoteGatewayNotConnected))
 	}
 	rt := s.DetectRuntime()
 	logger.Gateway.Debug().Str("runtime", fmt.Sprintf("%v", rt)).Msg(i18n.T(i18n.MsgLogRestartDetectedRuntime))
@@ -321,7 +321,7 @@ func (s *Service) Restart() error {
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
-			return errors.New("未找到 openclaw 容器")
+			return errors.New(i18n.T(i18n.MsgErrContainerNotFound))
 		}
 		return runCommand("docker", "restart", name)
 	case RuntimeProcess:
@@ -336,7 +336,7 @@ func (s *Service) Restart() error {
 		logger.Gateway.Error().
 			Str("runtime", fmt.Sprintf("%v", rt)).
 			Msg(i18n.T(i18n.MsgLogRestartUnknownRuntime))
-		return errors.New("无法识别本地运行环境，无法重启")
+		return errors.New(i18n.T(i18n.MsgErrUnknownRuntimeRestart))
 	}
 }
 
@@ -345,7 +345,7 @@ func (s *Service) gwClientRestart() error {
 	// 第一步：获取当前配置快照的 hash
 	cfgData, err := s.gwClient.RequestWithTimeout("config.get", map[string]interface{}{}, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("获取网关配置失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrGetGatewayConfigFailed), err)
 	}
 	// 从返回结果中提取 hash
 	var baseHash string
@@ -368,7 +368,7 @@ func (s *Service) gwClientRestart() error {
 	}
 	_, err = s.gwClient.RequestWithTimeout("config.patch", params, 15*time.Second)
 	if err != nil {
-		return fmt.Errorf("网关重启失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrGatewayRestartFailed), err)
 	}
 	return nil
 }
@@ -559,7 +559,7 @@ func (s *Service) startWindowsGateway(cmdName, bind, port string) error {
 
 	if err := c.Start(); err != nil {
 		logFile.Close()
-		return fmt.Errorf("启动网关进程失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrStartGatewayProcessFailed), err)
 	}
 
 	// 释放进程句柄，让子进程完全独立运行
@@ -622,7 +622,7 @@ func runCommand(cmd string, args ...string) error {
 	c := exec.CommandContext(ctx, cmd, args...)
 	out, err := c.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%s %s 失败: %s", cmd, strings.Join(args, " "), strings.TrimSpace(string(out)))
+		return fmt.Errorf(i18n.T(i18n.MsgErrCommandFailed), cmd, strings.Join(args, " "), strings.TrimSpace(string(out)))
 	}
 	output.Debugf("命令成功: %s %s\n", cmd, strings.Join(args, " "))
 	return nil

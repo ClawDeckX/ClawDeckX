@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"ClawDeckX/internal/i18n"
 	"bufio"
 	"context"
 	"encoding/json"
@@ -174,16 +175,16 @@ func (sc *StreamCommand) Run(ctx context.Context, name string, args ...string) e
 	// 获取 stdout 和 stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("创建 stdout 管道失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrCreateStdoutPipeFailed), err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("创建 stderr 管道失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrCreateStderrPipeFailed), err)
 	}
 
 	// 启动命令
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("启动命令失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrStartCommandFailed), err)
 	}
 
 	// 并发读取输出
@@ -205,7 +206,7 @@ func (sc *StreamCommand) Run(ctx context.Context, name string, args ...string) e
 
 	// 等待命令完成
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("命令执行失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrCommandExecFailed), err)
 	}
 
 	return nil
@@ -254,16 +255,16 @@ func (sc *StreamCommand) RunShell(ctx context.Context, command string) error {
 	// 获取 stdout 和 stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("创建 stdout 管道失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrCreateStdoutPipeFailed), err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("创建 stderr 管道失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrCreateStderrPipeFailed), err)
 	}
 
 	// 启动命令
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("启动命令失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrStartCommandFailed), err)
 	}
 
 	// 并发读取输出
@@ -285,7 +286,7 @@ func (sc *StreamCommand) RunShell(ctx context.Context, command string) error {
 
 	// 等待命令完成
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("命令执行失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrCommandExecFailed), err)
 	}
 
 	return nil

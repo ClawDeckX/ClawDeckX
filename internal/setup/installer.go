@@ -1,10 +1,11 @@
 ﻿package setup
 
 import (
+	"ClawDeckX/internal/i18n"
+	"ClawDeckX/internal/openclaw"
 	"context"
 	"encoding/json"
 	"fmt"
-	"ClawDeckX/internal/openclaw"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -116,7 +117,7 @@ func (i *Installer) InstallNode(ctx context.Context) error {
 func (i *Installer) installNodeViaPackageManager(ctx context.Context) error {
 	cmd := getNodeInstallCommand(i.env)
 	if cmd == "" || strings.Contains(cmd, "请访问") {
-		return fmt.Errorf("无可用的包管理器")
+		return fmt.Errorf(i18n.T(i18n.MsgErrNoPackageManager))
 	}
 
 	sc := i.newSC("install", "install-node")
@@ -129,7 +130,7 @@ func (i *Installer) installNodeViaFnm(ctx context.Context) error {
 	case "windows":
 		// Windows: 使用 PowerShell 安装 fnm
 		if !i.env.Tools["powershell"].Installed {
-			return fmt.Errorf("需要 PowerShell")
+			return fmt.Errorf(i18n.T(i18n.MsgErrNeedPowershell))
 		}
 		sc := NewStreamCommand(i.emitter, "install", "install-fnm")
 		// 安装 fnm
@@ -144,7 +145,7 @@ func (i *Installer) installNodeViaFnm(ctx context.Context) error {
 	case "darwin", "linux":
 		// Unix: 使用 curl 安装 fnm
 		if !i.env.Tools["curl"].Installed {
-			return fmt.Errorf("需要 curl")
+			return fmt.Errorf(i18n.T(i18n.MsgErrNeedCurl))
 		}
 		sc := NewStreamCommand(i.emitter, "install", "install-fnm")
 		// 安装 fnm
@@ -159,7 +160,7 @@ func (i *Installer) installNodeViaFnm(ctx context.Context) error {
 		return sc.RunShell(ctx, fnmCmd)
 
 	default:
-		return fmt.Errorf("不支持的操作系统")
+		return fmt.Errorf(i18n.T(i18n.MsgErrUnsupportedOS))
 	}
 }
 
@@ -213,7 +214,7 @@ func (i *Installer) provideNodeInstallGuide() error {
 	}
 
 	i.emitter.EmitLog(guide)
-	return fmt.Errorf("需要手动安装 Node.js")
+	return fmt.Errorf(i18n.T(i18n.MsgErrNeedManualInstallNode))
 }
 
 // InstallGit 安装 Git
@@ -227,12 +228,12 @@ func (i *Installer) InstallGit(ctx context.Context) error {
 
 	cmd := getGitInstallCommand(i.env)
 	if cmd == "" {
-		return fmt.Errorf("无法确定 Git 安装命令")
+		return fmt.Errorf(i18n.T(i18n.MsgErrCannotDetermineGitCmd))
 	}
 
 	sc := i.newSC("install", "install-git")
 	if err := sc.RunShell(ctx, cmd); err != nil {
-		return fmt.Errorf("Git 安装失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrGitInstallFailed), err)
 	}
 
 	i.emitter.EmitLog("Git 安装成功")
@@ -372,7 +373,7 @@ func (i *Installer) provideOpenClawInstallGuideWithVersion(version string) error
   3. 访问文档: https://docs.openclaw.ai`
 
 	i.emitter.EmitLog(guide)
-	return fmt.Errorf("需要手动安装 openclaw")
+	return fmt.Errorf(i18n.T(i18n.MsgErrNeedManualInstallOpenclaw))
 }
 
 // provideOpenClawInstallGuide 提供 OpenClaw 手动安装指引
@@ -402,7 +403,7 @@ func (i *Installer) provideOpenClawInstallGuide() error {
   2. 重启 ClawDeckX 应用`
 
 	i.emitter.EmitLog(guide)
-	return fmt.Errorf("需要手动安装 OpenClaw")
+	return fmt.Errorf(i18n.T(i18n.MsgErrNeedManualInstallOpenclaw))
 }
 
 // installViaScript 使用安装脚本安装（旧版，保留兼容）
@@ -420,7 +421,7 @@ func (i *Installer) installViaScriptWithConfig(ctx context.Context, config Insta
 	// Windows
 	if runtime.GOOS == "windows" {
 		if !i.env.Tools["powershell"].Installed {
-			return fmt.Errorf("未检测到 PowerShell")
+			return fmt.Errorf(i18n.T(i18n.MsgErrPowershellNotDetected))
 		}
 		// 使用 --no-onboard 参数跳过引导向导
 		cmd := fmt.Sprintf("iwr -useb %s.ps1 | iex -Command '& { $input | iex } --no-onboard'", scriptURL)
@@ -430,7 +431,7 @@ func (i *Installer) installViaScriptWithConfig(ctx context.Context, config Insta
 
 	// 需要 curl
 	if !i.env.Tools["curl"].Installed {
-		return fmt.Errorf("未检测到 curl，无法自动安装")
+		return fmt.Errorf(i18n.T(i18n.MsgErrCurlNotDetected))
 	}
 
 	// Linux/macOS - 使用 --no-onboard 参数
@@ -554,7 +555,7 @@ func maskSensitiveArgs(args []string) []string {
 func (i *Installer) ensureDefaultConfig() error {
 	cfgPath := GetOpenClawConfigPath()
 	if cfgPath == "" {
-		return fmt.Errorf("无法获取配置文件路径")
+		return fmt.Errorf(i18n.T(i18n.MsgErrCannotGetConfigPath))
 	}
 
 	// 如果配置文件已存在且合法，不覆盖
@@ -584,7 +585,7 @@ func (i *Installer) ensureDefaultConfig() error {
 
 	sc := NewStreamCommand(i.emitter, "configure", "onboard-default")
 	if err := sc.Run(context.Background(), cmdName, args...); err != nil {
-		return fmt.Errorf("onboard 生成默认配置失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrOnboardDefaultConfigFailed), err)
 	}
 
 	i.emitter.EmitLog("✅ 默认配置已通过 onboard 生成")
@@ -596,12 +597,12 @@ func (i *Installer) ensureDefaultConfig() error {
 func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 	configDir := ResolveStateDir()
 	if configDir == "" {
-		return fmt.Errorf("获取状态目录失败")
+		return fmt.Errorf(i18n.T(i18n.MsgErrGetStateDirFailed))
 	}
 	configPath := filepath.Join(configDir, "openclaw.json")
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("创建配置目录失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrCreateConfigDirFailed), err)
 	}
 
 	// 确定 provider 名称（custom 映射为实际使用的 API 类型）
@@ -688,11 +689,11 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 
 	data, err := json.MarshalIndent(minConfig, "", "  ")
 	if err != nil {
-		return fmt.Errorf("序列化配置失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrSerializeConfigFailed), err)
 	}
 
 	if err := os.WriteFile(configPath, data, 0600); err != nil {
-		return fmt.Errorf("写入配置文件失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrWriteConfigFailed), err)
 	}
 
 	i.emitter.EmitLog(fmt.Sprintf("配置已写入: %s", configPath))
@@ -905,17 +906,17 @@ func (i *Installer) InstallVPNTool(ctx context.Context, tool string) error {
 				return sc.RunShell(ctx, "winget install --id ZeroTier.ZeroTierOne --accept-package-agreements --accept-source-agreements")
 			}
 			i.emitter.EmitLog("请手动下载安装 ZeroTier: https://www.zerotier.com/download/")
-			return fmt.Errorf("Windows 需要手动安装 ZeroTier（无 winget）")
+			return fmt.Errorf(i18n.T(i18n.MsgErrWindowsNeedManualZerotier))
 		case "darwin":
 			if i.env.Tools["brew"].Installed {
 				return sc.RunShell(ctx, "brew install --cask zerotier-one")
 			}
 			i.emitter.EmitLog("请手动下载安装 ZeroTier: https://www.zerotier.com/download/")
-			return fmt.Errorf("macOS 需要 Homebrew 或手动安装 ZeroTier")
+			return fmt.Errorf(i18n.T(i18n.MsgErrMacosNeedBrewZerotier))
 		case "linux":
 			return sc.RunShell(ctx, "curl -s https://install.zerotier.com | sudo bash")
 		default:
-			return fmt.Errorf("不支持的操作系统: %s", runtime.GOOS)
+			return fmt.Errorf(i18n.T(i18n.MsgErrUnsupportedOSWithName), runtime.GOOS)
 		}
 
 	case "tailscale":
@@ -925,21 +926,21 @@ func (i *Installer) InstallVPNTool(ctx context.Context, tool string) error {
 				return sc.RunShell(ctx, "winget install --id tailscale.tailscale --accept-package-agreements --accept-source-agreements")
 			}
 			i.emitter.EmitLog("请手动下载安装 Tailscale: https://tailscale.com/download")
-			return fmt.Errorf("Windows 需要手动安装 Tailscale（无 winget）")
+			return fmt.Errorf(i18n.T(i18n.MsgErrWindowsNeedManualTailscale))
 		case "darwin":
 			if i.env.Tools["brew"].Installed {
 				return sc.RunShell(ctx, "brew install --cask tailscale")
 			}
 			i.emitter.EmitLog("请手动下载安装 Tailscale: https://tailscale.com/download")
-			return fmt.Errorf("macOS 需要 Homebrew 或手动安装 Tailscale")
+			return fmt.Errorf(i18n.T(i18n.MsgErrMacosNeedBrewTailscale))
 		case "linux":
 			return sc.RunShell(ctx, "curl -fsSL https://tailscale.com/install.sh | sh")
 		default:
-			return fmt.Errorf("不支持的操作系统: %s", runtime.GOOS)
+			return fmt.Errorf(i18n.T(i18n.MsgErrUnsupportedOSWithName), runtime.GOOS)
 		}
 
 	default:
-		return fmt.Errorf("未知工具: %s", tool)
+		return fmt.Errorf(i18n.T(i18n.MsgErrUnknownTool), tool)
 	}
 }
 
