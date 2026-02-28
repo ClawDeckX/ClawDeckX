@@ -281,10 +281,10 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, setField, getFie
   const { toast } = useToast();
 
   const API_OPTIONS = useMemo(() => [
-    { value: 'openai-completions', label: 'OpenAI Completions' },
+    { value: 'openai-completions', label: 'OpenAI' },
+    { value: 'anthropic-messages', label: 'Anthropic' },
+    { value: 'google-generative-ai', label: 'Google' },
     { value: 'openai-responses', label: 'OpenAI Responses' },
-    { value: 'anthropic-messages', label: 'Anthropic Messages' },
-    { value: 'google-generative-ai', label: 'Google GenAI' },
     { value: 'bedrock-converse-stream', label: 'AWS Bedrock' },
     { value: 'github-copilot', label: 'GitHub Copilot' },
   ], []);
