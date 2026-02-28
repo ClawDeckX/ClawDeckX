@@ -544,6 +544,9 @@ const (
 	// Auth messages
 	MsgAuthUsernameTooShort = "auth.username_too_short"
 	MsgAuthUsernameExists   = "auth.username_exists"
+
+	// Notify messages
+	MsgNotifyTestMessage = "notify.test_message"
 )
 
 // CLI messages (openclaw cli wrapper)
