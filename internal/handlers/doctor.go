@@ -119,18 +119,13 @@ type overviewResponse struct {
 	Actions    []overviewAction     `json:"actions"`
 }
 
-// dedupeCheckItems removes duplicate check items by ID, keeping the first occurrence.
+// dedupeCheckItems removes duplicate check items by normalized key, keeping the first occurrence.
+// It also handles semantic duplicates between basic checks and gateway diagnose checks.
 func dedupeCheckItems(items []CheckItem) []CheckItem {
 	seen := make(map[string]bool)
 	result := make([]CheckItem, 0, len(items))
 	for _, item := range items {
-		key := item.ID
-		if key == "" {
-			key = item.Code
-		}
-		if key == "" {
-			key = item.Name
-		}
+		key := normalizeCheckKey(item)
 		if seen[key] {
 			continue
 		}
@@ -138,6 +133,44 @@ func dedupeCheckItems(items []CheckItem) []CheckItem {
 		result = append(result, item)
 	}
 	return result
+}
+
+// normalizeCheckKey returns a normalized key for deduplication.
+// Maps semantically equivalent checks to the same key.
+func normalizeCheckKey(item CheckItem) string {
+	id := strings.ToLower(item.ID)
+	name := strings.ToLower(item.Name)
+
+	// Map gateway diagnose checks to their base equivalents
+	switch {
+	case strings.Contains(id, "openclaw_installed") || strings.Contains(id, "openclaw.install"):
+		return "check:openclaw_install"
+	case strings.Contains(id, "config_exists") || strings.Contains(id, "config.file") || strings.Contains(id, "config_valid"):
+		return "check:config_file"
+	case strings.Contains(id, "gateway_process") || strings.Contains(id, "gateway.status"):
+		return "check:gateway_status"
+	case strings.Contains(id, "port_reachable") || strings.Contains(id, "port.default"):
+		return "check:port"
+	case strings.Contains(id, "port_conflict"):
+		return "check:port_conflict"
+	case strings.Contains(id, "auth_token"):
+		return "check:auth_token"
+	case strings.Contains(id, "gateway_api"):
+		return "check:gateway_api"
+	case strings.Contains(id, "pid") || strings.Contains(id, "lock"):
+		return "check:pid_lock"
+	case strings.Contains(id, "disk"):
+		return "check:disk"
+	}
+
+	// Fallback: use ID or Name
+	if item.ID != "" {
+		return "id:" + id
+	}
+	if item.Code != "" {
+		return "code:" + strings.ToLower(item.Code)
+	}
+	return "name:" + name
 }
 
 // Run executes diagnostics.

@@ -101,7 +101,12 @@ func (c *GWCollector) handleEvent(event string, payload json.RawMessage) {
 		c.handleErrorEvent(payload)
 	case strings.HasPrefix(event, "cron."):
 		c.handleCronEvent(event, payload)
+	case event == "log":
+		c.handleLogEvent(payload)
 	}
+
+	// Unified log analysis: check payload for error/warn indicators
+	c.analyzePayloadForErrors(event, payload)
 }
 
 func (c *GWCollector) handleChatStreamEvent(payload json.RawMessage) {
@@ -393,5 +398,105 @@ func classifyTool(tool string) string {
 		return "Memory"
 	default:
 		return "System"
+	}
+}
+
+// handleLogEvent processes gateway log events (event type: "log")
+func (c *GWCollector) handleLogEvent(payload json.RawMessage) {
+	var data struct {
+		Level   string `json:"level"`
+		Message string `json:"message"`
+		Msg     string `json:"msg"`
+		Time    string `json:"time"`
+		Error   string `json:"error"`
+		Err     string `json:"err"`
+	}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return
+	}
+
+	level := strings.ToLower(data.Level)
+	message := data.Message
+	if message == "" {
+		message = data.Msg
+	}
+	errDetail := data.Error
+	if errDetail == "" {
+		errDetail = data.Err
+	}
+
+	// Only record ERROR and WARN level logs
+	switch level {
+	case "error", "fatal", "panic":
+		summary := "Gateway error: " + message
+		if errDetail != "" {
+			summary += " (" + errDetail + ")"
+		}
+		c.writeActivity("Log", "high", summary, string(payload), "gateway", "alert", "")
+	case "warn", "warning":
+		summary := "Gateway warning: " + message
+		c.writeActivity("Log", "medium", summary, string(payload), "gateway", "alert", "")
+	}
+}
+
+// analyzePayloadForErrors performs unified error analysis on any event payload.
+// It detects error/warn indicators in the payload and records them as activities.
+func (c *GWCollector) analyzePayloadForErrors(event string, payload json.RawMessage) {
+	// Skip events that are already handled specifically
+	if event == "error" || event == "log" {
+		return
+	}
+
+	// Try to extract common error fields from payload
+	var data map[string]interface{}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return
+	}
+
+	// Check for error indicators in the payload
+	var errorMsg string
+	var level string
+
+	// Check common error field names
+	for _, key := range []string{"error", "err", "errorMessage", "error_message", "message"} {
+		if v, ok := data[key]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				errorMsg = s
+				break
+			}
+		}
+	}
+
+	// Check level/status fields
+	for _, key := range []string{"level", "status", "state", "severity"} {
+		if v, ok := data[key]; ok {
+			if s, ok := v.(string); ok {
+				level = strings.ToLower(s)
+				break
+			}
+		}
+	}
+
+	// Determine if this is an error/warning based on level or error message presence
+	isError := level == "error" || level == "fatal" || level == "panic" || level == "critical"
+	isWarn := level == "warn" || level == "warning"
+
+	// If no explicit level but has error message, treat as error
+	if errorMsg != "" && !isError && !isWarn {
+		isError = true
+	}
+
+	if isError && errorMsg != "" {
+		summary := fmt.Sprintf("Event error [%s]: %s", event, errorMsg)
+		if len(summary) > 200 {
+			summary = summary[:200] + "..."
+		}
+		c.writeActivity("System", "high", summary, string(payload), event, "alert", "")
+	} else if isWarn && errorMsg != "" {
+		summary := fmt.Sprintf("Event warning [%s]: %s", event, errorMsg)
+		if len(summary) > 200 {
+			summary = summary[:200] + "..."
+		}
+		c.writeActivity("System", "medium", summary, string(payload), event, "alert", "")
 	}
 }

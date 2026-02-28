@@ -121,10 +121,11 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     }
   }, [loadOverview, runDoctor, text.overviewLoadFail, toast]);
 
-  // Load cached data on mount, don't auto-run expensive checks
-  useEffect(() => {
-    fetchAll(false); // Use cached data (12s cache)
-  }, [fetchAll]);
+  // Don't auto-run on mount - wait for user to click "立即体检" button
+  // This prevents slow startup experience
+  // useEffect(() => {
+  //   fetchAll(false);
+  // }, [fetchAll]);
 
   const handleFix = useCallback(async () => {
     setFixing(true);
