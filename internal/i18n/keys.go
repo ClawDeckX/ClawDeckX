@@ -530,6 +530,11 @@ const (
 	MsgServePortConflict401           = "serve.port_conflict_401"
 	MsgServePortConflictHttp          = "serve.port_conflict_http"
 	MsgServePortConflictRequestFailed = "serve.port_conflict_request_failed"
+
+	// Diagnostics messages
+	MsgDiagnosticsLevelWarning             = "diagnostics.level_warning"
+	MsgDiagnosticsGatewayStatusPlaceholder = "diagnostics.gateway_status_placeholder"
+	MsgDiagnosticsImplementHealthCheck     = "diagnostics.implement_health_check"
 )
 
 // CLI messages (openclaw cli wrapper)
