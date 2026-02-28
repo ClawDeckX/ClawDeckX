@@ -1,5 +1,7 @@
 ﻿package diagnostics
 
+import "ClawDeckX/internal/i18n"
+
 type Issue struct {
 	Level      string
 	Message    string
@@ -15,9 +17,9 @@ func Run() Report {
 	return Report{
 		Issues: []Issue{
 			{
-				Level:      "警告",
-				Message:    "网关状态未检查（占位）",
-				Suggestion: "实现网关健康检查",
+				Level:      i18n.T(i18n.MsgDiagnosticsLevelWarning),
+				Message:    i18n.T(i18n.MsgDiagnosticsGatewayStatusPlaceholder),
+				Suggestion: i18n.T(i18n.MsgDiagnosticsImplementHealthCheck),
 			},
 		},
 		HasErrors: false,
