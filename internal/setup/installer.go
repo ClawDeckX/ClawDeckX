@@ -251,7 +251,7 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 		}
 	}
 
-	i.emitter.EmitLog("自动安装失败，请手动安装 OpenClaw")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawManualRequired))
 	return i.provideOpenClawInstallGuide()
 }
 
@@ -270,8 +270,8 @@ func (i *Installer) InstallClawHub(ctx context.Context, registry string) error {
 
 	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubInstalling))
 	if err := i.installViaNpmWithOptions(ctx, "clawhub", registry); err != nil {
-		i.emitter.EmitLog(fmt.Sprintf("⚠️ ClawHub CLI 安装失败: %v（跳过）", err))
-		return nil // 非致命错误，不阻断安装流程
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerClawhubFailed, map[string]interface{}{"Error": err.Error()}))
+		return nil
 	}
 
 	if detectTool("clawhub", "--version").Installed {
@@ -288,25 +288,25 @@ func (i *Installer) verifyOpenClawInstalled() bool {
 }
 
 func (i *Installer) InstallOpenClawWithConfig(ctx context.Context, config InstallConfig) error {
-	i.emitter.EmitStep("install", "install-openclaw", "正在安装 OpenClaw...", 30)
+	i.emitter.EmitStep("install", "install-openclaw", i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": "OpenClaw"}), 30)
 
 	cmdName := "openclaw"
 
 	if i.env.Tools["npm"].Installed || detectTool("npm", "--version").Installed {
-		i.emitter.EmitLog("使用 npm 全局安装...")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNpmGlobalInstalling))
 		if err := i.installViaNpmWithOptions(ctx, "openclaw", config.Registry); err == nil {
 			if detectTool(cmdName, "--version").Installed {
-				i.emitter.EmitLog("✓ OpenClaw 通过 npm 安装成功")
+				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawNpmSuccess))
 				return nil
 			}
-			i.emitter.EmitLog("⚠ npm 安装完成但未检测到命令，可能需要重启")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawNpmRestart))
 			return nil
 		} else {
-			i.emitter.EmitLog(fmt.Sprintf("npm 安装失败: %v", err))
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawNpmFailed, map[string]interface{}{"Error": err.Error()}))
 		}
 	}
 
-	i.emitter.EmitLog("自动安装失败，请手动安装 OpenClaw")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawManualRequired))
 	return i.provideOpenClawInstallGuideWithVersion(config.Version)
 }
 
