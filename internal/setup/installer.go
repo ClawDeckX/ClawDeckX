@@ -762,13 +762,13 @@ func (i *Installer) InstallVPNTool(ctx context.Context, tool string) error {
 			if detectTool("winget", "--version").Installed {
 				return sc.RunShell(ctx, "winget install --id ZeroTier.ZeroTierOne --accept-package-agreements --accept-source-agreements")
 			}
-			i.emitter.EmitLog("请手动下载安装 ZeroTier: https://www.zerotier.com/download/")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerManualVpnDownload, map[string]interface{}{"Tool": "ZeroTier", "Url": "https://www.zerotier.com/download/"}))
 			return fmt.Errorf(i18n.T(i18n.MsgErrWindowsNeedManualZerotier))
 		case "darwin":
 			if i.env.Tools["brew"].Installed {
 				return sc.RunShell(ctx, "brew install --cask zerotier-one")
 			}
-			i.emitter.EmitLog("请手动下载安装 ZeroTier: https://www.zerotier.com/download/")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerManualVpnDownload, map[string]interface{}{"Tool": "ZeroTier", "Url": "https://www.zerotier.com/download/"}))
 			return fmt.Errorf(i18n.T(i18n.MsgErrMacosNeedBrewZerotier))
 		case "linux":
 			return sc.RunShell(ctx, "curl -s https://install.zerotier.com | sudo bash")
@@ -782,13 +782,13 @@ func (i *Installer) InstallVPNTool(ctx context.Context, tool string) error {
 			if detectTool("winget", "--version").Installed {
 				return sc.RunShell(ctx, "winget install --id tailscale.tailscale --accept-package-agreements --accept-source-agreements")
 			}
-			i.emitter.EmitLog("请手动下载安装 Tailscale: https://tailscale.com/download")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerManualVpnDownload, map[string]interface{}{"Tool": "Tailscale", "Url": "https://tailscale.com/download"}))
 			return fmt.Errorf(i18n.T(i18n.MsgErrWindowsNeedManualTailscale))
 		case "darwin":
 			if i.env.Tools["brew"].Installed {
 				return sc.RunShell(ctx, "brew install --cask tailscale")
 			}
-			i.emitter.EmitLog("请手动下载安装 Tailscale: https://tailscale.com/download")
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerManualVpnDownload, map[string]interface{}{"Tool": "Tailscale", "Url": "https://tailscale.com/download"}))
 			return fmt.Errorf(i18n.T(i18n.MsgErrMacosNeedBrewTailscale))
 		case "linux":
 			return sc.RunShell(ctx, "curl -fsSL https://tailscale.com/install.sh | sh")
@@ -1001,41 +1001,41 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 	}
 
 	if config.InstallZeroTier || config.InstallTailscale {
-		i.emitter.EmitPhase("vpn-tools", "安装内网穿透工具...", 45)
+		i.emitter.EmitPhase("vpn-tools", i18n.T(i18n.MsgInstallerPhaseVpnTools), 45)
 		if config.InstallZeroTier {
 			if err := i.InstallVPNTool(ctx, "zerotier"); err != nil {
-				i.emitter.EmitLog(fmt.Sprintf("⚠️ ZeroTier 安装失败: %v（跳过）", err))
+				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerInstallFailedSkip, map[string]interface{}{"Tool": "ZeroTier", "Error": err.Error()}))
 			} else if config.ZerotierNetworkId != "" {
-				i.emitter.EmitLog(fmt.Sprintf("正在加入 ZeroTier 网络: %s", config.ZerotierNetworkId))
+				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerJoiningZerotier, map[string]interface{}{"NetworkId": config.ZerotierNetworkId}))
 				sc := i.newSC("install", "zerotier-join")
 				joinCmd := "sudo zerotier-cli join " + config.ZerotierNetworkId
 				if runtime.GOOS == "windows" {
 					joinCmd = "zerotier-cli join " + config.ZerotierNetworkId
 				}
 				if err := sc.RunShell(ctx, joinCmd); err != nil {
-					i.emitter.EmitLog(fmt.Sprintf("⚠️ 加入 ZeroTier 网络失败: %v", err))
+					i.emitter.EmitLog(i18n.T(i18n.MsgInstallerZerotierJoinFailed, map[string]interface{}{"Error": err.Error()}))
 				} else {
-					i.emitter.EmitLog(fmt.Sprintf("✓ 已加入 ZeroTier 网络: %s", config.ZerotierNetworkId))
+					i.emitter.EmitLog(i18n.T(i18n.MsgInstallerZerotierJoined, map[string]interface{}{"NetworkId": config.ZerotierNetworkId}))
 				}
 			}
 		}
 		if config.InstallTailscale {
 			if err := i.InstallVPNTool(ctx, "tailscale"); err != nil {
-				i.emitter.EmitLog(fmt.Sprintf("⚠️ Tailscale 安装失败: %v（跳过）", err))
+				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerInstallFailedSkip, map[string]interface{}{"Tool": "Tailscale", "Error": err.Error()}))
 			}
 		}
 	}
 
 	if !config.SkipConfig {
-		i.emitter.EmitPhase("configure", "开始配置...", 50)
+		i.emitter.EmitPhase("configure", i18n.T(i18n.MsgInstallerPhaseConfigure), 50)
 		if err := i.ConfigureOpenClaw(ctx, config); err != nil {
-			result.ErrorMessage = "配置失败"
+			result.ErrorMessage = i18n.T(i18n.MsgInstallerConfigFailed)
 			result.ErrorDetails = err.Error()
 			i.emitter.EmitError(result.ErrorMessage, result)
 			return result, err
 		}
 	} else {
-		i.emitter.EmitLog("跳过模型配置，生成默认配置文件...")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerSkipConfigGenerateDefault))
 		if err := i.ensureDefaultConfig(); err != nil {
 			i.emitter.EmitLog(fmt.Sprintf("⚠️ 生成默认配置失败: %v", err))
 		}
