@@ -455,6 +455,10 @@
   "diagnostics.gateway_status_placeholder": "网关状态未检查（占位）",
   "diagnostics.implement_health_check": "实现网关健康检查",
 
+  "tray.open_web_ui": "打开管理后台",
+  "tray.address": "地址: {{.Url}}",
+  "tray.quit": "退出",
+
   "service.get_gateway_config_failed": "获取网关配置失败: {{.Error}}",
   "service.gateway_restart_failed": "网关重启失败: {{.Error}}",
   "service.start_gateway_process_failed": "启动网关进程失败: {{.Error}}",

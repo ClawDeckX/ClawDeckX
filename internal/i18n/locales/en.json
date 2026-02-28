@@ -455,6 +455,10 @@
   "diagnostics.gateway_status_placeholder": "Gateway status not checked (placeholder)",
   "diagnostics.implement_health_check": "Implement gateway health check",
 
+  "tray.open_web_ui": "Open Web UI",
+  "tray.address": "Address: {{.Url}}",
+  "tray.quit": "Quit",
+
   "service.get_gateway_config_failed": "Failed to get gateway config: {{.Error}}",
   "service.gateway_restart_failed": "Gateway restart failed: {{.Error}}",
   "service.start_gateway_process_failed": "Failed to start gateway process: {{.Error}}",
