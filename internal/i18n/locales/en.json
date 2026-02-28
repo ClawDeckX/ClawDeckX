@@ -425,6 +425,8 @@
   "service.remote_gateway_tcp_reachable": "Remote Gateway {{.Addr}} (TCP reachable)",
   "service.remote_gateway_http_ok": "Remote Gateway {{.Addr}} (HTTP OK, status {{.Code}})",
 
+  "gwclient.unknown_error": "Unknown error",
+
   "service.get_gateway_config_failed": "Failed to get gateway config: {{.Error}}",
   "service.gateway_restart_failed": "Gateway restart failed: {{.Error}}",
   "service.start_gateway_process_failed": "Failed to start gateway process: {{.Error}}",
