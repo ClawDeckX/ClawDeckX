@@ -163,6 +163,8 @@ export const settingsApi = {
   update: (data: any) => put('/api/v1/settings', data),
   getGateway: () => get('/api/v1/settings/gateway'),
   updateGateway: (data: any) => put('/api/v1/settings/gateway', data),
+  getLanguage: () => get<{ language: string }>('/api/v1/settings/language'),
+  setLanguage: (language: string) => put<{ language: string }>('/api/v1/settings/language', { language }),
 };
 
 // ==================== 配对管理 ====================
@@ -383,6 +385,17 @@ export const gwApi = {
   configSchema: () => rpc('config.schema'),
   // Agents
   agents: () => rpc<any[]>('agents.list'),
+  agentCreate: (params: { name: string; workspace?: string; emoji?: string; avatar?: string }) =>
+    post('/api/v1/gw/agents', params),
+  agentUpdate: (params: { agentId: string; name?: string; workspace?: string; model?: string; avatar?: string }) =>
+    put('/api/v1/gw/agents', params),
+  agentDelete: (agentId: string, deleteFiles = true) =>
+    post('/api/v1/gw/agents/delete', { agentId, deleteFiles }),
+  agentsBatchDelete: (params: { agentIds?: string[]; prefix?: string; deleteFiles?: boolean }) =>
+    post<{ deleted: number; total: number; results: Record<string, { ok: boolean; error?: string }>; errors: string[] }>(
+      '/api/v1/gw/agents/batch-delete', 
+      { agentIds: params.agentIds || [], prefix: params.prefix, deleteFiles: params.deleteFiles ?? true }
+    ),
   agentIdentity: (agentId: string) =>
     rpc('agent.identity.get', { agentId }),
   agentWait: (runId: string, timeoutMs = 120000) =>
@@ -514,4 +527,348 @@ export const badgeApi = {
 // ==================== 健康检查 ====================
 export const healthApi = {
   check: () => get<{ status: string; version: string }>('/api/v1/health'),
+};
+
+// ==================== 上下文预算分析 ====================
+export interface ContextFile {
+  fileName: string;
+  size: number;
+  tokenEstimate: number;
+  percentage: number;
+  status: 'ok' | 'warn' | 'critical';
+  lastModified: string;
+}
+
+export interface ContextBudgetAnalysis {
+  totalSize: number;
+  totalTokens: number;
+  budgetLimit: number;
+  usagePercentage: number;
+  status: 'ok' | 'warn' | 'critical';
+  files: ContextFile[];
+  suggestions: Array<{ file: string; issue: string; action: string; estimatedSaving: number }>;
+}
+
+export interface OptimizeResult {
+  file: string;
+  originalSize: number;
+  newSize: number;
+  savedTokens: number;
+  changes: string[];
+}
+
+export const contextBudgetApi = {
+  analyze: (agentId?: string) => get<ContextBudgetAnalysis>(`/api/v1/maintenance/context/analyze${agentId ? `?agent=${agentId}` : ''}`),
+  analyzeCached: (agentId?: string, ttlMs = 30000, force = false) => 
+    getCached<ContextBudgetAnalysis>(`/api/v1/maintenance/context/analyze${agentId ? `?agent=${agentId}` : ''}`, ttlMs, force),
+  optimize: (fileName: string, agentId?: string) => 
+    post<OptimizeResult>('/api/v1/maintenance/context/optimize', { fileName, agentId }),
+  optimizeAll: (agentId?: string) => 
+    post<{ results: OptimizeResult[]; totalSaved: number }>('/api/v1/maintenance/context/optimize-all', { agentId }),
+};
+
+// ==================== 场景库 ====================
+export interface ScenarioTemplate {
+  id: string;
+  category: 'social' | 'creative' | 'devops' | 'productivity' | 'research' | 'finance' | 'family';
+  name: { zh: string; en: string };
+  description: { zh: string; en: string };
+  icon: string;
+  color: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  tags: string[];
+  configs: {
+    soul?: { zh: string; en: string };
+    user?: { zh: string; en: string };
+    memory?: { zh: string; en: string };
+    heartbeat?: { zh: string; en: string };
+  };
+  requirements?: {
+    skills?: string[];
+    channels?: string[];
+    models?: string[];
+  };
+  automations?: Array<{
+    cron: string;
+    name: { zh: string; en: string };
+    command: string;
+  }>;
+  examples?: Array<{
+    title: { zh: string; en: string };
+    input: string;
+    output: string;
+  }>;
+  community?: {
+    author: string;
+    downloads: number;
+    stars: number;
+    lastUpdated: string;
+  };
+}
+
+export interface QuickSetupStep {
+  type: 'config' | 'skill' | 'channel' | 'cron' | 'verify';
+  description: { zh: string; en: string };
+  status: 'pending' | 'running' | 'success' | 'failed';
+  error?: string;
+}
+
+export interface QuickSetupResult {
+  success: boolean;
+  steps: QuickSetupStep[];
+  appliedConfigs: string[];
+  installedSkills: string[];
+  createdCronJobs: string[];
+  errors: string[];
+}
+
+export const scenarioApi = {
+  list: (category?: string) => 
+    get<ScenarioTemplate[]>(`/api/v1/scenarios${category ? `?category=${category}` : ''}`),
+  listCached: (category?: string, ttlMs = 300000, force = false) => 
+    getCached<ScenarioTemplate[]>(`/api/v1/scenarios${category ? `?category=${category}` : ''}`, ttlMs, force),
+  get: (id: string) => get<ScenarioTemplate>(`/api/v1/scenarios/${id}`),
+  preview: (id: string, language: 'zh' | 'en') => 
+    get<{ configs: Record<string, string>; automations: any[] }>(`/api/v1/scenarios/${id}/preview?lang=${language}`),
+  quickSetup: (id: string, agentId: string, options?: { skipSkills?: boolean; skipCron?: boolean }) => 
+    post<QuickSetupResult>(`/api/v1/scenarios/${id}/quick-setup`, { agentId, ...options }),
+  checkRequirements: (id: string) => 
+    get<{ satisfied: boolean; missing: { skills: string[]; channels: string[]; models: string[] } }>(`/api/v1/scenarios/${id}/check-requirements`),
+};
+
+// ==================== 多 Agent 协作模板 ====================
+export interface AgentRole {
+  id: string;
+  role: { zh: string; en: string };
+  description: { zh: string; en: string };
+  icon: string;
+  color: string;
+  configs: {
+    soul?: { zh: string; en: string };
+    tools?: string[];
+    skills?: string[];
+  };
+  dependencies: string[];
+}
+
+export interface WorkflowStep {
+  step: number;
+  agentRole: string;
+  action: { zh: string; en: string };
+  trigger: 'manual' | 'previous_complete' | 'schedule' | 'event';
+  triggerConfig?: any;
+  nextStep?: number;
+}
+
+export interface MultiAgentTemplate {
+  id: string;
+  name: { zh: string; en: string };
+  description: { zh: string; en: string };
+  icon: string;
+  category: 'content' | 'research' | 'devops' | 'support' | 'automation';
+  difficulty: 'medium' | 'hard' | 'expert';
+  agents: AgentRole[];
+  workflow: WorkflowStep[];
+  communication: {
+    protocol: 'lan-api' | 'shared-session' | 'message-queue';
+    config?: any;
+  };
+  examples?: Array<{
+    title: { zh: string; en: string };
+    description: { zh: string; en: string };
+  }>;
+  community?: {
+    author: string;
+    downloads: number;
+    stars: number;
+  };
+}
+
+export interface DeployResult {
+  success: boolean;
+  createdAgents: Array<{ id: string; role: string }>;
+  configuredWorkflow: boolean;
+  errors: string[];
+}
+
+// Multi-Agent Deployment Types
+export interface MultiAgentDeployRequest {
+  template: {
+    id: string;
+    name: string;
+    description: string;
+    agents: Array<{
+      id: string;
+      name: string;
+      role: string;
+      description?: string;
+      icon?: string;
+      color?: string;
+      soul?: string;
+      heartbeat?: string;
+      tools?: string;
+      skills?: string[];
+      env?: Record<string, string>;
+    }>;
+    workflow: {
+      type: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
+      description?: string;
+      steps: Array<{
+        agent?: string;
+        agents?: string[];
+        action: string;
+        parallel?: boolean;
+        condition?: string;
+      }>;
+    };
+    bindings?: Array<{
+      agentId: string;
+      match: Record<string, any>;
+    }>;
+  };
+  prefix?: string;
+  skipExisting?: boolean;
+  dryRun?: boolean;
+}
+
+export interface MultiAgentDeployResult {
+  success: boolean;
+  deployedCount: number;
+  skippedCount: number;
+  agents: Array<{
+    id: string;
+    name: string;
+    status: 'created' | 'skipped' | 'failed' | 'preview';
+    workspace?: string;
+    error?: string;
+  }>;
+  bindings?: Array<{
+    agentId: string;
+    status: 'configured' | 'failed';
+    error?: string;
+  }>;
+  errors?: string[];
+  coordinatorUpdated?: boolean;
+  coordinatorError?: string;
+}
+
+export interface MultiAgentStatus {
+  totalAgents: number;
+  deployments: Record<string, string[]>;
+  standalone: string[];
+}
+
+export const multiAgentApi = {
+  // Template-based APIs (legacy)
+  templates: () => get<MultiAgentTemplate[]>('/api/v1/multi-agent/templates'),
+  templatesCached: (ttlMs = 300000, force = false) => 
+    getCached<MultiAgentTemplate[]>('/api/v1/multi-agent/templates', ttlMs, force),
+  get: (id: string) => get<MultiAgentTemplate>(`/api/v1/multi-agent/templates/${id}`),
+  preview: (id: string, language: 'zh' | 'en') => 
+    get<{ agents: any[]; workflow: any[] }>(`/api/v1/multi-agent/templates/${id}/preview?lang=${language}`),
+  checkDeployment: (id: string) => 
+    get<{ deployed: boolean; agents: Array<{ id: string; role: string; status: string }> }>(`/api/v1/multi-agent/templates/${id}/check`),
+  workflowStatus: () => 
+    get<{ active: boolean; currentStep: number; agents: Array<{ id: string; status: string; lastAction: string }> }>('/api/v1/multi-agent/workflow/status'),
+  
+  // New deployment APIs
+  deploy: (request: MultiAgentDeployRequest) => 
+    post<MultiAgentDeployResult>('/api/v1/multi-agent/deploy', request),
+  previewDeploy: (request: MultiAgentDeployRequest) => 
+    post<MultiAgentDeployResult>('/api/v1/multi-agent/preview', { ...request, dryRun: true }),
+  status: () => get<MultiAgentStatus>('/api/v1/multi-agent/status'),
+  remove: (prefix?: string, agents?: string[]) => 
+    post<{ removed: number; agents: Record<string, boolean> }>('/api/v1/multi-agent/delete', { prefix, agents }),
+};
+
+// Template Management API
+export interface TemplateManifest {
+  version: string;
+  name: string;
+  description: string;
+  categories: Array<{
+    id: string;
+    name: string;
+    description: string;
+    path: string;
+  }>;
+  languages: string[];
+  lastUpdated: string;
+}
+
+export interface TemplateUpdateInfo {
+  available: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  changelog?: string[];
+}
+
+export const templateManagerApi = {
+  getManifest: () => get<TemplateManifest>('/api/v1/template-manager/manifest'),
+  checkUpdates: () => get<TemplateUpdateInfo>('/api/v1/template-manager/update-check'),
+  update: () => post<{ success: boolean; updated: string[] }>('/api/v1/template-manager/update', {}),
+  validate: (template: any) => post<{ valid: boolean; errors: string[] }>('/api/v1/template-manager/validate', template),
+  install: (source: string, templateId: string) => 
+    post<{ success: boolean; templateId: string }>('/api/v1/template-manager/install', { source, templateId }),
+  uninstall: (type: string, id: string) => 
+    del<{ success: boolean }>(`/api/v1/template-manager/${type}/${id}`),
+};
+
+// Workflow Orchestration API
+export interface WorkflowExecutionStep {
+  agent: string;
+  action: string;
+  parallel?: boolean;
+  condition?: string;
+  timeout?: number;
+}
+
+export interface WorkflowExecutionDefinition {
+  id: string;
+  name: string;
+  description: string;
+  type: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
+  steps: WorkflowExecutionStep[];
+  agents: string[];
+}
+
+export interface StepResult {
+  stepIndex: number;
+  agentId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  startedAt?: string;
+  completedAt?: string;
+  runId?: string;
+  sessionKey?: string;
+  output?: string;
+  error?: string;
+}
+
+export interface WorkflowInstance {
+  id: string;
+  definitionId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'stopped';
+  currentStep: number;
+  startedAt: string;
+  completedAt?: string;
+  stepResults: StepResult[];
+  error?: string;
+  definition: WorkflowExecutionDefinition;
+}
+
+export interface StartWorkflowRequest {
+  definition: WorkflowExecutionDefinition;
+  initialTask: string;
+  prefix?: string;
+}
+
+export const workflowApi = {
+  start: (request: StartWorkflowRequest) =>
+    post<{ instanceId: string; status: string }>('/api/v1/workflow/start', request),
+  status: (instanceId?: string) =>
+    get<WorkflowInstance | { workflows: WorkflowInstance[]; count: number }>(
+      instanceId ? `/api/v1/workflow/status?id=${instanceId}` : '/api/v1/workflow/status'
+    ),
+  stop: (instanceId: string) =>
+    post<{ instanceId: string; status: string }>('/api/v1/workflow/stop', { instanceId }),
 };

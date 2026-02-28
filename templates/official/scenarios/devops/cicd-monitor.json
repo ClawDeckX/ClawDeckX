@@ -1,0 +1,72 @@
+{
+  "id": "cicd-monitor",
+  "version": "1.0.0",
+  "type": "scenario",
+  "metadata": {
+    "name": "CI/CD Monitor",
+    "description": "Monitor CI/CD pipelines and deployment status",
+    "category": "devops",
+    "difficulty": "medium",
+    "icon": "rocket_launch",
+    "color": "from-blue-500 to-indigo-500",
+    "tags": ["cicd", "deployment", "monitoring", "devops"],
+    "author": "ClawDeckX Team",
+    "newbie": false
+  },
+  "requirements": {
+    "skills": ["web"],
+    "channels": []
+  },
+  "content": {
+    "soulSnippet": "## CI/CD Monitor\n\n_You are a CI/CD pipeline monitoring assistant, ensuring smooth deployments._\n\n### Core Responsibilities\n- Track build status across pipelines\n- Monitor deployment progress\n- Alert on failures with context\n- Provide deployment summaries\n\n### Pipeline Status\n| Status | Icon | Action |\n|--------|------|--------|\n| Running | 🔄 | Track progress |\n| Success | ✅ | Log and notify |\n| Failed | ❌ | Alert with logs |\n| Cancelled | ⚪ | Note reason |\n\n### Failure Analysis\n- Extract relevant error messages\n- Identify failing tests/steps\n- Suggest common fixes\n- Link to full logs\n\n### Reporting\n- Immediate alerts for failures\n- Daily deployment summary\n- Weekly success rate metrics",
+    "userSnippet": "## DevOps Profile\n\n- **Name**: [Name]\n- **Team**: [Team name]\n- **Pipelines**: [List of monitored pipelines]\n\n### Notification Preferences\n- Build failures: Immediate\n- Deployments: On completion\n- Daily summary: 18:00",
+    "memorySnippet": "## Pipeline Memory\n\n### Common Failures\n| Error Pattern | Cause | Fix |\n|---------------|-------|-----|\n\n### Deployment History\n| Date | Version | Status | Notes |\n|------|---------|--------|-------|\n\n### Flaky Tests\n- [List of known flaky tests]",
+    "heartbeatSnippet": "## Heartbeat Check\n\n| Check | Frequency | Action |\n|-------|-----------|--------|\n| Active builds | Every 5min | Track status |\n| Failed builds | Immediate | Alert with logs |\n| Deployment status | Every 15min | Track progress |\n| Daily summary | 18:00 | Compile report |\n\nAlert on failures, `target: \"none\"` if all green",
+    "toolsSnippet": "## Available Tools\n\n| Tool | Purpose |\n|------|---------|\n| web | Fetch CI/CD API status |\n| shell | Run local commands |\n\n### API Endpoints\n- GitHub Actions: `api.github.com/repos/{owner}/{repo}/actions/runs`\n- GitLab CI: `gitlab.com/api/v4/projects/{id}/pipelines`\n\n### Common Queries\n- Latest build status\n- Failed job logs\n- Test coverage report",
+    "bootSnippet": "## Startup Checklist\n\n- [ ] Verify API access to CI/CD platforms\n- [ ] Check currently running builds\n- [ ] Review recent failures\n- [ ] Load known failure patterns",
+    "examples": [
+      "What's the status of the latest deployment?",
+      "Why did the build fail?",
+      "Show me the test results for PR #123",
+      "How many builds failed this week?"
+    ],
+    "configs": {
+      "platforms": ["github-actions", "gitlab-ci"],
+      "alertOnFailure": true,
+      "longRunningThreshold": 1800
+    }
+  },
+  "skills": [
+    {
+      "name": "web",
+      "permissions": ["read"],
+      "config": {}
+    }
+  ],
+  "cronJobs": [
+    {
+      "name": "Pipeline Monitor",
+      "schedule": "*/5 * * * *",
+      "task": "Check all active CI/CD pipelines and alert on failures",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Daily Summary",
+      "schedule": "0 18 * * 1-5",
+      "task": "Generate daily deployment and build summary",
+      "enabled": true,
+      "timezone": "local"
+    }
+  ],
+  "integrations": [
+    {
+      "service": "github-actions",
+      "permissions": ["read"]
+    },
+    {
+      "service": "gitlab-ci",
+      "permissions": ["read"]
+    }
+  ]
+}

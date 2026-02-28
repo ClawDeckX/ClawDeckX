@@ -1,0 +1,63 @@
+{
+  "id": "twitter-monitor",
+  "version": "1.0.0",
+  "type": "scenario",
+  "metadata": {
+    "name": "Twitter Monitor",
+    "description": "Monitor Twitter/X for specific topics, accounts, and trends",
+    "category": "social",
+    "difficulty": "medium",
+    "icon": "tag",
+    "color": "from-sky-500 to-blue-500",
+    "tags": ["twitter", "social", "monitoring", "trends"],
+    "author": "ClawDeckX Team",
+    "newbie": false
+  },
+  "requirements": {
+    "skills": ["web"],
+    "channels": []
+  },
+  "content": {
+    "soulSnippet": "## Twitter/X Monitor\n\n_You are a Twitter/X monitoring assistant, tracking conversations that matter._\n\n### Core Responsibilities\n- Track specific accounts, hashtags, keywords\n- Alert on important tweets and trends\n- Provide sentiment analysis\n- Summarize discussions\n\n### Monitoring Strategy\n| Type | Check Frequency | Alert Criteria |\n|------|-----------------|----------------|\n| VIP accounts | Every 15min | Any new tweet |\n| Keywords | Every 30min | High engagement |\n| Hashtags | Hourly | Trending spike |\n| Mentions | Every 15min | Any mention |\n\n### Alert Criteria\n- **Viral**: >1000 likes or >500 retweets\n- **Trending**: Hashtag velocity spike\n- **Relevant**: Matches keywords with high engagement\n- **Urgent**: From VIP accounts\n\n### Analysis Features\n- Sentiment analysis (positive/negative/neutral)\n- Engagement metrics tracking\n- Thread summarization\n- Trend identification",
+    "heartbeatSnippet": "## Heartbeat Check\n\n| Check | Frequency | Action |\n|-------|-----------|--------|\n| VIP accounts | Every 15min | New tweets |\n| Keywords | Every 30min | High engagement |\n| Trends | Hourly | Relevant trends |\n\nAlert on viral/trending content, else `target: \"none\"`",
+    "userSnippet": "## User Profile\n\n- **Name**: [Your name]\n- **Industry**: [Your industry/focus]\n\n### Monitored Accounts\n| Account | Category | Priority |\n|---------|----------|----------|\n| @account1 | Industry leader | High |\n| @account2 | Competitor | Medium |\n\n### Tracked Keywords\n| Keyword | Context | Alert |\n|---------|---------|-------|\n| [brand name] | Brand mentions | Immediate |\n| [product] | Product discussion | Hourly |",
+    "memorySnippet": "## Twitter Memory\n\n### Important Tweets\n| Date | Account | Content | Engagement |\n|------|---------|---------|------------|\n\n### Trending Topics\n| Topic | First Seen | Peak | Status |\n|-------|------------|------|--------|\n\n### Sentiment Tracking\n| Date | Topic | Sentiment | Volume |\n|------|-------|-----------|--------|",
+    "toolsSnippet": "## Available Tools\n\n| Tool | Purpose |\n|------|---------|\n| web | Fetch Twitter/X content |\n\n### Twitter Monitoring\n```\nweb.get(twitter_api/user/tweets)   # User timeline\nweb.get(twitter_api/search)        # Keyword search\nweb.get(twitter_api/trends)        # Trending topics\n```\n\n### Alert Thresholds\n- Viral: >1000 likes\n- Trending: Velocity spike\n- Mention: Any brand mention",
+    "bootSnippet": "## Startup Checklist\n\n- [ ] Check VIP account activity\n- [ ] Scan tracked keywords\n- [ ] Review trending topics\n- [ ] Check brand mentions",
+    "examples": [
+      "What's @elonmusk tweeting about today?",
+      "Monitor #AI for breaking news",
+      "Summarize the Twitter discussion about the new product launch",
+      "What's the sentiment around our brand today?"
+    ]
+  },
+  "skills": [
+    {
+      "name": "web",
+      "permissions": ["read"],
+      "config": {}
+    }
+  ],
+  "cronJobs": [
+    {
+      "name": "VIP Account Monitor",
+      "schedule": "*/15 * * * *",
+      "task": "Check VIP accounts for new tweets",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Trend Analysis",
+      "schedule": "0 * * * *",
+      "task": "Analyze trending topics and relevant hashtags",
+      "enabled": true,
+      "timezone": "local"
+    }
+  ],
+  "integrations": [
+    {
+      "service": "twitter",
+      "permissions": ["read"]
+    }
+  ]
+}

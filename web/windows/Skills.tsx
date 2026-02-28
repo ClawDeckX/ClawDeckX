@@ -210,12 +210,11 @@ const SkillCard: React.FC<{
   const unsupportedOs = missingOs > 0;
 
   return (
-    <div className={`bg-slate-50 dark:bg-white/[0.02] border rounded-2xl p-4 transition-all group shadow-sm flex flex-col ${
-      isDisabled ? 'border-slate-200/50 dark:border-white/5 opacity-60' :
-      unsupportedOs ? 'border-slate-200/50 dark:border-white/5 opacity-40' :
-      skill.eligible ? 'border-mac-green/30 dark:border-mac-green/20 hover:border-mac-green/60' :
-      'border-slate-200 dark:border-white/10 hover:border-primary/40'
-    }`}>
+    <div className={`bg-slate-50 dark:bg-white/[0.02] border rounded-2xl p-4 transition-all group shadow-sm flex flex-col ${isDisabled ? 'border-slate-200/50 dark:border-white/5 opacity-60' :
+        unsupportedOs ? 'border-slate-200/50 dark:border-white/5 opacity-40' :
+          skill.eligible ? 'border-mac-green/30 dark:border-mac-green/20 hover:border-mac-green/60' :
+            'border-slate-200 dark:border-white/10 hover:border-primary/40'
+      }`}>
       {/* 头部 */}
       <div className="flex items-center gap-2.5 mb-2">
         <span className="text-lg leading-none">{skill.emoji || '⚙️'}</span>
@@ -425,22 +424,22 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
     items: { skill_key: string; name: string; description: string }[],
   ) => {
     if (lang === 'en' || items.length === 0) return;
-    
+
     // 先检查本地 state 缓存，过滤掉已经有缓存的项
     const itemsToCheck = items.filter(item => {
       const existing = translations[item.skill_key];
       return !existing || existing.status !== 'cached';
     });
-    
+
     if (itemsToCheck.length === 0) return; // 全部已缓存，无需请求
-    
+
     try {
       const allKeys = itemsToCheck.map(s => s.skill_key);
       // 1. 查询服务端缓存
       const cached = await skillTranslationApi.get(lang, allKeys) as any;
       const entries: any[] = Array.isArray(cached) ? cached : (cached?.data || []);
       const cachedMap: Record<string, boolean> = {};
-      
+
       // 立即设置已缓存的翻译（无延迟）
       if (entries.length > 0) {
         setTranslations(prev => {
@@ -497,7 +496,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
           });
           if (allDone) clearInterval(poll);
         } catch { /* ignore poll errors */ }
-      }, 3000);
+      }, 10000);
     } catch { /* ignore */ }
   }, [translations]);
 
@@ -509,15 +508,15 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
   // 合并翻译请求：本地技能 + 市场技能，添加防抖避免频繁请求
   useEffect(() => {
     if (!autoTranslate || language === 'en') return;
-    
+
     // 收集所有需要翻译的项
     const allItems: { skill_key: string; name: string; description: string }[] = [];
-    
+
     // 本地技能
     for (const s of skills) {
       allItems.push({ skill_key: s.skillKey, name: s.name || '', description: s.description || '' });
     }
-    
+
     // 市场技能
     for (const item of marketResults) {
       allItems.push({
@@ -526,9 +525,9 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
         description: (item as any).summary || (item as any).description || '',
       });
     }
-    
+
     if (allItems.length === 0) return;
-    
+
     // 防抖：500ms 后执行，避免快速连续触发
     const timer = setTimeout(() => {
       // 分批处理：每批最多 15 个，依次处理所有批次
@@ -543,7 +542,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       };
       processBatches();
     }, 500);
-    
+
     return () => clearTimeout(timer);
   }, [autoTranslate, language, skills, marketResults, translateBatch]);
 
@@ -740,9 +739,8 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
           <div className="flex bg-slate-200 dark:bg-black/40 p-0.5 rounded-xl shadow-inner">
             {tabs.map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                  activeTab === tab.id ? 'bg-white dark:bg-primary shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}>
+                className={`px-4 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${activeTab === tab.id ? 'bg-white dark:bg-primary shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}>
                 {tab.label}
                 {tab.count !== undefined && <span className="text-[11px] opacity-60">{tab.count}</span>}
               </button>
@@ -762,14 +760,13 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
               {/* 自动翻译开关 + 进度 + 刷新 */}
               {language !== 'en' && (
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => setAutoTranslate(!autoTranslate)} 
-                    className={`h-9 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${
-                      autoTranslate 
-                        ? 'bg-primary/10 dark:bg-primary/20 border-primary/30 text-primary hover:bg-primary/20' 
+                  <button onClick={() => setAutoTranslate(!autoTranslate)}
+                    className={`h-9 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${autoTranslate
+                        ? 'bg-primary/10 dark:bg-primary/20 border-primary/30 text-primary hover:bg-primary/20'
                         : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20'
-                    }`}
+                      }`}
                     title={autoTranslate ? sk.autoTranslateOn : sk.autoTranslateOff}>
-                    <span className="material-symbols-outlined text-[16px]">{autoTranslate ? 'translate' : 'translate_off'}</span>
+                    <span className="material-symbols-outlined text-[16px]">{autoTranslate ? 'translate' : 'g_translate'}</span>
                     {sk.autoTranslate}
                   </button>
                   {/* 翻译进度指示 */}
@@ -796,7 +793,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                   })()}
                   {/* 刷新翻译按钮 */}
                   {autoTranslate && (
-                    <button 
+                    <button
                       onClick={() => {
                         setTranslations({}); // 清空缓存，触发重新翻译
                       }}
@@ -829,14 +826,13 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
               {/* 自动翻译开关 */}
               {language !== 'en' && (
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => setAutoTranslate(!autoTranslate)} 
-                    className={`h-9 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${
-                      autoTranslate 
-                        ? 'bg-primary/10 dark:bg-primary/20 border-primary/30 text-primary hover:bg-primary/20' 
+                  <button onClick={() => setAutoTranslate(!autoTranslate)}
+                    className={`h-9 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${autoTranslate
+                        ? 'bg-primary/10 dark:bg-primary/20 border-primary/30 text-primary hover:bg-primary/20'
                         : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20'
-                    }`}
+                      }`}
                     title={autoTranslate ? sk.autoTranslateOn : sk.autoTranslateOff}>
-                    <span className="material-symbols-outlined text-[16px]">{autoTranslate ? 'translate' : 'translate_off'}</span>
+                    <span className="material-symbols-outlined text-[16px]">{autoTranslate ? 'translate' : 'g_translate'}</span>
                     {sk.autoTranslate}
                   </button>
                   {/* 翻译进度指示 */}
@@ -863,7 +859,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                   })()}
                   {/* 刷新翻译按钮 */}
                   {autoTranslate && (
-                    <button 
+                    <button
                       onClick={() => {
                         setTranslations(prev => {
                           const next: typeof prev = {};

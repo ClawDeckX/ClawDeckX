@@ -161,7 +161,7 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
     return counts;
   }, [sessions]);
 
-  const previewMessages: any[] = preview?.previews?.[0]?.messages || [];
+  const previewMessages: any[] = (preview?.previews?.[0]?.items || []).slice().reverse();
 
   return (
     <div className="flex-1 flex overflow-hidden bg-slate-50/50 dark:bg-transparent">
@@ -299,9 +299,9 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
 
               {/* Per-Session Overrides */}
               <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
-                <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider mb-1">{a.label} & {a.overrides}</h3>
+                <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider mb-1">{a.overrides}</h3>
                 <p className="text-[10px] text-slate-400 dark:text-white/30 mb-3">{a.overridesHelp}</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Label */}
                   <label className="block">
                     <span className="text-[11px] font-bold text-slate-400 dark:text-white/40 uppercase">{a.label}</span>
@@ -315,7 +315,7 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
                     <CustomSelect value={selected.thinkingLevel || ''} disabled={busy}
                       onChange={v => patchSession(selected.key, { thinkingLevel: v || null })}
                       options={THINK_LEVELS.map(lv => ({ value: lv, label: lv ? (a[lv] || lv) : a.inherit }))}
-                      className="w-full mt-0.5 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70" />
+                      className="w-full max-w-[140px] mt-0.5 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70" />
                   </label>
                   {/* Verbose */}
                   <label className="block">
@@ -323,7 +323,7 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
                     <CustomSelect value={selected.verboseLevel || ''} disabled={busy}
                       onChange={v => patchSession(selected.key, { verboseLevel: v || null })}
                       options={VERBOSE_VALUES.map(lv => ({ value: lv, label: lv ? (a[lv] || lv) : a.inherit }))}
-                      className="w-full mt-0.5 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70" />
+                      className="w-full max-w-[140px] mt-0.5 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70" />
                   </label>
                   {/* Reasoning */}
                   <label className="block">
@@ -331,7 +331,7 @@ const Activity: React.FC<ActivityProps> = ({ language }) => {
                     <CustomSelect value={selected.reasoningLevel || ''} disabled={busy}
                       onChange={v => patchSession(selected.key, { reasoningLevel: v || null })}
                       options={REASONING_LEVELS.map(lv => ({ value: lv, label: lv ? (a[lv] || lv) : a.inherit }))}
-                      className="w-full mt-0.5 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70" />
+                      className="w-full max-w-[140px] mt-0.5 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70" />
                   </label>
                 </div>
               </div>

@@ -1,0 +1,59 @@
+{
+  "version": "1.0.0",
+  "name": "ClawDeckX Official Templates",
+  "description": "Official template collection for ClawDeckX",
+  "author": "ClawDeckX Team",
+  "homepage": "https://github.com/clawdeck/templates",
+  "lastUpdated": "2026-02-27T00:00:00Z",
+  "categories": [
+    {
+      "id": "scenarios",
+      "name": "Scenarios",
+      "description": "Pre-configured scenario templates",
+      "path": "official/scenarios",
+      "subcategories": [
+        { "id": "productivity", "name": "Productivity", "icon": "work" },
+        { "id": "social", "name": "Social Media", "icon": "share" },
+        { "id": "creative", "name": "Content Creation", "icon": "edit" },
+        { "id": "devops", "name": "DevOps", "icon": "terminal" },
+        { "id": "research", "name": "Research & Learning", "icon": "school" },
+        { "id": "finance", "name": "Finance", "icon": "payments" },
+        { "id": "family", "name": "Family & Home", "icon": "home" }
+      ]
+    },
+    {
+      "id": "multi-agent",
+      "name": "Multi-Agent Collaboration",
+      "description": "Multi-agent workflow templates",
+      "path": "official/multi-agent",
+      "subcategories": [
+        { "id": "content", "name": "Content Production", "icon": "article" },
+        { "id": "research", "name": "Research Teams", "icon": "biotech" },
+        { "id": "devops", "name": "DevOps Teams", "icon": "cloud" },
+        { "id": "support", "name": "Customer Support", "icon": "support_agent" },
+        { "id": "data", "name": "Data Pipeline", "icon": "analytics" }
+      ]
+    },
+    {
+      "id": "agents",
+      "name": "Agent Presets",
+      "description": "Agent personality and configuration presets",
+      "path": "official/agents",
+      "subcategories": [
+        { "id": "personas", "name": "Personas", "icon": "person" }
+      ]
+    },
+    {
+      "id": "automations",
+      "name": "Automations",
+      "description": "Automation script templates",
+      "path": "official/automations",
+      "subcategories": [
+        { "id": "heartbeat", "name": "Heartbeat", "icon": "favorite" },
+        { "id": "cron", "name": "Scheduled Tasks", "icon": "schedule" }
+      ]
+    }
+  ],
+  "languages": ["en", "zh", "ja"],
+  "defaultLanguage": "en"
+}

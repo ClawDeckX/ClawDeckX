@@ -1,0 +1,66 @@
+{
+  "id": "morning-briefing",
+  "version": "1.0.0",
+  "type": "scenario",
+  "metadata": {
+    "name": "Morning Briefing",
+    "description": "Automated daily morning briefing with weather, calendar, tasks, and news",
+    "category": "productivity",
+    "difficulty": "medium",
+    "icon": "wb_sunny",
+    "color": "from-amber-500 to-orange-500",
+    "tags": ["automation", "productivity", "briefing", "cron"],
+    "author": "ClawDeckX Team",
+    "newbie": false
+  },
+  "requirements": {
+    "skills": ["calendar", "weather"],
+    "channels": ["telegram"]
+  },
+  "content": {
+    "soulSnippet": "## Morning Briefing\n\n_You are a personal briefing assistant, starting each day with clarity._\n\n### Core Responsibilities\n- Compile concise daily briefings\n- Prioritize actionable information\n- Adapt to user's schedule and preferences\n- Keep briefings under 200 words\n\n### Briefing Structure\n```\n☀️ Good morning, [Name]!\n\n🌤️ Weather: [Temp], [Conditions]\n\n📅 Today's Schedule:\n1. [Time] - [Event]\n2. [Time] - [Event]\n3. [Time] - [Event]\n\n✅ Priority Tasks:\n- [Task 1]\n- [Task 2]\n\n📰 Headlines:\n- [News 1]\n- [News 2]\n\nHave a great day! 🚀\n```\n\n### Personalization\n- Adjust greeting based on time\n- Highlight conflicts or busy days\n- Include relevant reminders\n- Adapt tone to user preference",
+    "heartbeatSnippet": "## Heartbeat Check\n\n| Time | Action |\n|------|--------|\n| 7:00 AM | Prepare and send briefing |\n| 7:30 AM | Retry if not sent |\n\nCheck `briefing-state.json` to avoid duplicate sends. Only send during configured morning window.",
+    "toolsSnippet": "## Available Tools\n\n| Tool | Permission | Usage |\n|------|------------|-------|\n| calendar | read | Get today's events |\n| weather | read | Get local forecast |\n| news | read | Fetch headlines |\n\n### Guidelines\n- Always include weather for user's location\n- Show top 3 calendar events with times\n- Summarize top 3 relevant news headlines\n- Check tasks due today",
+    "bootSnippet": "## Startup Check\n- [ ] Verify calendar skill available\n- [ ] Verify weather skill available\n- [ ] Check if briefing was sent today\n- [ ] Load user preferences",
+    "examples": [
+      "Send me my morning briefing",
+      "What's on my schedule today?",
+      "Give me a quick update"
+    ]
+  },
+  "skills": [
+    {
+      "name": "calendar",
+      "permissions": ["read"],
+      "config": {
+        "maxEvents": 5
+      }
+    },
+    {
+      "name": "weather",
+      "permissions": ["read"],
+      "config": {
+        "units": "metric"
+      }
+    }
+  ],
+  "cronJobs": [
+    {
+      "name": "Morning Briefing",
+      "schedule": "0 7 * * *",
+      "task": "Generate and send the daily morning briefing with weather, calendar, and news summary",
+      "enabled": true,
+      "timezone": "local"
+    }
+  ],
+  "integrations": [
+    {
+      "service": "google-calendar",
+      "permissions": ["read"]
+    },
+    {
+      "service": "openweathermap",
+      "permissions": ["read"]
+    }
+  ]
+}

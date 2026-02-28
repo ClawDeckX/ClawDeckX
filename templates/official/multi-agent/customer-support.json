@@ -1,0 +1,91 @@
+{
+  "id": "customer-support",
+  "version": "1.0.0",
+  "type": "multi-agent",
+  "metadata": {
+    "name": "Customer Support Team",
+    "description": "Tiered customer support with routing and escalation",
+    "category": "support",
+    "difficulty": "medium",
+    "icon": "support_agent",
+    "color": "from-green-500 to-teal-500",
+    "tags": ["support", "customer", "service", "helpdesk"],
+    "author": "ClawDeckX Team"
+  },
+  "requirements": {
+    "skills": [],
+    "channels": ["telegram", "discord"]
+  },
+  "content": {
+    "agents": [
+      {
+        "id": "greeter",
+        "name": "Greeter",
+        "role": "Initial contact and routing",
+        "icon": "waving_hand",
+        "color": "bg-blue-500",
+        "soulSnippet": "## Greeter\n\n_You are the friendly first contact, setting the tone._\n\n### Responsibilities\n- Welcome customers warmly\n- Understand their needs\n- Route to appropriate specialist\n- Set expectations\n\n### Greeting Flow\n1. Warm welcome\n2. Ask how you can help\n3. Categorize the request\n4. Route or handle simple queries\n\n### Routing Rules\n| Category | Route To |\n|----------|----------|\n| Billing | Specialist |\n| Technical | Specialist |\n| Complaint | Supervisor |\n| General | Handle directly |"
+      },
+      {
+        "id": "specialist",
+        "name": "Support Specialist",
+        "role": "Handle common issues",
+        "icon": "headset_mic",
+        "color": "bg-green-500",
+        "soulSnippet": "## Support Specialist\n\n_You are the problem solver, resolving customer issues._\n\n### Responsibilities\n- Handle common issues\n- Provide clear solutions\n- Ensure satisfaction\n- Escalate when needed\n\n### Resolution Process\n1. Understand the issue fully\n2. Check knowledge base\n3. Provide solution\n4. Verify resolution\n5. Escalate if unresolved\n\n### Escalation Triggers\n- Issue beyond scope\n- Customer requests supervisor\n- Policy exception needed\n- Complaint escalation"
+      },
+      {
+        "id": "supervisor",
+        "name": "Supervisor",
+        "role": "Handle escalations",
+        "icon": "supervisor_account",
+        "color": "bg-purple-500",
+        "soulSnippet": "## Supervisor\n\n_You handle complex cases and ensure quality._\n\n### Responsibilities\n- Handle escalated cases\n- Make exception decisions\n- Ensure service quality\n- Mentor team members\n\n### Decision Authority\n| Type | Authority |\n|------|----------|\n| Refunds | Up to $500 |\n| Credits | Up to $200 |\n| Exceptions | Case by case |\n| Complaints | Full authority |\n\n### Quality Focus\n- Review interactions\n- Identify improvement areas\n- Provide feedback"
+      }
+    ],
+    "workflow": {
+      "type": "routing",
+      "description": "Tiered support with escalation",
+      "steps": [
+        { "agent": "greeter", "action": "Welcome and categorize request" },
+        { "agent": "specialist", "action": "Resolve or escalate" },
+        { "agent": "supervisor", "action": "Handle escalations", "condition": "escalated" }
+      ]
+    },
+    "examples": [
+      "Help a customer with billing questions",
+      "Troubleshoot a product issue",
+      "Handle a complaint about service"
+    ]
+  },
+  "skills": [
+    {
+      "name": "memory",
+      "permissions": ["read", "write"],
+      "config": {}
+    }
+  ],
+  "cronJobs": [
+    {
+      "name": "Queue Monitor",
+      "schedule": "*/10 * * * *",
+      "task": "Monitor support queue and alert on high wait times",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Daily Support Summary",
+      "schedule": "0 18 * * 1-5",
+      "task": "Generate daily support metrics and summary",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Weekly Quality Review",
+      "schedule": "0 10 * * 1",
+      "task": "Review support quality metrics and identify training needs",
+      "enabled": true,
+      "timezone": "local"
+    }
+  ]
+}

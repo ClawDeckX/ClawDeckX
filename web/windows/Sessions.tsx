@@ -82,11 +82,12 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const sessionDefault = (t as any).dash?.sessionDefault || c.sessionKey;
 
   // Shared Manager WS subscription for chat streaming events
-  const handleChatEventRef = useRef<(payload?: any) => void>(() => {});
+  const handleChatEventRef = useRef<(payload?: any) => void>(() => { });
   const [wsConnected, setWsConnected] = useState(false);
   const [wsError, setWsError] = useState<string | null>(null);
-  const [wsConnecting, setWsConnecting] = useState(false);
+  const [wsConnecting, setWsConnecting] = useState(true);
   const [gwReady, setGwReady] = useState(false);
+  const [gwChecked, setGwChecked] = useState(false);
   const lastGwReconnectAtRef = useRef(0);
 
   // Sessions
@@ -233,6 +234,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   useEffect(() => {
     setWsConnecting(true);
     setWsError(null);
+    setGwChecked(false);
 
     // 1) Check GW proxy is reachable via REST
     const refreshGwReady = () => {
@@ -241,6 +243,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         const gatewayRunning = svc.status === 'fulfilled' && !!(svc.value as any)?.running;
         const ready = rpcConnected || gatewayRunning;
         setGwReady(ready);
+        setGwChecked(true);
 
         // Self-heal: gateway process is up but GW WS client is disconnected.
         if (!rpcConnected && gatewayRunning) {
@@ -253,26 +256,42 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
         if (!ready) {
           setWsError(c.configMissing);
+          // Once GW check finished AND is not ready, stop showing "connecting" spinner
+          setWsConnecting(false);
           return;
         }
-        // Clear hard "config missing" errors when gateway is available.
-        setWsError((prev) => (prev === c.configMissing ? null : prev));
+        // Clear ALL errors when gateway is reachable (not just configMissing).
+        setWsError(null);
       }).catch(() => {
         setGwReady(false);
+        setGwChecked(true);
+        setWsConnecting(false);
         setWsError(c.configMissing);
       });
     };
     refreshGwReady();
-    const gwTimer = setInterval(refreshGwReady, 5000);
+    let gwTimer: ReturnType<typeof setInterval> | null = setInterval(refreshGwReady, 5000);
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (gwTimer) { clearInterval(gwTimer); gwTimer = null; }
+      } else {
+        if (!gwTimer) {
+          gwTimer = setInterval(refreshGwReady, 5000);
+          refreshGwReady();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     // 2) Subscribe to shared Manager WS for real-time chat streaming events
     let opened = false;
     const connectTimeout = setTimeout(() => {
       if (!opened) {
+        // Only clear connecting state; don't set wsError here.
+        // The GW REST check is the source of truth for connectivity.
         setWsConnecting(false);
-        setWsError(c.wsError);
       }
-    }, 3000);
+    }, 10000);
 
     const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
@@ -296,7 +315,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
     return () => {
       clearTimeout(connectTimeout);
-      clearInterval(gwTimer);
+      if (gwTimer) clearInterval(gwTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
       unsubscribe();
     };
   }, [c.configMissing, c.wsError]);
@@ -312,7 +332,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     if (!payload.state && (payload.role || payload.message?.role)) {
       const msg = payload.message || payload;
       const text = extractText(msg?.content ?? msg);
-      if (text) {
+      if (text.trim()) {
         setMessages(prev => appendMessageDedup(prev, {
           role: (msg.role || 'assistant') as ChatMsg['role'],
           content: msg.content ?? [{ type: 'text', text }],
@@ -333,7 +353,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       // Gateway sends: message: { role, content: [{ type: 'text', text }], timestamp }
       const msg = payload.message as any;
       const text = extractText(msg?.content ?? msg);
-      if (typeof text === 'string' && text.length > 0) {
+      if (typeof text === 'string' && text.trim().length > 0) {
         setStream(text);
         setRunPhase('streaming');
       }
@@ -342,7 +362,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       const msg = payload.message as any;
       if (msg) {
         const text = extractText(msg?.content ?? msg);
-        if (text) {
+        if (text.trim()) {
           setMessages(prev => appendMessageDedup(prev, {
             role: (msg.role || 'assistant') as ChatMsg['role'],
             content: msg.content ?? [{ type: 'text', text }],
@@ -434,11 +454,24 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
   // On ready: load sessions list and refresh it periodically.
   useEffect(() => {
-    if (gwReady) {
-      loadSessions();
-      const timer = setInterval(loadSessions, 30000);
-      return () => clearInterval(timer);
-    }
+    if (!gwReady) return;
+    loadSessions();
+    let timer: ReturnType<typeof setInterval> | null = setInterval(loadSessions, 30000);
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (timer) { clearInterval(timer); timer = null; }
+      } else {
+        if (!timer) {
+          timer = setInterval(loadSessions, 30000);
+          loadSessions();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (timer) clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [gwReady, loadSessions]);
 
   // Load chat history only when selected session changes.
@@ -733,8 +766,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
   const activeLabel = sessions.find(s => s.key === sessionKey)?.label || sessionKey;
 
-  // Not connected state
-  if (!gwReady && wsError && !wsConnected && !wsConnecting) {
+  // Not connected state: only block UI when gateway itself is unreachable
+  // AND we've actually checked (avoid flashing disconnected before first REST check).
+  if (!gwReady && !wsConnecting && gwChecked) {
     return (
       <div className="flex-1 flex items-center justify-center bg-white dark:bg-[#0d1117]">
         <div className="text-center max-w-sm px-6">
@@ -772,7 +806,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
           <div className="relative">
             <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-white/20 text-[14px]">key</span>
             <input value={sessionKey} onChange={e => setSessionKey(e.target.value)}
-              onBlur={loadHistory}
+              onBlur={() => loadHistory()}
               className="w-full h-8 pl-7 pr-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[10px] font-mono text-slate-700 dark:text-white/70 focus:ring-1 focus:ring-primary/50 outline-none"
               placeholder={c.sessionKey} />
           </div>
@@ -836,9 +870,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
         {/* Connection Status */}
         <div className="px-3 py-2 border-t border-slate-200 dark:border-white/5 flex items-center gap-2">
-          <div className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-mac-green animate-pulse' : wsConnecting ? 'bg-mac-yellow animate-pulse' : 'bg-slate-300'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full ${gwReady ? 'bg-mac-green animate-pulse' : wsConnecting ? 'bg-mac-yellow animate-pulse' : 'bg-slate-300'}`} />
           <span className="text-[11px] font-medium text-slate-400 dark:text-white/40">
-            {wsConnected ? c.connected : wsConnecting ? c.connecting : c.disconnected}
+            {gwReady ? c.connected : wsConnecting ? c.connecting : c.disconnected}
           </span>
         </div>
       </aside>
@@ -858,7 +892,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
             <div className="truncate">
               <h2 className="text-xs md:text-sm font-bold text-slate-900 dark:text-white truncate">{activeLabel}</h2>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`w-1 h-1 rounded-full ${wsConnected ? 'bg-mac-green' : 'bg-slate-300'}`} />
+                <span className={`w-1 h-1 rounded-full ${gwReady ? 'bg-mac-green' : 'bg-slate-300'}`} />
                 <span className="text-[11px] text-slate-400 font-medium font-mono">{sessionKey}</span>
                 <span className="text-slate-300 dark:text-white/15">|</span>
                 <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${runPhaseMeta.textClass}`}>
@@ -869,12 +903,6 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {isStreaming && (
-              <button onClick={handleAbort}
-                className="flex items-center gap-1 px-2.5 py-1 bg-red-500/10 text-red-500 rounded-lg text-[10px] font-bold hover:bg-red-500/20 transition-all">
-                <span className="material-symbols-outlined text-[14px]">stop_circle</span> {c.abort}
-              </button>
-            )}
             <button onClick={() => setInjectOpen(true)} disabled={!gwReady}
               className="p-2 text-slate-400 hover:bg-purple-100 dark:hover:bg-purple-500/10 hover:text-purple-500 rounded-lg transition-colors disabled:opacity-30"
               title={c.inject}>

@@ -138,11 +138,25 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   }, [fetchProfiles, fetchStatus, fetchHealthCheck, fetchLogs, fetchEvents, activeTab]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    let timer: ReturnType<typeof setInterval> | null = setInterval(() => {
       fetchStatus();
       fetchHealthCheck();
     }, 5000);
-    return () => clearInterval(timer);
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (timer) { clearInterval(timer); timer = null; }
+      } else {
+        if (!timer) {
+          timer = setInterval(() => { fetchStatus(); fetchHealthCheck(); }, 5000);
+          fetchStatus(); fetchHealthCheck();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (timer) clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchStatus, fetchHealthCheck]);
 
   useEffect(() => {

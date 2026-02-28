@@ -97,7 +97,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
         setWsConnecting(false);
         setWsError(a.wsError);
       }
-    }, 3000);
+    }, 10000);
 
     const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
@@ -248,8 +248,8 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
       } else {
         toast('success', a.approved);
       }
-    } catch (e: any) { 
-      setError(a.decideFailed + ': ' + String(e)); 
+    } catch (e: any) {
+      setError(a.decideFailed + ': ' + String(e));
       toast('error', a.decideFailed);
     }
     setBusy(false);
@@ -307,11 +307,10 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
           </div>
           {/* Show/Hide Flow Button */}
           <button onClick={() => setShowFlow(!showFlow)}
-            className={`h-8 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${
-              showFlow 
-                ? 'bg-primary/10 border-primary/30 text-primary' 
+            className={`h-8 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${showFlow
+                ? 'bg-primary/10 border-primary/30 text-primary'
                 : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/70 hover:bg-slate-200 dark:hover:bg-white/10'
-            }`}>
+              }`}>
             <span className="material-symbols-outlined text-[14px]">help_outline</span>
             <span className="hidden sm:inline">{showFlow ? a.hideFlow : a.showFlow}</span>
           </button>

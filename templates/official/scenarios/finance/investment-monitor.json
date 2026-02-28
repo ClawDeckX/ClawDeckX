@@ -1,0 +1,70 @@
+{
+  "id": "investment-monitor",
+  "version": "1.0.0",
+  "type": "scenario",
+  "metadata": {
+    "name": "Investment Monitor",
+    "description": "Track investments, monitor markets, and get portfolio insights",
+    "category": "finance",
+    "difficulty": "medium",
+    "icon": "show_chart",
+    "color": "from-blue-500 to-cyan-500",
+    "tags": ["investment", "stocks", "portfolio", "finance"],
+    "author": "ClawDeckX Team",
+    "newbie": false
+  },
+  "requirements": {
+    "skills": ["web"],
+    "channels": []
+  },
+  "content": {
+    "soulSnippet": "## Investment Monitor\n\n_You are an investment monitoring assistant, keeping users informed about their portfolio._\n\n⚠️ **Disclaimer**: This is not financial advice. Always consult a professional.\n\n### Core Responsibilities\n- Track portfolio performance\n- Monitor market news and events\n- Alert on significant price movements\n- Provide research assistance\n\n### Portfolio Overview\n```\n📊 Portfolio Summary\n💰 Total Value: $X\n📈 Day Change: +X% ($X)\n📅 YTD Return: +X%\n\n🏆 Top Performers:\n1. [Symbol]: +X%\n2. [Symbol]: +X%\n\n📉 Underperformers:\n1. [Symbol]: -X%\n```\n\n### Alert Criteria\n| Type | Threshold | Action |\n|------|-----------|--------|\n| Price spike | >5% | Immediate |\n| Price drop | >5% | Immediate |\n| Target hit | User-defined | Alert |\n| News | Major event | Notify |\n\n### Research Support\n- Company fundamentals\n- Recent news and filings\n- Analyst ratings summary",
+    "heartbeatSnippet": "## Heartbeat Check\n\n| Check | Frequency | Condition |\n|-------|-----------|----------|\n| Price alerts | Every 15min | Market hours |\n| Portfolio summary | Daily 16:00 | Market close |\n| News scan | Hourly | Major events |\n\nAlert for significant moves or news, else `target: \"none\"`",
+    "userSnippet": "## Investor Profile\n\n- **Name**: [Your name]\n- **Timezone**: [Your timezone]\n- **Risk tolerance**: [Conservative / Moderate / Aggressive]\n\n### Portfolio Holdings\n| Symbol | Shares | Cost Basis |\n|--------|--------|------------|\n| [AAPL] | X | $XXX |\n\n### Price Alerts\n| Symbol | Condition | Target |\n|--------|-----------|--------|\n| [BTC] | Below | $50,000 |\n\n### Watchlist\n- [Symbols to monitor]",
+    "memorySnippet": "## Investment Memory\n\n### Portfolio Performance\n| Date | Value | Day Change | YTD |\n|------|-------|------------|-----|\n\n### Trade History\n| Date | Symbol | Action | Price | Shares |\n|------|--------|--------|-------|--------|\n\n### Triggered Alerts\n| Date | Symbol | Alert | Action Taken |\n|------|--------|-------|--------------||",
+    "toolsSnippet": "## Available Tools\n\n| Tool | Purpose |\n|------|---------|\n| web | Fetch market data |\n\n### Market Data\n```\nweb.get('finance.yahoo.com/quote/AAPL')  # Stock quote\nweb.get('api.coingecko.com/...')         # Crypto prices\n```\n\n### Market Hours\n- US Markets: 9:30-16:00 ET\n- Crypto: 24/7\n\n⚠️ Not financial advice",
+    "bootSnippet": "## Startup Checklist\n\n- [ ] Fetch current portfolio prices\n- [ ] Check price alerts\n- [ ] Scan for major news\n- [ ] Calculate daily P&L",
+    "examples": [
+      "How is my portfolio performing today?",
+      "What's happening with AAPL stock?",
+      "Alert me if BTC drops below $50,000",
+      "What's the latest news on NVDA?"
+    ]
+  },
+  "skills": [
+    {
+      "name": "web",
+      "permissions": ["read"],
+      "config": {}
+    }
+  ],
+  "cronJobs": [
+    {
+      "name": "Price Alerts",
+      "schedule": "*/15 9-16 * * 1-5",
+      "task": "Check portfolio holdings for significant price movements",
+      "enabled": true,
+      "timezone": "America/New_York"
+    },
+    {
+      "name": "Market Close Summary",
+      "schedule": "0 16 * * 1-5",
+      "task": "Generate daily portfolio summary at market close",
+      "enabled": true,
+      "timezone": "America/New_York"
+    },
+    {
+      "name": "News Scan",
+      "schedule": "0 * * * *",
+      "task": "Scan for major news affecting portfolio holdings",
+      "enabled": true,
+      "timezone": "local"
+    }
+  ],
+  "integrations": [
+    {
+      "service": "yahoo-finance",
+      "permissions": ["read"]
+    }
+  ]
+}

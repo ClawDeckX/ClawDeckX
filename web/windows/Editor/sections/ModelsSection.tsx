@@ -336,7 +336,7 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, setField, getFie
   const [wizExpandedCost, setWizExpandedCost] = useState<string | null>(null);
   const [wizSearchInput, setWizSearchInput] = useState('');
   const [wizCustomName, setWizCustomName] = useState('');
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'fail' | 'warning'>('idle');
   const [modelSearchOpen, setModelSearchOpen] = useState(false);
   const [modelHighlight, setModelHighlight] = useState(-1);
   const [discoveringModels, setDiscoveringModels] = useState(false);
@@ -344,6 +344,7 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, setField, getFie
   const [autoDiscoverAttemptKey, setAutoDiscoverAttemptKey] = useState('');
   const modelSearchRef = useRef<HTMLDivElement>(null);
   const modelListRef = useRef<HTMLDivElement>(null);
+  const [providerTestStatus, setProviderTestStatus] = useState<Record<string, 'idle' | 'testing' | 'ok' | 'fail' | 'warning'>>({});
 
   useEffect(() => {
     if (!modelSearchOpen) return;
@@ -458,21 +459,52 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, setField, getFie
   const handleTestConnection = useCallback(async () => {
     setTestStatus('testing');
     try {
-      await post('/api/v1/setup/test-model', {
+      const result = await post<{ status?: string; message?: string }>('/api/v1/setup/test-model', {
         provider: selectedProvider,
         apiKey: wizApiKey,
         baseUrl: wizBaseUrl,
         model: wizFinalModel,
         apiType: wizApiType,
       });
-      setTestStatus('ok');
-      toast('success', es.connected);
+      if (result?.status === 'warning') {
+        setTestStatus('warning');
+        toast('warning', result.message || es.connected);
+      } else {
+        setTestStatus('ok');
+        toast('success', es.connected);
+      }
     } catch (err: any) {
       setTestStatus('fail');
       toast('error', formatFriendlyError(err, es) || es.failed);
     }
     setTimeout(() => setTestStatus('idle'), 3000);
   }, [selectedProvider, wizApiKey, wizBaseUrl, wizFinalModel, toast, es]);
+
+  const handleTestProvider = useCallback(async (providerName: string, cfg: any) => {
+    setProviderTestStatus(prev => ({ ...prev, [providerName]: 'testing' }));
+    try {
+      const models = Array.isArray(cfg.models) ? cfg.models : [];
+      const firstModel = models.length > 0 ? (typeof models[0] === 'string' ? models[0] : models[0]?.id) : '';
+      const result = await post<{ status?: string; message?: string }>('/api/v1/setup/test-model', {
+        provider: providerName,
+        apiKey: cfg.apiKey || '',
+        baseUrl: cfg.baseUrl || '',
+        model: firstModel,
+        apiType: cfg.api || 'openai-completions',
+      });
+      if (result?.status === 'warning') {
+        setProviderTestStatus(prev => ({ ...prev, [providerName]: 'warning' }));
+        toast('warning', result.message || es.connected);
+      } else {
+        setProviderTestStatus(prev => ({ ...prev, [providerName]: 'ok' }));
+        toast('success', es.connected);
+      }
+    } catch (err: any) {
+      setProviderTestStatus(prev => ({ ...prev, [providerName]: 'fail' }));
+      toast('error', formatFriendlyError(err, es) || es.failed);
+    }
+    setTimeout(() => setProviderTestStatus(prev => ({ ...prev, [providerName]: 'idle' })), 3000);
+  }, [toast, es]);
 
   const handleWizardSave = useCallback(() => {
     if (!preset || wizModels.length === 0) return;
@@ -575,6 +607,7 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, setField, getFie
         ) : (
           providerEntries.map(([name, cfg]: [string, any]) => {
             const models: any[] = cfg.models || [];
+            const testState = providerTestStatus[name] || 'idle';
             return (
               <ConfigCard
                 key={name}
@@ -582,6 +615,30 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, setField, getFie
                 icon="dns"
                 onDelete={() => deleteField(['models', 'providers', name])}
                 defaultOpen={false}
+                actions={
+                  <button
+                    onClick={() => handleTestProvider(name, cfg)}
+                    disabled={testState === 'testing'}
+                    title={es.testConn}
+                    className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+                      testState === 'testing' ? 'text-slate-400 cursor-wait' :
+                      testState === 'ok' ? 'text-green-500 hover:text-green-600' :
+                      testState === 'warning' ? 'text-amber-500 hover:text-amber-600' :
+                      testState === 'fail' ? 'text-red-500 hover:text-red-600' :
+                      'text-slate-400 hover:text-primary hover:bg-primary/5'
+                    }`}
+                  >
+                    <span className={`material-symbols-outlined text-[16px] ${
+                      testState === 'testing' ? 'animate-spin' : ''
+                    }`}>
+                      {testState === 'testing' ? 'progress_activity' :
+                       testState === 'ok' ? 'check_circle' :
+                       testState === 'warning' ? 'warning' :
+                       testState === 'fail' ? 'error' :
+                       'play_arrow'}
+                    </span>
+                  </button>
+                }
               >
                 <TextField label={es.lblBaseUrl} value={cfg.baseUrl || ''} onChange={v => setField(['models', 'providers', name, 'baseUrl'], v)} placeholder={es.phOpenAIBaseUrl} tooltip={es.baseUrlTip} />
                 <PasswordField label={es.lblApiKey} value={cfg.apiKey || ''} onChange={v => setField(['models', 'providers', name, 'apiKey'], v)} placeholder={es.phApiKeySk} tooltip={es.apiKeyTip} />

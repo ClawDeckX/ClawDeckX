@@ -144,7 +144,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
   const fetchFast = useCallback(async () => {
     if (fastFetchingRef.current) return;
     fastFetchingRef.current = true;
-    const settle = async <T,>(p: Promise<T>): Promise<{ ok: boolean; data: T | null }> => {
+    const settle = async <T,>(p: Promise<T>): Promise<{ ok: true; data: T } | { ok: false; data: null }> => {
       try {
         return { ok: true, data: await p };
       } catch {
@@ -194,7 +194,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
   const fetchSlow = useCallback(async () => {
     if (slowFetchingRef.current) return;
     slowFetchingRef.current = true;
-    const settle = async <T,>(p: Promise<T>): Promise<{ ok: boolean; data: T | null }> => {
+    const settle = async <T,>(p: Promise<T>): Promise<{ ok: true; data: T } | { ok: false; data: null }> => {
       try {
         return { ok: true, data: await p };
       } catch {
@@ -225,12 +225,16 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
       const hadFailure = results.some((r) => !r.ok);
       if (hadFailure) setHasPartialFailure(true);
 
+      const sessData = sessRes.data as any;
+      const modelsData = modelsRes.data as any;
+      const skillsData = skillsRes.data as any;
+      const agentsData = agentsRes.data as any;
       setDs(prev => ({
         ...prev,
-        sessions: sessRes.data ? (Array.isArray(sessRes.data) ? sessRes.data : sessRes.data?.sessions || []) : prev.sessions,
-        models: modelsRes.data ? (Array.isArray(modelsRes.data) ? modelsRes.data : modelsRes.data?.list || modelsRes.data?.models || []) : prev.models,
-        skills: skillsRes.data ? (Array.isArray(skillsRes.data) ? skillsRes.data : skillsRes.data?.skills || []) : prev.skills,
-        agents: agentsRes.data ? (Array.isArray(agentsRes.data) ? agentsRes.data : agentsRes.data?.agents || []) : prev.agents,
+        sessions: sessData ? (Array.isArray(sessData) ? sessData : sessData?.sessions || []) : prev.sessions,
+        models: modelsData ? (Array.isArray(modelsData) ? modelsData : modelsData?.list || modelsData?.models || []) : prev.models,
+        skills: skillsData ? (Array.isArray(skillsData) ? skillsData : skillsData?.skills || []) : prev.skills,
+        agents: agentsData ? (Array.isArray(agentsData) ? agentsData : agentsData?.agents || []) : prev.agents,
         cronStatus: cronRes.data ?? prev.cronStatus,
         usageCost: costRes.data ?? prev.usageCost,
         userConfig: cfgObj ?? prev.userConfig,

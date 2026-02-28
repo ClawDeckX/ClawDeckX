@@ -108,7 +108,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
             {open && (
                 <div
                     ref={listRef}
-                    className="absolute z-[100] right-0 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e2028] shadow-xl shadow-black/10 dark:shadow-black/40 py-1 w-max min-w-full"
+                    className="absolute z-[100] left-0 mt-1 max-h-52 overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e2028] shadow-xl shadow-black/10 dark:shadow-black/40 py-1 min-w-full max-w-[200px]"
+                    style={{ colorScheme: 'dark' }}
                 >
                     {options.map((o, idx) => (
                         <button
@@ -116,11 +117,11 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                             type="button"
                             onMouseEnter={() => setHl(idx)}
                             onClick={() => { onChange(o.value); setOpen(false); }}
-                            className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors whitespace-nowrap ${o.value === value
+                            className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors truncate ${o.value === value
                                 ? 'text-primary font-bold bg-primary/5 dark:bg-primary/10'
                                 : idx === hl
-                                    ? 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-white/80'
-                                    : 'text-slate-600 dark:text-white/60 hover:bg-slate-50 dark:hover:bg-white/[0.03]'
+                                    ? 'bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-white'
+                                    : 'text-slate-600 dark:text-white/70 hover:bg-slate-50 dark:hover:bg-white/[0.06]'
                                 }`}
                         >
                             {o.label}

@@ -1,0 +1,32 @@
+{
+  "category": "scenarios",
+  "version": "1.0.0",
+  "templates": [
+    "productivity/personal-assistant.json",
+    "productivity/email-manager.json",
+    "productivity/calendar-manager.json",
+    "productivity/task-tracker.json",
+    "productivity/personal-crm.json",
+    "productivity/second-brain.json",
+    "social/reddit-digest.json",
+    "social/youtube-analyzer.json",
+    "social/twitter-monitor.json",
+    "social/tech-news.json",
+    "creative/content-pipeline.json",
+    "creative/blog-writer.json",
+    "creative/social-scheduler.json",
+    "devops/dev-assistant.json",
+    "devops/self-healing-server.json",
+    "devops/log-analyzer.json",
+    "devops/cicd-monitor.json",
+    "research/knowledge-rag.json",
+    "research/paper-reader.json",
+    "research/learning-tracker.json",
+    "research/market-research.json",
+    "finance/expense-tracker.json",
+    "finance/investment-monitor.json",
+    "family/home-assistant.json",
+    "family/meal-planner.json",
+    "family/kids-learning.json"
+  ]
+}

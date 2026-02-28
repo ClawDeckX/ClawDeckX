@@ -40,7 +40,7 @@ const AuthSection = lazy(() => import('./sections/AuthSection').then(m => ({ def
 const MiscSection = lazy(() => import('./sections/MiscSection').then(m => ({ default: m.MiscSection })));
 const JsonEditorSection = lazy(() => import('./sections/JsonEditorSection').then(m => ({ default: m.JsonEditorSection })));
 const LiveConfigSection = lazy(() => import('./sections/LiveConfigSection').then(m => ({ default: m.LiveConfigSection })));
-const TemplatesSection = lazy(() => import('./sections/TemplatesSection').then(m => ({ default: m.TemplatesSection })));
+const TemplatesSection = lazy(() => import('./sections/TemplatesSectionV2').then(m => ({ default: m.TemplatesSectionV2 })));
 const SECTIONS: SectionDef[] = [
   // core sections
   { id: 'models', icon: 'psychology', labelKey: 'secModels', color: 'text-blue-500' },

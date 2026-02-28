@@ -1,0 +1,98 @@
+{
+  "id": "content-factory",
+  "version": "1.0.0",
+  "type": "multi-agent",
+  "metadata": {
+    "name": "Content Factory",
+    "description": "End-to-end content production pipeline with research, writing, editing, and publishing",
+    "category": "content",
+    "difficulty": "hard",
+    "icon": "factory",
+    "color": "from-purple-500 to-pink-500",
+    "tags": ["content", "writing", "workflow", "team"],
+    "author": "ClawDeckX Team"
+  },
+  "requirements": {
+    "skills": ["web"],
+    "channels": []
+  },
+  "content": {
+    "agents": [
+      {
+        "id": "researcher",
+        "name": "Researcher",
+        "role": "Gather and analyze information",
+        "icon": "search",
+        "color": "bg-blue-500",
+        "soulSnippet": "You are a thorough researcher. Gather comprehensive information on topics, verify facts, and provide well-organized research briefs with citations."
+      },
+      {
+        "id": "writer",
+        "name": "Writer",
+        "role": "Create initial drafts",
+        "icon": "edit",
+        "color": "bg-green-500",
+        "soulSnippet": "You are a creative writer. Transform research into engaging, well-structured content. Focus on clarity, flow, and audience engagement."
+      },
+      {
+        "id": "editor",
+        "name": "Editor",
+        "role": "Review and optimize content",
+        "icon": "rate_review",
+        "color": "bg-amber-500",
+        "soulSnippet": "You are a meticulous editor. Review content for grammar, style, clarity, and accuracy. Ensure consistency and polish the final output."
+      },
+      {
+        "id": "publisher",
+        "name": "Publisher",
+        "role": "Format and distribute",
+        "icon": "publish",
+        "color": "bg-purple-500",
+        "soulSnippet": "You are a publishing specialist. Format content for different platforms, optimize for SEO, and manage distribution schedules."
+      }
+    ],
+    "workflow": {
+      "type": "sequential",
+      "description": "Four-stage content production pipeline",
+      "steps": [
+        { "agent": "researcher", "action": "Research topic and compile brief" },
+        { "agent": "writer", "action": "Create draft from research" },
+        { "agent": "editor", "action": "Review and refine content" },
+        { "agent": "publisher", "action": "Format and publish" }
+      ]
+    },
+    "examples": [
+      "Create a blog post about AI trends in 2026",
+      "Produce a newsletter about productivity tips",
+      "Write and publish a product announcement"
+    ]
+  },
+  "skills": [
+    {
+      "name": "web",
+      "permissions": ["read"],
+      "config": {}
+    },
+    {
+      "name": "memory",
+      "permissions": ["read", "write"],
+      "config": {}
+    }
+  ],
+  "cronJobs": [
+    {
+      "name": "Content Calendar Check",
+      "schedule": "0 9 * * 1-5",
+      "task": "Review content calendar and initiate scheduled content production",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Weekly Content Review",
+      "schedule": "0 10 * * 1",
+      "task": "Review last week's content performance and plan improvements",
+      "enabled": true,
+      "timezone": "local"
+    }
+  ]
+}

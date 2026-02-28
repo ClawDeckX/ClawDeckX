@@ -34,6 +34,75 @@ interface AppGroup {
   apps: { id: WindowID; icon: string; color: string }[];
 }
 
+// 移到组件外部，避免每次渲染重新创建
+const ALL_DESKTOP_APPS: AppInfo[] = [
+  { id: 'dashboard', titleKey: 'dashboard', icon: 'dashboard', gradient: 'from-[#2DA9FF] to-[#007AFF]' },
+  { id: 'setup_wizard', titleKey: 'setup_wizard', icon: 'rocket_launch', gradient: 'from-[#FF6B6B] to-[#FF3D3D]' },
+  { id: 'usage_wizard', titleKey: 'usage_wizard', icon: 'auto_fix_high', gradient: 'from-[#A855F7] to-[#7C3AED]' },
+  { id: 'editor', titleKey: 'editor', icon: 'code_blocks', gradient: 'from-[#14B8A6] to-[#0D9488]' },
+  { id: 'skills', titleKey: 'skills', icon: 'extension', gradient: 'from-[#FF9500] to-[#E67E00]' },
+  { id: 'alerts', titleKey: 'alerts', icon: 'approval', gradient: 'from-[#FF453A] to-[#C33B32]' },
+  { id: 'gateway', titleKey: 'gateway', icon: 'router', gradient: 'from-[#34C759] to-[#248A3D]' },
+  { id: 'activity', titleKey: 'activity', icon: 'query_stats', gradient: 'from-[#AF52DE] to-[#8944AB]' },
+  { id: 'maintenance', titleKey: 'maintenance', icon: 'health_and_safety', gradient: 'from-[#22C55E] to-[#15803D]' },
+  { id: 'config_mgmt', titleKey: 'config_mgmt', icon: 'analytics', gradient: 'from-[#F472B6] to-[#DB2777]' },
+  { id: 'sessions', titleKey: 'sessions', icon: 'forum', gradient: 'from-[#818CF8] to-[#4F46E5]' },
+  { id: 'scheduler', titleKey: 'scheduler', icon: 'event_repeat', gradient: 'from-[#FF375F] to-[#BF2A47]' },
+  { id: 'agents', titleKey: 'agents', icon: 'robot_2', gradient: 'from-[#5856D6] to-[#3634A3]' },
+  { id: 'settings', titleKey: 'settings', icon: 'settings', gradient: 'from-[#8E8E93] to-[#636366]' },
+  { id: 'nodes', titleKey: 'nodes', icon: 'hub', gradient: 'from-[#10B981] to-[#059669]' },
+];
+
+const DOCK_GROUPS: AppGroup[] = [
+  {
+    id: 'overview',
+    nameKey: 'monitorCenter',
+    icon: 'dashboard',
+    gradient: 'from-[#007AFF] to-[#0040A3]',
+    apps: [
+      { id: 'dashboard', icon: 'dashboard', color: 'bg-blue-500' },
+      { id: 'activity', icon: 'query_stats', color: 'bg-indigo-500' },
+      { id: 'alerts', icon: 'approval', color: 'bg-red-500' },
+    ]
+  },
+  {
+    id: 'gateway',
+    nameKey: 'gatewayMgmt',
+    icon: 'hub',
+    gradient: 'from-[#34C759] to-[#1A5C2A]',
+    apps: [
+      { id: 'gateway', icon: 'router', color: 'bg-emerald-500' },
+      { id: 'sessions', icon: 'forum', color: 'bg-teal-500' },
+      { id: 'agents', icon: 'robot_2', color: 'bg-green-600' },
+      { id: 'scheduler', icon: 'event_repeat', color: 'bg-cyan-600' },
+    ]
+  },
+  {
+    id: 'config',
+    nameKey: 'configTools',
+    icon: 'code_blocks',
+    gradient: 'from-[#FF9500] to-[#B36800]',
+    apps: [
+      { id: 'editor', icon: 'code_blocks', color: 'bg-slate-700' },
+      { id: 'skills', icon: 'extension', color: 'bg-amber-600' },
+      { id: 'config_mgmt', icon: 'analytics', color: 'bg-cyan-500' },
+      { id: 'usage_wizard', icon: 'auto_fix_high', color: 'bg-violet-600' },
+    ]
+  },
+  {
+    id: 'system',
+    nameKey: 'systemTools',
+    icon: 'shield_lock',
+    gradient: 'from-[#3B82F6] to-[#1E40AF]',
+    apps: [
+      { id: 'nodes', icon: 'hub', color: 'bg-sky-600' },
+      { id: 'maintenance', icon: 'health_and_safety', color: 'bg-emerald-600' },
+      { id: 'settings', icon: 'settings', color: 'bg-zinc-600' },
+      { id: 'setup_wizard', icon: 'rocket_launch', color: 'bg-red-500' },
+    ]
+  }
+];
+
 const Desktop: React.FC<DesktopProps> = ({
   onOpenWindow,
   onPrefetchWindow,
@@ -78,39 +147,33 @@ const Desktop: React.FC<DesktopProps> = ({
   const t = useMemo(() => getTranslation(language), [language]);
 
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    let timer: ReturnType<typeof setInterval> | null = setInterval(() => setTime(new Date()), 1000);
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (timer) { clearInterval(timer); timer = null; }
+      } else {
+        if (!timer) {
+          timer = setInterval(() => setTime(new Date()), 1000);
+          setTime(new Date());
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 
-  const allDesktopApps: AppInfo[] = [
-    // 默认桌面顺序（与设计稿一致）
-    { id: 'dashboard', titleKey: 'dashboard', icon: 'dashboard', gradient: 'from-[#2DA9FF] to-[#007AFF]' },
-    { id: 'setup_wizard', titleKey: 'setup_wizard', icon: 'rocket_launch', gradient: 'from-[#FF6B6B] to-[#FF3D3D]' },
-    { id: 'usage_wizard', titleKey: 'usage_wizard', icon: 'auto_fix_high', gradient: 'from-[#A855F7] to-[#7C3AED]' },
-    { id: 'editor', titleKey: 'editor', icon: 'code_blocks', gradient: 'from-[#14B8A6] to-[#0D9488]' },
-    { id: 'skills', titleKey: 'skills', icon: 'extension', gradient: 'from-[#FF9500] to-[#E67E00]' },
-    { id: 'alerts', titleKey: 'alerts', icon: 'approval', gradient: 'from-[#FF453A] to-[#C33B32]' },
-    { id: 'gateway', titleKey: 'gateway', icon: 'router', gradient: 'from-[#34C759] to-[#248A3D]' },
-    { id: 'activity', titleKey: 'activity', icon: 'query_stats', gradient: 'from-[#AF52DE] to-[#8944AB]' },
-    { id: 'maintenance', titleKey: 'maintenance', icon: 'health_and_safety', gradient: 'from-[#22C55E] to-[#15803D]' },
-    { id: 'config_mgmt', titleKey: 'config_mgmt', icon: 'analytics', gradient: 'from-[#F472B6] to-[#DB2777]' },
-    { id: 'sessions', titleKey: 'sessions', icon: 'forum', gradient: 'from-[#818CF8] to-[#4F46E5]' },
-    { id: 'scheduler', titleKey: 'scheduler', icon: 'event_repeat', gradient: 'from-[#FF375F] to-[#BF2A47]' },
-    { id: 'agents', titleKey: 'agents', icon: 'robot_2', gradient: 'from-[#5856D6] to-[#3634A3]' },
-    { id: 'settings', titleKey: 'settings', icon: 'settings', gradient: 'from-[#8E8E93] to-[#636366]' },
-    { id: 'nodes', titleKey: 'nodes', icon: 'hub', gradient: 'from-[#10B981] to-[#059669]' },
-  ];
   const desktopApps = useMemo(() => {
     // Defensive normalization: keep editor always visible on desktop.
     const map = new Map<WindowID, AppInfo>();
-    allDesktopApps.forEach((a) => map.set(a.id, a));
+    ALL_DESKTOP_APPS.forEach((a) => map.set(a.id, a));
     if (!map.has('editor')) {
       map.set('editor', { id: 'editor', titleKey: 'editor', icon: 'code_blocks', gradient: 'from-[#14B8A6] to-[#0D9488]' });
     }
     return Array.from(map.values());
-  }, [allDesktopApps]);
+  }, []);
 
   const appIds = useMemo(() => desktopApps.map(a => a.id), [desktopApps]);
   const { positions: iconPositions, previewPositions, dragState, getPixelPos, onIconPointerDown, config: iconGridConfig } = useIconGrid(appIds);
@@ -119,60 +182,10 @@ const Desktop: React.FC<DesktopProps> = ({
   const prevBadgesRef = useRef<Record<string, number>>({});
   const [bouncingGroups, setBouncingGroups] = useState<Set<string>>(new Set());
 
-  const groups: AppGroup[] = [
-    {
-      id: 'overview',
-      nameKey: 'monitorCenter',
-      icon: 'dashboard',
-      gradient: 'from-[#007AFF] to-[#0040A3]',
-      apps: [
-        { id: 'dashboard', icon: 'dashboard', color: 'bg-blue-500' },
-        { id: 'activity', icon: 'query_stats', color: 'bg-indigo-500' },
-        { id: 'alerts', icon: 'approval', color: 'bg-red-500' },
-      ]
-    },
-    {
-      id: 'gateway',
-      nameKey: 'gatewayMgmt',
-      icon: 'hub',
-      gradient: 'from-[#34C759] to-[#1A5C2A]',
-      apps: [
-        { id: 'gateway', icon: 'router', color: 'bg-emerald-500' },
-        { id: 'sessions', icon: 'forum', color: 'bg-teal-500' },
-        { id: 'agents', icon: 'robot_2', color: 'bg-green-600' },
-        { id: 'scheduler', icon: 'event_repeat', color: 'bg-cyan-600' },
-      ]
-    },
-    {
-      id: 'config',
-      nameKey: 'configTools',
-      icon: 'code_blocks',
-      gradient: 'from-[#FF9500] to-[#B36800]',
-      apps: [
-        { id: 'editor', icon: 'code_blocks', color: 'bg-slate-700' },
-        { id: 'skills', icon: 'extension', color: 'bg-amber-600' },
-        { id: 'config_mgmt', icon: 'analytics', color: 'bg-cyan-500' },
-        { id: 'usage_wizard', icon: 'auto_fix_high', color: 'bg-violet-600' },
-      ]
-    },
-    {
-      id: 'system',
-      nameKey: 'systemTools',
-      icon: 'shield_lock',
-      gradient: 'from-[#3B82F6] to-[#1E40AF]',
-      apps: [
-        { id: 'nodes', icon: 'hub', color: 'bg-sky-600' },
-        { id: 'maintenance', icon: 'health_and_safety', color: 'bg-emerald-600' },
-        { id: 'settings', icon: 'settings', color: 'bg-zinc-600' },
-        { id: 'setup_wizard', icon: 'rocket_launch', color: 'bg-red-500' },
-      ]
-    }
-  ];
-
   useEffect(() => {
     const prev = prevBadgesRef.current;
     const newBouncing = new Set<string>();
-    for (const group of groups) {
+    for (const group of DOCK_GROUPS) {
       for (const app of group.apps) {
         const cur = (badges as Record<string, number>)[app.id] || 0;
         const old = prev[app.id] || 0;
@@ -335,8 +348,8 @@ const Desktop: React.FC<DesktopProps> = ({
       >
         {activeGroupId && (
           <div ref={popupRef} className={`mb-6 mac-glass p-3 md:p-5 rounded-[1.5rem] md:rounded-[2rem] shadow-2xl border transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-6 mx-4 md:mx-0 ${theme === 'dark' ? 'bg-[#1e1e1e]/90 border-white/10' : 'bg-white/90 border-slate-900/10'}`}>
-            <div className="grid gap-4 md:gap-6" style={{ gridTemplateColumns: `repeat(${Math.min(groups.find(g => g.id === activeGroupId)?.apps.length || 4, 4)}, minmax(0, 1fr))` }}>
-              {groups.find(g => g.id === activeGroupId)?.apps.map(app => {
+            <div className="grid gap-4 md:gap-6" style={{ gridTemplateColumns: `repeat(${Math.min(DOCK_GROUPS.find(g => g.id === activeGroupId)?.apps.length || 4, 4)}, minmax(0, 1fr))` }}>
+              {DOCK_GROUPS.find(g => g.id === activeGroupId)?.apps.map(app => {
                 const appData = desktopApps.find(a => a.id === app.id);
                 const win = activeWindows.find(w => w.id === app.id);
                 const isOpen = !!win?.isOpen;
@@ -361,7 +374,7 @@ const Desktop: React.FC<DesktopProps> = ({
         )}
 
         <div className={`mac-glass flex items-center justify-center md:items-end gap-1 px-3 md:px-4 py-2 md:py-3 w-full md:w-auto h-[72px] md:h-[72px] md:rounded-[1.8rem] rounded-t-[2rem] shadow-[0_10px_40px_rgba(0,0,0,0.3)] border-t border-white/20 transition-all duration-300 ${theme === 'dark' ? 'bg-black/40' : 'bg-white/50'}`} onMouseLeave={() => setHoverIndex(null)}>
-          {groups.map((group, index) => {
+          {DOCK_GROUPS.map((group, index) => {
             const isGroupActive = activeGroupId === group.id;
             const hasAnyAppOpen = group.apps.some(app => activeWindows.find(w => w.id === app.id)?.isOpen);
             const scale = getScale(index);

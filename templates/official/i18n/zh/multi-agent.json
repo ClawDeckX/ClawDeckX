@@ -1,0 +1,158 @@
+{
+  "content-factory": {
+    "name": "内容工厂",
+    "description": "研究、写作、编辑、发布的端到端内容生产流水线",
+    "agents": {
+      "researcher": {
+        "name": "研究员",
+        "role": "收集和分析信息"
+      },
+      "writer": {
+        "name": "作家",
+        "role": "创作初稿"
+      },
+      "editor": {
+        "name": "编辑",
+        "role": "审核和优化内容"
+      },
+      "publisher": {
+        "name": "发布者",
+        "role": "格式化和分发"
+      }
+    },
+    "workflow": {
+      "description": "四阶段内容生产流水线"
+    },
+    "content": {
+      "examples": [
+        "创建一篇关于2026年AI趋势的博客文章",
+        "制作一份关于生产力技巧的新闻通讯",
+        "撰写并发布产品公告"
+      ]
+    }
+  },
+  "research-team": {
+    "name": "研究团队",
+    "description": "由首席研究员、分析师和评审员组成的协作研究团队",
+    "agents": {
+      "lead-researcher": {
+        "name": "首席研究员",
+        "role": "指导研究并综合发现"
+      },
+      "data-analyst": {
+        "name": "数据分析师",
+        "role": "分析数据并发现模式"
+      },
+      "domain-expert": {
+        "name": "领域专家",
+        "role": "提供专业知识"
+      },
+      "critic": {
+        "name": "批评审查员",
+        "role": "质疑假设并验证"
+      }
+    },
+    "workflow": {
+      "description": "并行研究与批判性审查"
+    },
+    "content": {
+      "examples": [
+        "研究AI对医疗保健的影响",
+        "分析电动汽车的市场趋势",
+        "调查远程工作的最佳实践"
+      ]
+    }
+  },
+  "devops-team": {
+    "name": "DevOps 团队",
+    "description": "自动化事件响应和基础设施管理团队",
+    "agents": {
+      "monitor": {
+        "name": "监控员",
+        "role": "监视系统并检测问题"
+      },
+      "responder": {
+        "name": "首响者",
+        "role": "初步分类和快速修复"
+      },
+      "engineer": {
+        "name": "SRE 工程师",
+        "role": "深度排查和修复"
+      },
+      "communicator": {
+        "name": "沟通员",
+        "role": "利益相关者更新"
+      }
+    },
+    "workflow": {
+      "description": "事件响应工作流"
+    },
+    "content": {
+      "examples": [
+        "处理服务器宕机",
+        "响应高CPU告警",
+        "管理安全事件"
+      ]
+    }
+  },
+  "customer-support": {
+    "name": "客服团队",
+    "description": "分层客户支持，支持路由和升级",
+    "agents": {
+      "greeter": {
+        "name": "接待员",
+        "role": "初次接触和路由"
+      },
+      "specialist": {
+        "name": "支持专员",
+        "role": "处理常见问题"
+      },
+      "supervisor": {
+        "name": "主管",
+        "role": "处理升级问题"
+      }
+    },
+    "workflow": {
+      "description": "分层支持与升级"
+    },
+    "content": {
+      "examples": [
+        "帮助客户解决账单问题",
+        "排查产品问题",
+        "处理服务投诉"
+      ]
+    }
+  },
+  "data-pipeline": {
+    "name": "数据流水线",
+    "description": "自动化数据收集、处理、分析和报告",
+    "agents": {
+      "collector": {
+        "name": "数据收集器",
+        "role": "从源收集数据"
+      },
+      "processor": {
+        "name": "数据处理器",
+        "role": "清洗和转换数据"
+      },
+      "analyzer": {
+        "name": "数据分析器",
+        "role": "分析并发现洞察"
+      },
+      "reporter": {
+        "name": "报告生成器",
+        "role": "创建报告和可视化"
+      }
+    },
+    "workflow": {
+      "description": "带分析的ETL流水线"
+    },
+    "content": {
+      "examples": [
+        "分析每周销售数据",
+        "生成月度绩效报告",
+        "处理和分析用户行为数据"
+      ]
+    }
+  }
+}

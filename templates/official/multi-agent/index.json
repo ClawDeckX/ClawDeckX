@@ -1,0 +1,11 @@
+{
+  "category": "multi-agent",
+  "version": "1.0.0",
+  "templates": [
+    "content-factory.json",
+    "research-team.json",
+    "devops-team.json",
+    "customer-support.json",
+    "data-pipeline.json"
+  ]
+}

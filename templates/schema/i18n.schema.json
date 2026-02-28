@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClawDeckX Template i18n Schema",
+  "type": "object",
+  "description": "Template translation override file",
+  "patternProperties": {
+    "^[a-z0-9-]+$": {
+      "type": "object",
+      "description": "Translation for template ID",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "content": {
+          "type": "object",
+          "properties": {
+            "soulSnippet": { "type": "string" },
+            "heartbeatSnippet": { "type": "string" },
+            "examples": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "agents": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z0-9-]+$": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "role": { "type": "string" },
+                "description": { "type": "string" }
+              }
+            }
+          }
+        },
+        "workflow": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string" },
+            "steps": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

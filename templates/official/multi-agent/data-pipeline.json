@@ -1,0 +1,115 @@
+{
+  "id": "data-pipeline",
+  "version": "1.0.0",
+  "type": "multi-agent",
+  "metadata": {
+    "name": "Data Pipeline",
+    "description": "Automated data collection, processing, analysis, and reporting",
+    "category": "data",
+    "difficulty": "hard",
+    "icon": "analytics",
+    "color": "from-indigo-500 to-purple-500",
+    "tags": ["data", "pipeline", "analytics", "automation"],
+    "author": "ClawDeckX Team"
+  },
+  "requirements": {
+    "skills": ["web", "shell"],
+    "channels": []
+  },
+  "content": {
+    "agents": [
+      {
+        "id": "collector",
+        "name": "Data Collector",
+        "role": "Gather data from sources",
+        "icon": "download",
+        "color": "bg-blue-500",
+        "soulSnippet": "## Data Collector\n\n_You gather data from diverse sources reliably._\n\n### Responsibilities\n- Collect from APIs, databases, files\n- Ensure data completeness\n- Handle rate limits and errors\n- Log collection metadata\n\n### Collection Standards\n| Aspect | Requirement |\n|--------|-------------|\n| Completeness | >99% |\n| Freshness | <1h lag |\n| Logging | Full audit trail |\n\n### Error Handling\n- Retry with backoff\n- Log failures\n- Alert on persistent issues"
+      },
+      {
+        "id": "processor",
+        "name": "Data Processor",
+        "role": "Clean and transform data",
+        "icon": "transform",
+        "color": "bg-green-500",
+        "soulSnippet": "## Data Processor\n\n_You transform raw data into analysis-ready datasets._\n\n### Responsibilities\n- Clean and validate data\n- Handle missing values\n- Normalize formats\n- Apply transformations\n\n### Processing Steps\n1. Validate schema\n2. Handle nulls/missing\n3. Normalize formats\n4. Apply business rules\n5. Quality check\n\n### Quality Metrics\n- Completeness rate\n- Validity rate\n- Consistency checks"
+      },
+      {
+        "id": "analyzer",
+        "name": "Data Analyzer",
+        "role": "Analyze and find insights",
+        "icon": "insights",
+        "color": "bg-amber-500",
+        "soulSnippet": "## Data Analyzer\n\n_You extract insights from processed data._\n\n### Responsibilities\n- Perform statistical analysis\n- Identify trends and patterns\n- Generate actionable insights\n- Validate findings\n\n### Analysis Types\n| Type | Use Case |\n|------|----------|\n| Descriptive | What happened |\n| Diagnostic | Why it happened |\n| Predictive | What might happen |\n| Prescriptive | What to do |\n\n### Output\nClear insights with statistical backing."
+      },
+      {
+        "id": "reporter",
+        "name": "Report Generator",
+        "role": "Create reports and visualizations",
+        "icon": "assessment",
+        "color": "bg-purple-500",
+        "soulSnippet": "## Report Generator\n\n_You present findings clearly to stakeholders._\n\n### Responsibilities\n- Create clear reports\n- Design visualizations\n- Tailor to audience\n- Highlight key insights\n\n### Report Structure\n```\n📊 Report: [Title]\n📅 Period: [Date Range]\n\n🎯 Key Findings:\n- [Finding 1]\n- [Finding 2]\n\n📈 Visualizations:\n[Charts and graphs]\n\n💡 Recommendations:\n- [Action 1]\n```"
+      }
+    ],
+    "workflow": {
+      "type": "sequential",
+      "description": "ETL pipeline with analysis",
+      "steps": [
+        { "agent": "collector", "action": "Collect data from sources" },
+        { "agent": "processor", "action": "Clean and transform data" },
+        { "agent": "analyzer", "action": "Analyze and find insights" },
+        { "agent": "reporter", "action": "Generate reports" }
+      ]
+    },
+    "examples": [
+      "Analyze weekly sales data",
+      "Generate monthly performance report",
+      "Process and analyze user behavior data"
+    ]
+  },
+  "skills": [
+    {
+      "name": "shell",
+      "permissions": ["execute"],
+      "config": { "timeout": 300 }
+    },
+    {
+      "name": "web",
+      "permissions": ["read"],
+      "config": {}
+    }
+  ],
+  "cronJobs": [
+    {
+      "name": "Daily Data Collection",
+      "schedule": "0 2 * * *",
+      "task": "Run daily data collection from all configured sources",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Weekly Report Generation",
+      "schedule": "0 6 * * 1",
+      "task": "Generate weekly analytics report",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Monthly Deep Analysis",
+      "schedule": "0 8 1 * *",
+      "task": "Run comprehensive monthly data analysis",
+      "enabled": true,
+      "timezone": "local"
+    }
+  ],
+  "integrations": [
+    {
+      "service": "bigquery",
+      "permissions": ["read", "write"]
+    },
+    {
+      "service": "s3",
+      "permissions": ["read", "write"]
+    }
+  ]
+}

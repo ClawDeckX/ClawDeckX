@@ -73,12 +73,17 @@ async function request<T = any>(
   // Credentials 'include' ensures cookies are sent with the request
   const res = await fetch(url, { ...options, headers, credentials: 'include' });
 
-  // 401 → reload only if previously authenticated (or let the app handle it)
+  // 401 → clear stale token and reload to force login screen
   if (res.status === 401) {
-    // If we get 401, it means the cookie is invalid or missing.
-    // We can just reload to force a re-login flow if needed, or throw.
     if (!url.includes('/auth/login') && !url.includes('/auth/needs-setup')) {
-      window.location.reload();
+      // Clear stale session token to break any potential reload loop
+      clearToken();
+      // Debounce: only reload if we haven't reloaded in the last 3 seconds
+      const lastReload = parseInt(sessionStorage.getItem('_last401Reload') || '0', 10);
+      if (Date.now() - lastReload > 3000) {
+        sessionStorage.setItem('_last401Reload', String(Date.now()));
+        window.location.reload();
+      }
     }
     throw new ApiError('AUTH_UNAUTHORIZED', translateApiError('AUTH_UNAUTHORIZED', 'session expired'), 401);
   }

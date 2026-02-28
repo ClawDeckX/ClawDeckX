@@ -1129,9 +1129,9 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
               <button onClick={() => setShowBudgetModal(false)} 
-                className="px-4 h-9 text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                className="px-4 h-9 text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.1] rounded-lg transition-colors">
                 {es.cancel}
               </button>
               <button onClick={saveBudget} 

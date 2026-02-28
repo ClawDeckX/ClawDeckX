@@ -1,0 +1,115 @@
+{
+  "id": "devops-team",
+  "version": "1.0.0",
+  "type": "multi-agent",
+  "metadata": {
+    "name": "DevOps Team",
+    "description": "Automated incident response and infrastructure management team",
+    "category": "devops",
+    "difficulty": "hard",
+    "icon": "cloud",
+    "color": "from-orange-500 to-red-500",
+    "tags": ["devops", "incident", "infrastructure", "automation"],
+    "author": "ClawDeckX Team"
+  },
+  "requirements": {
+    "skills": ["shell"],
+    "channels": ["telegram", "slack"]
+  },
+  "content": {
+    "agents": [
+      {
+        "id": "monitor",
+        "name": "Monitor",
+        "role": "Watch systems and detect issues",
+        "icon": "monitor_heart",
+        "color": "bg-blue-500",
+        "soulSnippet": "## System Monitor\n\n_You are the watchdog, detecting issues before they escalate._\n\n### Responsibilities\n- Monitor metrics, logs, and alerts\n- Detect anomalies and patterns\n- Trigger incident response\n- Track system health trends\n\n### Alert Thresholds\n| Metric | Warning | Critical |\n|--------|---------|----------|\n| CPU | >80% | >95% |\n| Memory | >85% | >95% |\n| Error rate | >1% | >5% |\n| Latency | >500ms | >2s |\n\n### Output\nClear alerts with context and severity."
+      },
+      {
+        "id": "responder",
+        "name": "First Responder",
+        "role": "Initial triage and quick fixes",
+        "icon": "emergency",
+        "color": "bg-red-500",
+        "soulSnippet": "## First Responder\n\n_You are the rapid response unit, containing issues quickly._\n\n### Responsibilities\n- Assess incident severity\n- Perform initial triage\n- Apply quick fixes\n- Escalate when needed\n\n### Triage Process\n1. Acknowledge alert\n2. Assess impact and scope\n3. Attempt quick remediation\n4. Escalate if not resolved in 15min\n\n### Output\nIncident status and actions taken."
+      },
+      {
+        "id": "engineer",
+        "name": "SRE Engineer",
+        "role": "Deep troubleshooting and fixes",
+        "icon": "engineering",
+        "color": "bg-amber-500",
+        "soulSnippet": "## SRE Engineer\n\n_You are the expert troubleshooter, solving complex issues._\n\n### Responsibilities\n- Deep root cause analysis\n- Implement permanent fixes\n- Ensure system reliability\n- Document solutions\n\n### Troubleshooting Approach\n1. Gather all available data\n2. Form hypotheses\n3. Test systematically\n4. Implement and verify fix\n5. Document for future\n\n### Output\nRoot cause analysis and fix documentation."
+      },
+      {
+        "id": "communicator",
+        "name": "Communicator",
+        "role": "Stakeholder updates",
+        "icon": "campaign",
+        "color": "bg-green-500",
+        "soulSnippet": "## Communications Lead\n\n_You keep everyone informed during incidents._\n\n### Responsibilities\n- Provide status updates\n- Manage stakeholder expectations\n- Write post-incident reports\n- Coordinate external comms\n\n### Update Cadence\n| Severity | Frequency |\n|----------|----------|\n| Critical | Every 15min |\n| High | Every 30min |\n| Medium | Hourly |\n\n### Output\nClear, timely status updates and reports."
+      }
+    ],
+    "workflow": {
+      "type": "event-driven",
+      "description": "Incident response workflow",
+      "steps": [
+        { "agent": "monitor", "action": "Detect and alert on issues", "trigger": "anomaly" },
+        { "agent": "responder", "action": "Triage and initial response" },
+        { "agents": ["engineer", "communicator"], "action": "Fix and communicate", "parallel": true },
+        { "agent": "engineer", "action": "Post-incident review" }
+      ]
+    },
+    "examples": [
+      "Handle a server outage",
+      "Respond to high CPU alert",
+      "Manage a security incident"
+    ]
+  },
+  "skills": [
+    {
+      "name": "shell",
+      "permissions": ["execute"],
+      "config": { "timeout": 60, "sudo": true }
+    },
+    {
+      "name": "web",
+      "permissions": ["read"],
+      "config": {}
+    }
+  ],
+  "cronJobs": [
+    {
+      "name": "System Health Check",
+      "schedule": "*/5 * * * *",
+      "task": "Monitor system health metrics and trigger alerts",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Daily Ops Report",
+      "schedule": "0 9 * * 1-5",
+      "task": "Generate daily operations status report",
+      "enabled": true,
+      "timezone": "local"
+    },
+    {
+      "name": "Weekly Incident Review",
+      "schedule": "0 10 * * 1",
+      "task": "Review past week's incidents and generate learnings",
+      "enabled": true,
+      "timezone": "local"
+    }
+  ],
+  "integrations": [
+    {
+      "service": "pagerduty",
+      "permissions": ["read", "write"]
+    },
+    {
+      "service": "slack",
+      "permissions": ["write"]
+    }
+  ]
+}

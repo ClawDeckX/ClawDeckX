@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClawDeckX Template Schema",
+  "type": "object",
+  "required": ["id", "version", "type", "metadata", "content"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Unique template identifier"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version"
+    },
+    "type": {
+      "enum": ["scenario", "multi-agent", "agent", "automation", "diagnostic"],
+      "description": "Template type"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "description", "category"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "subcategory": { "type": "string" },
+        "difficulty": { "enum": ["easy", "medium", "hard"] },
+        "icon": { "type": "string" },
+        "color": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "author": { "type": "string" },
+        "license": { "type": "string", "default": "MIT" },
+        "homepage": { "type": "string", "format": "uri" },
+        "newbie": { "type": "boolean" }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "properties": {
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "channels": { "type": "array", "items": { "type": "string" } },
+        "minVersion": { "type": "string" },
+        "maxVersion": { "type": "string" }
+      }
+    },
+    "content": {
+      "type": "object",
+      "description": "Template content (default language: en)",
+      "properties": {
+        "soulSnippet": { "type": "string" },
+        "heartbeatSnippet": { "type": "string" },
+        "examples": { "type": "array", "items": { "type": "string" } },
+        "configs": { "type": "object" },
+        "automations": { "type": "array" },
+        "agents": { "type": "array" },
+        "workflow": { "type": "object" }
+      }
+    }
+  }
+}

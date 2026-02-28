@@ -3,6 +3,9 @@ import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { doctorApi } from '../services/api';
 import { useToast } from '../components/Toast';
+import { ContextBudgetPanel } from '../components/maintenance';
+
+type TabId = 'diagnose' | 'context';
 
 interface DoctorProps {
   language: Language;
@@ -73,8 +76,12 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
   const dateLocale = useMemo(() => ({ zh: 'zh-CN', en: 'en-US' } as Record<string, string>)[language] || 'en-US', [language]);
   const common = (t.common || {}) as any;
   const dr = (t.dr || {}) as any;
+  const maint = (t.maint || {}) as any;
   const text = dr;
   const na = common.na || '--';
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabId>('diagnose');
 
   const [result, setResult] = useState<DiagResult | null>(null);
   const [overview, setOverview] = useState<DoctorOverview | null>(null);
@@ -114,8 +121,9 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     }
   }, [loadOverview, runDoctor, text.overviewLoadFail, toast]);
 
+  // Load cached data on mount, don't auto-run expensive checks
   useEffect(() => {
-    fetchAll();
+    fetchAll(false); // Use cached data (12s cache)
   }, [fetchAll]);
 
   const handleFix = useCallback(async () => {
@@ -345,93 +353,164 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
 
   const localizedItems = useMemo(() => filteredItems.map(localizeCheckItem), [filteredItems, localizeCheckItem]);
 
+  const tabs: { id: TabId; icon: string; label: string }[] = [
+    { id: 'diagnose', icon: 'troubleshoot', label: maint.tabDiagnose || text.title || 'Diagnostics' },
+    { id: 'context', icon: 'data_usage', label: maint.tabContext || 'Context' },
+  ];
+
   return (
     <div className="h-full overflow-y-auto bg-slate-50 dark:bg-transparent">
+      {/* Header */}
       <div className="p-3 md:p-4 border-b border-slate-200 dark:border-white/5 bg-white/70 dark:bg-white/[0.02] backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm md:text-base font-bold text-slate-800 dark:text-white">{text.title}</h2>
-            <p className="text-[11px] text-slate-500 dark:text-white/40 mt-0.5">{text.subtitle}</p>
+            <h2 className="text-sm md:text-base font-bold text-slate-800 dark:text-white">{maint.title || text.title}</h2>
+            <p className="text-[11px] text-slate-500 dark:text-white/40 mt-0.5">{maint.subtitle || text.subtitle}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`px-2 py-1 rounded text-[10px] font-bold ${statusClass(overview?.status || 'warn')}`}>{statusLabel}</span>
-            <span className="text-[13px] font-black text-primary">{overview?.score ?? result?.score ?? na}</span>
-            <button onClick={() => fetchAll(true)} disabled={loading} className="h-8 px-3 rounded-lg text-[11px] font-bold border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:border-amber-500/50 disabled:opacity-50 flex items-center gap-1.5">
-              <span className={`material-symbols-outlined text-[14px] ${loading ? 'animate-spin' : ''}`}>{loading ? 'progress_activity' : 'troubleshoot'}</span>
-              {loading ? text.running : text.run}
+          {activeTab === 'diagnose' && (
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-1 rounded text-[10px] font-bold ${statusClass(overview?.status || 'warn')}`}>{statusLabel}</span>
+              <span className="text-[13px] font-black text-primary">{overview?.score ?? result?.score ?? na}</span>
+              <button onClick={() => fetchAll(true)} disabled={loading} className="h-8 px-3 rounded-lg text-[11px] font-bold border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:border-amber-500/50 disabled:opacity-50 flex items-center gap-1.5">
+                <span className={`material-symbols-outlined text-[14px] ${loading ? 'animate-spin' : ''}`}>{loading ? 'progress_activity' : 'troubleshoot'}</span>
+                {loading ? text.running : text.run}
+              </button>
+              <button onClick={handleFix} disabled={fixing || fixableCount === 0} className="h-8 px-3 rounded-lg text-[11px] font-bold bg-primary text-white disabled:opacity-40">
+                {fixing ? text.fixing : text.fix}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-1 mt-3 overflow-x-auto pb-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`h-8 px-3 rounded-lg text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+                activeTab === tab.id
+                  ? 'bg-primary/15 text-primary'
+                  : 'bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-white/40 hover:bg-slate-200 dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
-            <button onClick={handleFix} disabled={fixing || fixableCount === 0} className="h-8 px-3 rounded-lg text-[11px] font-bold bg-primary text-white disabled:opacity-40">
-              {fixing ? text.fixing : text.fix}
-            </button>
-          </div>
+          ))}
         </div>
       </div>
 
-      <div className="p-3 md:p-4 space-y-3">
-        {loadError && (
-          <div className="rounded-lg border border-red-300/50 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-300">
-            {loadError}
-          </div>
+      {/* Tab Content */}
+      <div className="p-3 md:p-4">
+        {/* Context Tab */}
+        {activeTab === 'context' && (
+          <ContextBudgetPanel language={language} />
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {(overview?.cards || []).map((c) => (
-            <div key={c.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40">{cardLabel(c.id, c.label)}</p>
-              <div className="mt-1 flex items-end justify-between gap-2">
-                <p className="text-xl font-black text-slate-700 dark:text-white/80">
-                  {Number.isInteger(c.value) ? c.value : c.value.toFixed(1)}{c.unit || ''}
-                </p>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${statusClass(c.status)}`}>{c.status === 'ok' ? text.ok : c.status === 'warn' ? text.warn : text.error}</span>
+        {/* Diagnose Tab (Original Content) */}
+        {activeTab === 'diagnose' && (
+          <div className="space-y-3">
+            {loadError && (
+              <div className="rounded-lg border border-red-300/50 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-300">
+                {loadError}
               </div>
-            </div>
-          ))}
+            )}
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {(overview?.cards || []).map((c) => {
+            // Add explanatory text for each card
+            let hint = '';
+            if (c.id === 'events24h') {
+              hint = text.cardEvents24hHint || '活动事件总数（包含所有级别）';
+            } else if (c.id === 'errors1h') {
+              hint = text.cardErrors1hHint || '高风险和严重事件数';
+            } else if (c.id === 'availability') {
+              hint = text.cardAvailabilityHint || '网关诊断检查通过率';
+            } else if (c.id === 'resource') {
+              hint = text.cardResourceHint || '系统内存使用率';
+            }
+            return (
+              <div key={c.id} className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3" title={hint}>
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40">{cardLabel(c.id, c.label)}</p>
+                <div className="mt-1 flex items-end justify-between gap-2">
+                  <p className="text-xl font-black text-slate-700 dark:text-white/80">
+                    {Number.isInteger(c.value) ? c.value : c.value.toFixed(1)}{c.unit || ''}
+                  </p>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${statusClass(c.status)}`}>{c.status === 'ok' ? text.ok : c.status === 'warn' ? text.warn : text.error}</span>
+                </div>
+                {hint && <p className="text-[9px] text-slate-400 dark:text-white/30 mt-1">{hint}</p>}
+              </div>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
           <div className="xl:col-span-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40">{text.trendTitle}</p>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40">{text.trendTitle}</p>
+                <p className="text-[9px] text-slate-400 dark:text-white/30 mt-0.5">{text.trendHint || '上：健康分数 / 下：事件数量'}</p>
+              </div>
               <p className="text-[10px] text-slate-400 dark:text-white/35">{text.lastUpdate}: {lastUpdate || na}</p>
             </div>
             {trend.length === 0 ? (
               <p className="text-[11px] text-slate-400 dark:text-white/40 py-6 text-center">{text.empty}</p>
             ) : (
               <div className="space-y-2">
-                <div className="h-24 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-200/70 dark:border-white/10 p-2">
+                <div className="h-24 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-200/70 dark:border-white/10 p-2 relative">
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
                     <polyline points={points} fill="none" stroke="currentColor" className="text-primary" strokeWidth="1.5" />
                   </svg>
+                  <div className="absolute top-1 left-2 text-[9px] text-slate-400 dark:text-white/30">{text.healthScore || '健康分数'}</div>
                 </div>
-                <div className="grid grid-cols-6 gap-1">
-                  {trend.slice(-12).map((p, idx) => {
-                    const total = p.low + p.medium + p.high + p.critical;
-                    const barH = Math.min(100, total * 8);
-                    return (
-                      <div key={`${p.timestamp}-${idx}`} className="h-14 flex items-end justify-center">
-                        <div className="w-3 rounded-t bg-slate-300 dark:bg-white/20" style={{ height: `${Math.max(6, barH)}%` }} title={`${p.label}: ${total}`} />
-                      </div>
-                    );
-                  })}
+                <div className="relative">
+                  <div className="grid grid-cols-6 gap-1">
+                    {trend.slice(-12).map((p, idx) => {
+                      const total = p.low + p.medium + p.high + p.critical;
+                      const barH = Math.min(100, total * 8);
+                      return (
+                        <div key={`${p.timestamp}-${idx}`} className="h-14 flex flex-col items-center justify-end">
+                          <div className="w-full flex flex-col items-center justify-end" style={{ height: '100%' }}>
+                            <div className="w-3 rounded-t" style={{ 
+                              height: `${Math.max(6, barH)}%`,
+                              background: total === 0 ? '#cbd5e1' : `linear-gradient(to top, ${p.critical > 0 ? '#ef4444' : p.high > 0 ? '#f97316' : p.medium > 0 ? '#f59e0b' : '#10b981'}, #64748b)`
+                            }} title={`${p.label}\n低: ${p.low} 中: ${p.medium}\n高: ${p.high} 严重: ${p.critical}`} />
+                          </div>
+                          <p className="text-[8px] text-slate-400 dark:text-white/30 mt-0.5">{p.label.split(':')[0]}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="absolute -left-1 top-0 text-[9px] text-slate-400 dark:text-white/30">{text.eventCount || '事件数'}</div>
                 </div>
               </div>
             )}
           </div>
 
           <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40 mb-2">{text.riskTitle}</p>
-            <div className="h-2 rounded-full overflow-hidden flex">
-              <div className="bg-emerald-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.low || 0) / totalRisk) * 100 : 0}%` }} />
-              <div className="bg-amber-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.medium || 0) / totalRisk) * 100 : 0}%` }} />
-              <div className="bg-orange-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.high || 0) / totalRisk) * 100 : 0}%` }} />
-              <div className="bg-red-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.critical || 0) / totalRisk) * 100 : 0}%` }} />
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40">{text.riskTitle}</p>
+              <p className="text-[9px] text-slate-400 dark:text-white/30">{text.riskHint || '24小时内'}</p>
             </div>
-            <div className="mt-3 space-y-1.5 text-[11px]">
-              <div className="flex items-center justify-between"><span className="text-emerald-500">{text.riskLow}</span><span className="text-slate-500 dark:text-white/60">{overview?.riskCounts?.low || 0}</span></div>
-              <div className="flex items-center justify-between"><span className="text-amber-500">{text.riskMedium}</span><span className="text-slate-500 dark:text-white/60">{overview?.riskCounts?.medium || 0}</span></div>
-              <div className="flex items-center justify-between"><span className="text-orange-500">{text.riskHigh}</span><span className="text-slate-500 dark:text-white/60">{overview?.riskCounts?.high || 0}</span></div>
-              <div className="flex items-center justify-between"><span className="text-red-500">{text.riskCritical}</span><span className="text-slate-500 dark:text-white/60">{overview?.riskCounts?.critical || 0}</span></div>
-            </div>
+            {totalRisk > 0 ? (
+              <>
+                <div className="h-3 rounded-full overflow-hidden flex">
+                  <div className="bg-emerald-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.low || 0) / totalRisk) * 100 : 0}%` }} title={`${text.riskLow}: ${overview?.riskCounts?.low || 0}`} />
+                  <div className="bg-amber-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.medium || 0) / totalRisk) * 100 : 0}%` }} title={`${text.riskMedium}: ${overview?.riskCounts?.medium || 0}`} />
+                  <div className="bg-orange-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.high || 0) / totalRisk) * 100 : 0}%` }} title={`${text.riskHigh}: ${overview?.riskCounts?.high || 0}`} />
+                  <div className="bg-red-500" style={{ width: `${totalRisk ? ((overview?.riskCounts?.critical || 0) / totalRisk) * 100 : 0}%` }} title={`${text.riskCritical}: ${overview?.riskCounts?.critical || 0}`} />
+                </div>
+                <div className="mt-3 space-y-1.5 text-[11px]">
+                  <div className="flex items-center justify-between"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span><span className="text-slate-600 dark:text-white/70">{text.riskLow}</span></span><span className="font-bold text-slate-700 dark:text-white/80">{overview?.riskCounts?.low || 0}</span></div>
+                  <div className="flex items-center justify-between"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span><span className="text-slate-600 dark:text-white/70">{text.riskMedium}</span></span><span className="font-bold text-slate-700 dark:text-white/80">{overview?.riskCounts?.medium || 0}</span></div>
+                  <div className="flex items-center justify-between"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span><span className="text-slate-600 dark:text-white/70">{text.riskHigh}</span></span><span className="font-bold text-slate-700 dark:text-white/80">{overview?.riskCounts?.high || 0}</span></div>
+                  <div className="flex items-center justify-between"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span><span className="text-slate-600 dark:text-white/70">{text.riskCritical}</span></span><span className="font-bold text-slate-700 dark:text-white/80">{overview?.riskCounts?.critical || 0}</span></div>
+                </div>
+              </>
+            ) : (
+              <p className="text-[11px] text-slate-400 dark:text-white/40 py-6 text-center">{text.noRiskData || '暂无数据'}</p>
+            )}
           </div>
         </div>
 
@@ -534,6 +613,8 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
             )}
           </div>
         </div>
+        </div>
+        )}
       </div>
     </div>
   );

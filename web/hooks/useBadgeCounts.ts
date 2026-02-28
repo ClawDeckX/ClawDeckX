@@ -17,12 +17,26 @@ export function useBadgeCounts(enabled = true): Record<WindowID, number> {
   }, [enabled]);
   fetchRef.current = fetchBadges;
 
-  // Initial fetch + polling
+  // Initial fetch + polling with visibility detection
   useEffect(() => {
     if (!enabled) return;
     fetchBadges();
-    const timer = setInterval(fetchBadges, POLL_INTERVAL);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setInterval> | null = setInterval(fetchBadges, POLL_INTERVAL);
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (timer) { clearInterval(timer); timer = null; }
+      } else {
+        if (!timer) {
+          timer = setInterval(fetchBadges, POLL_INTERVAL);
+          fetchBadges();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (timer) clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [enabled, fetchBadges]);
 
   // WS real-time updates: subscribe to alert + gw_event channels

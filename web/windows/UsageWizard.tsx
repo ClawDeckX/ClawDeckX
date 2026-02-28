@@ -2,8 +2,10 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi, templateApi } from '../services/api';
+import { ScenarioTemplate } from '../services/template-manager-v2';
 import { useToast } from '../components/Toast';
 import { FileApplyConfirm, FileApplyRequest } from '../components/FileApplyConfirm';
+import { ScenarioLibraryV2 } from '../components/scenarios';
 
 interface UsageWizardProps {
   language: Language;
@@ -78,104 +80,8 @@ const PERSONA_PRESETS: PersonaPreset[] = [
   },
 ];
 
-// Scenario definitions with templates and requirements
-interface ScenarioDef {
-  id: string;
-  icon: string;
-  color: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  newbie?: boolean;
-  soulSnippet: { zh: string; en: string };
-  heartbeatSnippet: { zh: string; en: string };
-  requires?: { skills?: string[]; channels?: boolean };
-}
-
-const SCENARIOS: ScenarioDef[] = [
-  { id: 'assistant', icon: 'assistant', color: 'from-primary to-primary/80', difficulty: 'easy', newbie: true,
-    soulSnippet: {
-      zh: '\n## 个人助手\n- 回答问题时简洁准确，必要时提供详细解释\n- 主动记住用户的偏好和重要信息\n- 帮助管理待办事项和提醒\n- 遇到不确定的问题，诚实说明\n',
-      en: '\n## Personal Assistant\n- Answer questions concisely and accurately, provide details when needed\n- Proactively remember user preferences and important info\n- Help manage todos and reminders\n- Be honest about uncertainty\n',
-    },
-    heartbeatSnippet: {
-      zh: '\n- [ ] 检查是否有待办事项需要提醒\n- [ ] 检查用户之前提到的重要事项\n',
-      en: '\n- [ ] Check if there are todos that need reminding\n- [ ] Check important items mentioned by user previously\n',
-    },
-  },
-  { id: 'email', icon: 'mail', color: 'from-blue-500 to-blue-600', difficulty: 'medium',
-    soulSnippet: {
-      zh: '\n## 邮件管家\n- 每次心跳检查未读邮件，按重要程度分类\n- 重要邮件立即通知我，普通邮件汇总\n- 可以帮我草拟回复，但发送前必须确认\n',
-      en: '\n## Email Manager\n- Check unread emails during each heartbeat, classify by importance\n- Notify me immediately for important emails, summarize others\n- Draft replies for me, but always confirm before sending\n',
-    },
-    heartbeatSnippet: {
-      zh: '\n- [ ] 检查未读邮件，分类并汇总\n- [ ] 重要邮件立即通知用户\n',
-      en: '\n- [ ] Check unread emails, classify and summarize\n- [ ] Notify user immediately for important emails\n',
-    },
-    requires: { skills: ['gog'] },
-  },
-  { id: 'calendar', icon: 'calendar_month', color: 'from-green-500 to-green-600', difficulty: 'medium',
-    soulSnippet: {
-      zh: '\n## 日程管理\n- 每天早上汇报今日日程\n- 会议前 15 分钟提醒\n- 检测日程冲突并建议调整\n',
-      en: '\n## Calendar Manager\n- Brief me on today\'s schedule every morning\n- Remind me 15 minutes before meetings\n- Detect schedule conflicts and suggest adjustments\n',
-    },
-    heartbeatSnippet: {
-      zh: '\n- [ ] 检查今日日程，提醒即将到来的会议\n- [ ] 检测日程冲突\n',
-      en: '\n- [ ] Check today\'s schedule, remind upcoming meetings\n- [ ] Detect schedule conflicts\n',
-    },
-    requires: { skills: ['gog'] },
-  },
-  { id: 'task', icon: 'checklist', color: 'from-amber-500 to-amber-600', difficulty: 'easy',
-    soulSnippet: {
-      zh: '\n## 任务追踪\n- 维护待办事项清单，记录在 memory 中\n- 心跳时检查截止日期，提前提醒\n- 完成任务后自动更新状态\n',
-      en: '\n## Task Tracker\n- Maintain todo list in memory files\n- Check deadlines during heartbeat, remind in advance\n- Auto-update status when tasks are completed\n',
-    },
-    heartbeatSnippet: {
-      zh: '\n- [ ] 检查待办事项截止日期\n- [ ] 提醒即将到期的任务\n',
-      en: '\n- [ ] Check todo deadlines\n- [ ] Remind about upcoming due tasks\n',
-    },
-  },
-  { id: 'dev', icon: 'code', color: 'from-violet-500 to-violet-600', difficulty: 'medium',
-    soulSnippet: {
-      zh: '\n## 开发助手\n- 监控 GitHub Issue 和 PR\n- CI/CD 失败时立即通知\n- 代码审查时给出建设性建议\n',
-      en: '\n## Dev Assistant\n- Monitor GitHub issues and PRs\n- Notify immediately on CI/CD failures\n- Give constructive suggestions during code review\n',
-    },
-    heartbeatSnippet: {
-      zh: '\n- [ ] 检查 GitHub 新 Issue 和 PR\n- [ ] 检查 CI/CD 状态\n',
-      en: '\n- [ ] Check new GitHub issues and PRs\n- [ ] Check CI/CD status\n',
-    },
-    requires: { skills: ['github'] },
-  },
-  { id: 'knowledge', icon: 'menu_book', color: 'from-cyan-500 to-cyan-600', difficulty: 'easy',
-    soulSnippet: {
-      zh: '\n## 知识管理\n- 对话中提到的重要信息自动归档到 memory\n- 支持语义搜索历史知识\n- 定期整理和去重知识库\n',
-      en: '\n## Knowledge Manager\n- Auto-archive important info from conversations to memory\n- Support semantic search of historical knowledge\n- Periodically organize and deduplicate knowledge base\n',
-    },
-    heartbeatSnippet: {
-      zh: '\n- [ ] 整理近期对话中的重要信息\n- [ ] 检查知识库是否需要更新\n',
-      en: '\n- [ ] Organize important info from recent conversations\n- [ ] Check if knowledge base needs updating\n',
-    },
-  },
-  { id: 'family', icon: 'family_restroom', color: 'from-pink-500 to-pink-600', difficulty: 'easy',
-    soulSnippet: {
-      zh: '\n## 家庭助手\n- 管理家庭日程和提醒事项\n- 维护购物清单\n- 语气温暖友好，适合家庭场景\n',
-      en: '\n## Family Assistant\n- Manage family schedule and reminders\n- Maintain shopping lists\n- Use warm, friendly tone suitable for family context\n',
-    },
-    heartbeatSnippet: {
-      zh: '\n- [ ] 检查家庭日程提醒\n- [ ] 检查购物清单是否需要补充\n',
-      en: '\n- [ ] Check family schedule reminders\n- [ ] Check if shopping list needs updating\n',
-    },
-  },
-  { id: 'team', icon: 'groups', color: 'from-indigo-500 to-indigo-600', difficulty: 'hard',
-    soulSnippet: {
-      zh: '\n## 团队协作\n- 支持多人通过不同频道与我交互\n- 根据频道和用户身份调整回复风格\n- 团队相关信息共享，个人信息隔离\n',
-      en: '\n## Team Collaboration\n- Support multi-user interaction via different channels\n- Adjust response style based on channel and user identity\n- Share team info, isolate personal info\n',
-    },
-    heartbeatSnippet: {
-      zh: '\n- [ ] 检查各频道未处理的消息\n- [ ] 汇总团队待办事项\n',
-      en: '\n- [ ] Check unprocessed messages across channels\n- [ ] Summarize team todos\n',
-    },
-    requires: { channels: true },
-  },
-];
+// Note: Scenario definitions moved to templates/official/scenarios/
+// ScenarioLibraryV2 component now loads scenarios from the unified template system
 
 // Automation templates
 interface AutoTemplateDef {
@@ -503,25 +409,6 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
     });
   }, [defaultAgentId, bilingualLang, o]);
 
-  // Open confirm dialog for scenario apply
-  const applyScenario = useCallback((sc: ScenarioDef) => {
-    if (!defaultAgentId) return;
-    const lang = bilingualLang;
-    const cap = sc.id.charAt(0).toUpperCase() + sc.id.slice(1);
-    const titleKey = `scenario${cap}Title` as string;
-    setPendingApply({
-      scenarioId: sc.id,
-      request: {
-        agentId: defaultAgentId,
-        title: (o as any)?.[titleKey] || sc.id,
-        files: [
-          { fileName: 'SOUL.md', mode: 'append', content: sc.soulSnippet[lang] },
-          { fileName: 'HEARTBEAT.md', mode: 'append', content: sc.heartbeatSnippet[lang] },
-        ],
-      },
-    });
-  }, [defaultAgentId, bilingualLang, o]);
-
   const handleApplyDone = useCallback(async () => {
     if (pendingApply) {
       const sid = pendingApply.scenarioId;
@@ -534,6 +421,12 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
     setPendingApply(null);
     await fetchAll();
   }, [pendingApply, fetchAll]);
+
+  // Handle scenario apply from ScenarioLibraryV2
+  const handleApplyScenario = useCallback((scenario: ScenarioTemplate) => {
+    setAppliedScenarios(prev => new Set(prev).add(scenario.id));
+    toast('success', o?.scenarioApplied || 'Scenario applied');
+  }, [o, toast]);
 
   // Tip status detection: returns ok + detail label when configured
   const getTipStatus = useCallback((tipId: string): { ok: boolean; detail: string } => {
@@ -1241,160 +1134,16 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
   };
 
   // ---------------------------------------------------------------------------
-  // Step 4: Scenarios
+  // Step 4: Scenarios (使用新的 ScenarioLibraryV2 组件)
   // ---------------------------------------------------------------------------
 
-  const renderStepScenarios = () => {
-    const agentId = defaultAgentId;
-    const difficultyLabel = (d: string) => d === 'easy' ? o?.scenarioDifficultyEasy : d === 'medium' ? o?.scenarioDifficultyMedium : o?.scenarioDifficultyHard;
-    const difficultyColor = (d: string) => d === 'easy' ? 'bg-mac-green/10 text-mac-green' : d === 'medium' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400';
-    return (
-      <div className="space-y-4">
-        <p className="text-[10px] text-slate-400 dark:text-white/40">{o?.scenarioSubtitle}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {SCENARIOS.map(sc => {
-            const cap = sc.id.charAt(0).toUpperCase() + sc.id.slice(1);
-            const titleKey = `scenario${cap}Title` as string;
-            const descKey = `scenario${cap}Desc` as string;
-            const isApplied = appliedScenarios.has(sc.id);
-            const needsSkill = sc.requires?.skills?.length ? sc.requires.skills : null;
-            const needsChannel = sc.requires?.channels && activeChannels.length === 0;
-            const allReady = !needsSkill && !needsChannel;
-
-            return (
-              <div key={sc.id} className={`rounded-2xl border transition-all ${sc.newbie && !isApplied ? 'ring-2 ring-primary/20 ' : ''}${isApplied ? 'border-mac-green/30 bg-mac-green/[0.03]' : 'border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] hover:border-primary/20'}`}>
-                <div className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${sc.color} flex items-center justify-center shrink-0 shadow-sm`}>
-                      <span className="material-symbols-outlined text-[20px] text-white">{sc.icon}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-slate-700 dark:text-white/80">{(o as any)?.[titleKey]}</span>
-                        {sc.newbie && !isApplied && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-primary/10 text-primary flex items-center gap-0.5">
-                            <span className="material-symbols-outlined text-[10px]">star</span>{o?.scenarioRecommendNewbie}
-                          </span>
-                        )}
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${difficultyColor(sc.difficulty)}`}>
-                          {difficultyLabel(sc.difficulty)}
-                        </span>
-                        {isApplied && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-mac-green/10 text-mac-green flex items-center gap-0.5">
-                            <span className="material-symbols-outlined text-[10px]">check</span>{o?.scenarioApplied}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-400 dark:text-white/40 mt-1 leading-relaxed">{(o as any)?.[descKey]}</p>
-                      {(needsSkill || needsChannel) && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {needsSkill?.map(sk => (
-                            <span key={sk} className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
-                              {o?.scenarioNeedSkill}: {sk}
-                            </span>
-                          ))}
-                          {needsChannel && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
-                              {o?.scenarioNeedChannel}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {allReady && !isApplied && (
-                        <span className="inline-block text-[10px] px-1.5 py-0.5 rounded-full bg-mac-green/10 text-mac-green font-bold mt-2">
-                          {o?.scenarioAllReady}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mt-3">
-                    <button onClick={() => setExpandedScenario(sc.id)}
-                      className="text-[10px] px-2.5 py-1 rounded-lg text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/[0.04] font-bold transition-colors flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[12px]">visibility</span>
-                      {o?.scenarioExpand}
-                    </button>
-                    {agentId && !isApplied && (
-                      <button onClick={() => applyScenario(sc)}
-                        className="text-[10px] px-3 py-1 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 transition-colors flex items-center gap-1 ml-auto">
-                        <span className="material-symbols-outlined text-[12px]">play_arrow</span>
-                        {o?.scenarioApply}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Scenario detail modal */}
-        {expandedScenario && (() => {
-          const sc = SCENARIOS.find(s => s.id === expandedScenario);
-          if (!sc) return null;
-          const cap = sc.id.charAt(0).toUpperCase() + sc.id.slice(1);
-          const titleKey = `scenario${cap}Title` as string;
-          const descKey = `scenario${cap}Desc` as string;
-          const snippet = pickBilingual(sc.soulSnippet);
-          const hbSnippet = pickBilingual(sc.heartbeatSnippet);
-          const isApplied = appliedScenarios.has(sc.id);
-          return (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4" onClick={() => setExpandedScenario(null)}>
-              <div className="bg-white dark:bg-[#1a1c20] rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] sm:max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                {/* Modal header */}
-                <div className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-200 dark:border-white/[0.06] shrink-0">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${sc.color} flex items-center justify-center shrink-0 shadow-sm`}>
-                    <span className="material-symbols-outlined text-[20px] text-white">{sc.icon}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-bold text-slate-800 dark:text-white">{(o as any)?.[titleKey]}</h3>
-                    <p className="text-[11px] text-slate-400 dark:text-white/40 mt-0.5">{(o as any)?.[descKey]}</p>
-                  </div>
-                  <button onClick={() => setExpandedScenario(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white/60 p-1 shrink-0">
-                    <span className="material-symbols-outlined text-[20px]">close</span>
-                  </button>
-                </div>
-                {/* Modal body */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-5 py-3 sm:py-4 space-y-4">
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-600 dark:text-white/50 mb-2 flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[14px] text-primary">psychology</span>
-                      {o?.scenarioSoulSnippet}
-                    </p>
-                    <div className="rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3 sm:p-4">
-                      <pre className="text-[11px] sm:text-xs text-slate-700 dark:text-white/60 whitespace-pre-wrap font-mono leading-relaxed">{snippet.trim()}</pre>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-600 dark:text-white/50 mb-2 flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[14px] text-primary">monitor_heart</span>
-                      {o?.scenarioHeartbeatSnippet}
-                    </p>
-                    <div className="rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3 sm:p-4">
-                      <pre className="text-[11px] sm:text-xs text-slate-700 dark:text-white/60 whitespace-pre-wrap font-mono leading-relaxed">{hbSnippet.trim()}</pre>
-                    </div>
-                  </div>
-                </div>
-                {/* Modal footer */}
-                <div className="flex items-center justify-end gap-2 px-4 sm:px-5 py-3 border-t border-slate-200 dark:border-white/[0.06] shrink-0">
-                  <button onClick={() => setExpandedScenario(null)}
-                    className="text-[11px] px-3 py-1.5 rounded-lg text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/[0.04] font-bold transition-colors">
-                {o?.cancel || o?.close}
-                  </button>
-                  {agentId && !isApplied && (
-                    <button onClick={() => { applyScenario(sc); setExpandedScenario(null); }}
-                      className="text-[11px] px-4 py-1.5 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 transition-colors flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">play_arrow</span>
-                      {o?.scenarioApply}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-    );
-  };
+  const renderStepScenarios = () => (
+    <ScenarioLibraryV2
+      language={language}
+      defaultAgentId={defaultAgentId}
+      onApplyScenario={handleApplyScenario}
+    />
+  );
 
   // ---------------------------------------------------------------------------
   // Step 5: Tips
@@ -1544,7 +1293,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           {stepContent[activeStep]?.()}
         </div>
       </div>
@@ -1556,7 +1305,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor }) => 
       {pendingApply && (
         <FileApplyConfirm
           request={pendingApply.request}
-          locale={(t as any).fileApply}
+          locale={(t as any).fileApply || {}}
           onDone={handleApplyDone}
           onCancel={() => setPendingApply(null)}
         />

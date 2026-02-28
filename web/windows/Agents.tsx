@@ -4,13 +4,15 @@ import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
 import { subscribeManagerWS } from '../services/manager-ws';
-import { getTemplatesForFile, resolveTemplate, WorkspaceTemplate } from '../data/templates';
+import { templateSystem, WorkspaceTemplate } from '../services/template-system';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
+import { MultiAgentCollaborationV2 } from '../components/multiagent';
+import ScenarioLibraryV2 from '../components/scenarios/ScenarioLibraryV2';
 
 interface AgentsProps { language: Language; }
-type Panel = 'overview' | 'files' | 'tools' | 'skills' | 'channels' | 'cron' | 'run';
+type Panel = 'overview' | 'files' | 'tools' | 'skills' | 'channels' | 'cron' | 'run' | 'scenarios' | 'collaboration';
 
 
 function fmtBytes(b?: number) {
@@ -81,10 +83,18 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [fileDrafts, setFileDrafts] = useState<Record<string, string>>({});
   const [fileSaving, setFileSaving] = useState(false);
   const [tplDropdown, setTplDropdown] = useState(false);
+  const [fileTemplates, setFileTemplates] = useState<WorkspaceTemplate[]>([]);
   const [skillsReport, setSkillsReport] = useState<any>(null);
+  const [skillsFilter, setSkillsFilter] = useState<'all' | 'ready' | 'notReady'>('ready');
   const [channelsSnap, setChannelsSnap] = useState<any>(null);
+  const [channelsLoading, setChannelsLoading] = useState(false);
   const [cronStatus, setCronStatus] = useState<any>(null);
   const [cronJobs, setCronJobs] = useState<any[]>([]);
+
+  // Load workspace file templates
+  useEffect(() => {
+    templateSystem.getAllTemplates(language).then(setFileTemplates).catch(() => {});
+  }, [language]);
 
   // Check GW proxy connectivity + connect Manager WS for agent chat streaming events
   useEffect(() => {
@@ -99,7 +109,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     let opened = false;
     const connectTimeout = setTimeout(() => {
       if (!opened) setWsConnecting(false);
-    }, 3000);
+    }, 10000);
 
     const unsubscribe = subscribeManagerWS((msg: any) => {
       try {
@@ -204,7 +214,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       gwApi.agentSkills(selectedId).then(setSkillsReport).catch(() => { });
     }
     if (p === 'channels') {
-      gwApi.channels().then(setChannelsSnap).catch(() => { });
+      setChannelsLoading(true);
+      gwApi.channels().then(setChannelsSnap).catch(() => { }).finally(() => setChannelsLoading(false));
     }
     if (p === 'cron') {
       gwApi.cronStatus().then(setCronStatus).catch(() => { });
@@ -387,7 +398,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     const msg = runInput.trim();
     if (!msg) return;
 
-    const sessionKey = `agent-run-${selectedId}-${Date.now()}`;
+    // SessionKey format: agent:<agentId>:<sessionName>
+    const sessionName = `run-${Date.now()}`;
+    const sessionKey = `agent:${selectedId}:${sessionName}`;
     runSessionRef.current = sessionKey;
 
     setRunMessages(prev => [...prev, { role: 'user', text: msg, ts: Date.now() }]);
@@ -398,13 +411,12 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
 
     try {
       const idempotencyKey = `${sessionKey}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const res = await gwApi.proxy('agent', {
-        message: msg,
-        agentId: selectedId,
+      const res = await gwApi.proxy('chat.send', {
         sessionKey,
+        message: msg,
         idempotencyKey,
       }) as any;
-      runIdRef.current = res?.runId || sessionKey;
+      runIdRef.current = res?.runId || idempotencyKey;
     } catch (err: any) {
       setRunStream(null);
       setRunError(err?.message || a.runFailed);
@@ -436,6 +448,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
 
   const isRunStreaming = runIdRef.current !== null || runStream !== null;
 
+  const ma = ((t as any).multiAgent || {}) as any;
+  const sc = ((t as any).scenario || {}) as any;
   const TABS: { id: Panel; icon: string; label: string }[] = [
     { id: 'overview', icon: 'dashboard', label: a.overview },
     { id: 'files', icon: 'description', label: a.files },
@@ -444,6 +458,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     { id: 'channels', icon: 'forum', label: a.channels },
     { id: 'cron', icon: 'schedule', label: a.cron },
     { id: 'run', icon: 'play_arrow', label: a.run },
+    { id: 'scenarios', icon: 'auto_awesome', label: sc.title || 'Scenarios' },
+    { id: 'collaboration', icon: 'groups', label: ma.title || 'Multi-Agent' },
   ];
 
   const TOOL_SECTIONS = [
@@ -664,7 +680,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                           <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-white/60">{fileActive}</span>
                           <div className="flex gap-2">
                             {/* Template insert dropdown */}
-                            {fileActive && getTemplatesForFile(fileActive).length > 0 && (
+                            {fileActive && fileTemplates.filter(t => t.targetFile === fileActive).length > 0 && (
                               <div className="relative">
                                 <button onClick={() => setTplDropdown(!tplDropdown)}
                                   className="text-[10px] px-2 py-1 rounded-lg border border-primary/30 text-primary hover:bg-primary/5 font-bold transition-colors flex items-center gap-1">
@@ -673,8 +689,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                                 </button>
                                 {tplDropdown && (
                                   <div className="absolute right-0 top-full mt-1 z-30 bg-white dark:bg-[#1a1a2e] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl p-1 min-w-[200px]">
-                                    {getTemplatesForFile(fileActive).map((tpl: WorkspaceTemplate) => {
-                                      const resolved = resolveTemplate(tpl, language);
+                                    {fileTemplates.filter(t => t.targetFile === fileActive).map((tpl: WorkspaceTemplate) => {
+                                      const resolved = templateSystem.resolveI18n(tpl, language);
                                       return (
                                         <button key={tpl.id} onClick={() => {
                                           setFileDrafts(prev => ({ ...prev, [fileActive!]: resolved.content }));
@@ -750,19 +766,60 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
 
               {/* Skills Panel */}
               {panel === 'skills' && (() => {
-                const skills: any[] = skillsReport?.skills || [];
+                const allSkills: any[] = skillsReport?.skills || [];
+                // Filter skills based on selected filter
+                const skills = allSkills.filter((sk: any) => {
+                  if (skillsFilter === 'ready') return sk.eligible;
+                  if (skillsFilter === 'notReady') return !sk.eligible;
+                  return true; // 'all'
+                });
                 const groups: Record<string, any[]> = {};
                 skills.forEach((sk: any) => {
                   const src = sk.bundled ? a.sourceBuiltIn : (sk.source || a.sourceOther);
                   if (!groups[src]) groups[src] = [];
                   groups[src].push(sk);
                 });
+                const readyCount = allSkills.filter(sk => sk.eligible).length;
+                const notReadyCount = allSkills.filter(sk => !sk.eligible).length;
                 return (
                   <div className="space-y-4 max-w-3xl">
                     <div className="flex items-center justify-between">
                       <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase">{a.skills}</h3>
                       <button onClick={() => selectedId && gwApi.agentSkills(selectedId).then(setSkillsReport).catch(() => { })}
                         className="text-[10px] text-primary hover:underline">{a.refresh}</button>
+                    </div>
+                    {/* Filter buttons */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSkillsFilter('ready')}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                          skillsFilter === 'ready'
+                            ? 'bg-mac-green/10 text-mac-green border border-mac-green/20'
+                            : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 hover:bg-slate-200 dark:hover:bg-white/10'
+                        }`}
+                      >
+                        {a.eligible || '就绪'} ({readyCount})
+                      </button>
+                      <button
+                        onClick={() => setSkillsFilter('notReady')}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                          skillsFilter === 'notReady'
+                            ? 'bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-white/70 border border-slate-300 dark:border-white/20'
+                            : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 hover:bg-slate-200 dark:hover:bg-white/10'
+                        }`}
+                      >
+                        {a.notEligible || '未就绪'} ({notReadyCount})
+                      </button>
+                      <button
+                        onClick={() => setSkillsFilter('all')}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                          skillsFilter === 'all'
+                            ? 'bg-primary/10 text-primary border border-primary/20'
+                            : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 hover:bg-slate-200 dark:hover:bg-white/10'
+                        }`}
+                      >
+                        {a.all || '全部'} ({allSkills.length})
+                      </button>
                     </div>
                     {skills.length === 0 ? (
                       <p className="text-[10px] text-slate-400 dark:text-white/20 py-8 text-center">{a.loading}</p>
@@ -791,17 +848,54 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
 
               {/* Channels Panel */}
               {panel === 'channels' && (() => {
-                const raw = channelsSnap?.channels ?? channelsSnap?.list ?? channelsSnap;
-                const channels: any[] = Array.isArray(raw) ? raw : [];
+                // Parse channel data from OpenClaw Gateway channels.status response
+                let channels: any[] = [];
+                if (channelsSnap && typeof channelsSnap === 'object') {
+                  const order = channelsSnap.channelOrder || [];
+                  const channelData = channelsSnap.channels || {};
+                  const accounts = channelsSnap.channelAccounts || {};
+                  const labels = channelsSnap.channelLabels || {};
+                  const meta = channelsSnap.channelMeta || [];
+                  
+                  // Build channel list from channelOrder
+                  channels = order.map((id: string) => {
+                    const data = channelData[id];
+                    const accountList = accounts[id] || [];
+                    const metaEntry = meta.find((m: any) => m.id === id);
+                    const label = metaEntry?.label || labels[id] || id;
+                    
+                    // Determine connection status from accounts
+                    let connected = false;
+                    let running = false;
+                    if (accountList.length > 0) {
+                      connected = accountList.some((acc: any) => acc.connected);
+                      running = accountList.some((acc: any) => acc.running);
+                    } else if (data && typeof data === 'object') {
+                      connected = (data as any).connected || false;
+                      running = (data as any).running || false;
+                    }
+                    
+                    return {
+                      id,
+                      label,
+                      connected,
+                      running,
+                      accounts: accountList,
+                      data
+                    };
+                  });
+                }
                 return (
                   <div className="space-y-4 max-w-3xl">
                     <div className="flex items-center justify-between">
                       <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase">{a.channels}</h3>
-                      <button onClick={() => gwApi.channels().then(setChannelsSnap).catch(() => { })}
+                      <button onClick={() => { setChannelsLoading(true); gwApi.channels().then(setChannelsSnap).catch(() => { }).finally(() => setChannelsLoading(false)); }}
                         className="text-[10px] text-primary hover:underline">{a.refresh}</button>
                     </div>
-                    {channels.length === 0 ? (
+                    {channelsLoading ? (
                       <p className="text-[10px] text-slate-400 dark:text-white/20 py-8 text-center">{a.loading}</p>
+                    ) : channels.length === 0 ? (
+                      <p className="text-[10px] text-slate-400 dark:text-white/20 py-8 text-center">{a.noChannels || 'No channels configured'}</p>
                     ) : (
                       <div className="space-y-2">
                         {channels.map((ch: any, i: number) => {
@@ -853,8 +947,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                           return (
                             <div key={idx} className={`flex items-start gap-2.5 ${isUser ? 'flex-row-reverse' : ''}`}>
                               <div className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border mt-0.5 ${isUser
-                                  ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-black border-slate-700 dark:border-slate-300'
-                                  : 'bg-primary/10 border-primary/20 text-primary'
+                                ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-black border-slate-700 dark:border-slate-300'
+                                : 'bg-primary/10 border-primary/20 text-primary'
                                 }`}>
                                 <span className="material-symbols-outlined text-[14px]">
                                   {isUser ? 'person' : 'smart_toy'}
@@ -862,8 +956,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                               </div>
                               <div className={`max-w-[80%] ${isUser ? 'text-right' : ''}`}>
                                 <div className={`p-3 rounded-2xl shadow-sm border ${isUser
-                                    ? 'bg-primary text-white border-primary/30 rounded-tr-sm'
-                                    : 'bg-white dark:bg-white/[0.03] text-slate-800 dark:text-slate-200 border-slate-200 dark:border-white/[0.06] rounded-tl-sm'
+                                  ? 'bg-primary text-white border-primary/30 rounded-tr-sm'
+                                  : 'bg-white dark:bg-white/[0.03] text-slate-800 dark:text-slate-200 border-slate-200 dark:border-white/[0.06] rounded-tl-sm'
                                   }`}>
                                   <div className="text-[12px] leading-relaxed whitespace-pre-wrap break-words">{msg.text}</div>
                                 </div>
@@ -930,8 +1024,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                             <button onClick={sendToAgent}
                               disabled={!runInput.trim() || runSending || !gwReady}
                               className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-95 ${runInput.trim() && !runSending && gwReady
-                                  ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                                  : 'bg-slate-100 dark:bg-white/5 text-slate-400'
+                                ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                                : 'bg-slate-100 dark:bg-white/5 text-slate-400'
                                 }`}>
                               <span className="material-symbols-outlined text-[16px]">
                                 {runSending ? 'progress_activity' : 'arrow_upward'}
@@ -1017,6 +1111,32 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                   </div>
                 );
               })()}
+
+              {/* Scenarios Panel */}
+              {panel === 'scenarios' && (
+                <ScenarioLibraryV2
+                  language={language}
+                  defaultAgentId={selectedId || undefined}
+                  onApplyScenario={() => {
+                    // 应用场景后刷新文件列表
+                    if (selectedId) {
+                      gwApi.agentFilesList(selectedId).then(setFilesList).catch(() => {});
+                    }
+                  }}
+                />
+              )}
+
+              {/* Collaboration Panel */}
+              {panel === 'collaboration' && (
+                <MultiAgentCollaborationV2 
+                  language={language} 
+                  defaultAgentId={selectedId || undefined}
+                  onDeploy={() => {
+                    // 部署完成后静默刷新代理列表
+                    loadAgents();
+                  }}
+                />
+              )}
             </div>
           </>
         )}

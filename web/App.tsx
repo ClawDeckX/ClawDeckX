@@ -8,6 +8,7 @@ import WindowFrame from './components/WindowFrame';
 import { WindowID, WindowState, WindowBounds, Language } from './types';
 import { getTranslation, loadLocale } from './locales';
 import { get } from './services/request';
+import { authApi, settingsApi } from './services/api';
 import { useBadgeCounts } from './hooks/useBadgeCounts';
 
 const idle = (cb: () => void) => {
@@ -169,6 +170,7 @@ const buildWindows = (lang: Language): WindowState[] => {
 
 const App: React.FC = () => {
   const [isLocked, setIsLocked] = useState(true);
+  const [authChecking, setAuthChecking] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('lang') as Language) || 'zh');
   const [windows, setWindows] = useState<WindowState[]>(() => buildWindows(language));
@@ -176,6 +178,20 @@ const App: React.FC = () => {
   const [localeReady, setLocaleReady] = useState(language === 'en');
   const hasWarmedChunksRef = React.useRef(false);
   const prefetchedWindowsRef = React.useRef<Set<WindowID>>(new Set());
+
+  // On mount: check if existing cookie session is still valid → skip lock screen
+  useEffect(() => {
+    authApi.me()
+      .then(() => {
+        setIsLocked(false);
+      })
+      .catch(() => {
+        // Cookie missing or expired → stay on lock screen
+      })
+      .finally(() => {
+        setAuthChecking(false);
+      });
+  }, []);
 
   // Cross-window navigation: jump to a specific session in Sessions window
   const [pendingSessionKey, setPendingSessionKey] = useState<string | null>(null);
@@ -206,6 +222,10 @@ const App: React.FC = () => {
       ...w,
       title: (t as any)[w.id] || w.id
     })));
+    // Sync language to backend (fire and forget, no need to wait)
+    settingsApi.setLanguage(language).catch(() => {
+      // Ignore errors (e.g., not logged in yet)
+    });
   }, [language, t]);
 
   // 自动检查OpenClaw 安装状态，未安装则自动打开安装向导
@@ -308,6 +328,19 @@ const App: React.FC = () => {
     openWindow('sessions');
   }, [openWindow]);
 
+  // Listen for navigate-to-session events from workflow runner
+  useEffect(() => {
+    const handleNavigateToSession = (e: CustomEvent<{ sessionKey: string; agentId?: string }>) => {
+      if (e.detail?.sessionKey) {
+        navigateToSession(e.detail.sessionKey);
+      }
+    };
+    window.addEventListener('navigate-to-session', handleNavigateToSession as EventListener);
+    return () => {
+      window.removeEventListener('navigate-to-session', handleNavigateToSession as EventListener);
+    };
+  }, [navigateToSession]);
+
   const closeWindow = useCallback((id: WindowID) => {
     setWindows(prev => prev.map(w => w.id === id ? { ...w, isOpen: false, isMaximized: false } : w));
   }, []);
@@ -339,7 +372,7 @@ const App: React.FC = () => {
     setWindows(prev => prev.map(w => w.id === id ? { ...w, bounds, isMaximized: false } : w));
   }, []);
 
-  if (!localeReady) return (
+  if (!localeReady || authChecking) return (
     <div className="h-screen w-screen flex items-center justify-center bg-slate-900">
       <span className="material-symbols-outlined text-3xl text-white/40 animate-spin">progress_activity</span>
     </div>
@@ -378,44 +411,44 @@ const App: React.FC = () => {
           {windows.filter(w => w.isOpen).map(w => {
             const topZ = Math.max(...windows.filter(o => o.isOpen && !o.isMinimized).map(o => o.zIndex));
             return (
-            <WindowFrame
-              key={w.id}
-              window={w}
-              language={language}
-              isFocused={w.zIndex === topZ}
-              dockHidden={windows.some(o => o.isOpen && o.isMaximized && !o.isMinimized)}
-              onClose={() => closeWindow(w.id)}
-              onMinimize={() => minimizeWindow(w.id)}
-              onMaximize={() => maximizeWindow(w.id)}
-              onFocus={() => focusWindow(w.id)}
-              onBoundsChange={(b) => updateBounds(w.id, b)}
-            >
-              <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-400 dark:text-white/40"><span className="material-symbols-outlined animate-spin mr-2">progress_activity</span></div>}>
-                {w.id === 'dashboard' && <Dashboard language={language} />}
-                {w.id === 'gateway' && <Gateway language={language} />}
-                {w.id === 'sessions' && <Sessions language={language} pendingSessionKey={pendingSessionKey} onSessionKeyConsumed={() => setPendingSessionKey(null)} />}
-                {w.id === 'activity' && <Activity language={language} />}
-                {w.id === 'alerts' && <Alerts language={language} />}
-                {w.id === 'config_mgmt' && <Usage language={language} onNavigateToSession={navigateToSession} />}
-                {w.id === 'editor' && <Editor language={language} />}
-                {w.id === 'skills' && <Skills language={language} />}
-                {w.id === 'agents' && <Agents language={language} />}
-                {w.id === 'maintenance' && <Doctor language={language} />}
-                {w.id === 'scheduler' && <Scheduler language={language} />}
-                {w.id === 'settings' && <Settings language={language} />}
-                {w.id === 'nodes' && <Nodes language={language} />}
-                {w.id === 'setup_wizard' && (
-                  <SetupWizard
-                    language={language}
-                    onClose={() => closeWindow('setup_wizard')}
-                    onOpenEditor={() => openWindow('editor')}
-                    onOpenUsageWizard={() => openWindow('usage_wizard')}
-                  />
-                )}
-                {w.id === 'usage_wizard' && <UsageWizard language={language} onOpenEditor={() => openWindow('editor')} />}
-              </Suspense>
-            </WindowFrame>
-          );
+              <WindowFrame
+                key={w.id}
+                window={w}
+                language={language}
+                isFocused={w.zIndex === topZ}
+                dockHidden={windows.some(o => o.isOpen && o.isMaximized && !o.isMinimized)}
+                onClose={() => closeWindow(w.id)}
+                onMinimize={() => minimizeWindow(w.id)}
+                onMaximize={() => maximizeWindow(w.id)}
+                onFocus={() => focusWindow(w.id)}
+                onBoundsChange={(b) => updateBounds(w.id, b)}
+              >
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-400 dark:text-white/40"><span className="material-symbols-outlined animate-spin mr-2">progress_activity</span></div>}>
+                  {w.id === 'dashboard' && <Dashboard language={language} />}
+                  {w.id === 'gateway' && <Gateway language={language} />}
+                  {w.id === 'sessions' && <Sessions language={language} pendingSessionKey={pendingSessionKey} onSessionKeyConsumed={() => setPendingSessionKey(null)} />}
+                  {w.id === 'activity' && <Activity language={language} />}
+                  {w.id === 'alerts' && <Alerts language={language} />}
+                  {w.id === 'config_mgmt' && <Usage language={language} onNavigateToSession={navigateToSession} />}
+                  {w.id === 'editor' && <Editor language={language} />}
+                  {w.id === 'skills' && <Skills language={language} />}
+                  {w.id === 'agents' && <Agents language={language} />}
+                  {w.id === 'maintenance' && <Doctor language={language} />}
+                  {w.id === 'scheduler' && <Scheduler language={language} />}
+                  {w.id === 'settings' && <Settings language={language} />}
+                  {w.id === 'nodes' && <Nodes language={language} />}
+                  {w.id === 'setup_wizard' && (
+                    <SetupWizard
+                      language={language}
+                      onClose={() => closeWindow('setup_wizard')}
+                      onOpenEditor={() => openWindow('editor')}
+                      onOpenUsageWizard={() => openWindow('usage_wizard')}
+                    />
+                  )}
+                  {w.id === 'usage_wizard' && <UsageWizard language={language} onOpenEditor={() => openWindow('editor')} />}
+                </Suspense>
+              </WindowFrame>
+            );
           })}
         </div>
       </ConfirmProvider>
