@@ -476,5 +476,17 @@
   "error.get_gateway_config_failed": "获取网关配置失败: %w",
   "error.gateway_restart_failed": "网关重启失败: %w",
   "error.start_gateway_process_failed": "启动网关进程失败: %w",
-  "error.command_failed": "%s %s 失败: %s"
+  "error.command_failed": "%s %s 失败: %s",
+  "error.send_request_failed": "发送请求失败: %w",
+  "error.gateway_error": "gateway 错误: %s",
+  "error.websocket_dial_failed": "WebSocket 拨号失败: %w",
+  "error.read_message_failed": "读取消息失败: %w",
+  "error.openclaw_not_installed": "openclaw 未安装",
+  "error.config_set_failed": "设置 %s 失败: %w",
+  "error.serialize_key_failed": "序列化 %s 失败: %w",
+  "error.openclaw_not_installed_no_config": "openclaw 未安装，无法生成配置",
+  "error.config_set_fallback_failed": "config set 降级也失败: onboard 错误: %v, config set 错误: %w",
+  "error.parse_pairing_list_failed": "解析配对列表失败: %w",
+  "error.gateway_cli_not_found": "未找到 OpenClaw gateway-cli 文件: %s",
+  "error.target_fragment_not_found": "文件未找到目标片段: %s"
 }

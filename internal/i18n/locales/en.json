@@ -476,5 +476,17 @@
   "error.get_gateway_config_failed": "Failed to get gateway config: %w",
   "error.gateway_restart_failed": "Gateway restart failed: %w",
   "error.start_gateway_process_failed": "Failed to start gateway process: %w",
-  "error.command_failed": "%s %s failed: %s"
+  "error.command_failed": "%s %s failed: %s",
+  "error.send_request_failed": "Failed to send request: %w",
+  "error.gateway_error": "Gateway error: %s",
+  "error.websocket_dial_failed": "WebSocket dial failed: %w",
+  "error.read_message_failed": "Failed to read message: %w",
+  "error.openclaw_not_installed": "OpenClaw is not installed",
+  "error.config_set_failed": "Failed to set %s: %w",
+  "error.serialize_key_failed": "Failed to serialize %s: %w",
+  "error.openclaw_not_installed_no_config": "OpenClaw is not installed, cannot generate config",
+  "error.config_set_fallback_failed": "config set fallback also failed: onboard error: %v, config set error: %w",
+  "error.parse_pairing_list_failed": "Failed to parse pairing list: %w",
+  "error.gateway_cli_not_found": "OpenClaw gateway-cli file not found: %s",
+  "error.target_fragment_not_found": "Target fragment not found in file: %s"
 }

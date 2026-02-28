@@ -1,6 +1,7 @@
 ﻿package commands
 
 import (
+	"ClawDeckX/internal/i18n"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func fixOpenclawRuntimeNetworkInterfaces() (bool, error) {
 		return false, err
 	}
 	if len(files) == 0 {
-		return false, fmt.Errorf("未找到 OpenClaw gateway-cli 文件: %s", pattern)
+		return false, fmt.Errorf(i18n.T(i18n.MsgErrGatewayCliNotFound), pattern)
 	}
 
 	changedAny := false
@@ -48,7 +49,7 @@ func patchRuntimeFile(path string) (bool, error) {
 		return false, nil
 	}
 	if !strings.Contains(content, runtimePatchNeedle) {
-		return false, fmt.Errorf("文件未找到目标片段: %s", path)
+		return false, fmt.Errorf(i18n.T(i18n.MsgErrTargetFragmentNotFound), path)
 	}
 
 	backup := fmt.Sprintf("%s.ClawDeckX-%s.bak", path, time.Now().Format("20060102-150405"))
@@ -71,7 +72,7 @@ func rollbackOpenclawRuntimeFix() (bool, error) {
 		return false, err
 	}
 	if len(targets) == 0 {
-		return false, fmt.Errorf("未找到 OpenClaw gateway-cli 文件: %s", pattern)
+		return false, fmt.Errorf(i18n.T(i18n.MsgErrGatewayCliNotFound), pattern)
 	}
 
 	changedAny := false

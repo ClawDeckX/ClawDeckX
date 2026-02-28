@@ -399,7 +399,7 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 		c.mu.Lock()
 		delete(c.pending, id)
 		c.mu.Unlock()
-		return nil, fmt.Errorf("发送请求失败: %w", err)
+		return nil, fmt.Errorf(i18n.T(i18n.MsgErrSendRequestFailed), err)
 	}
 
 	// 等待响应
@@ -413,7 +413,7 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 			if resp.Error != nil {
 				msg = resp.Error.Message
 			}
-			return nil, fmt.Errorf("gateway 错误: %s", msg)
+			return nil, fmt.Errorf(i18n.T(i18n.MsgErrGatewayError), msg)
 		}
 		return resp.Payload, nil
 	case <-time.After(timeout):
@@ -469,7 +469,7 @@ func (c *GWClient) dial() error {
 
 	conn, _, err := dialer.Dial(u.String(), nil)
 	if err != nil {
-		return fmt.Errorf("WebSocket 拨号失败: %w", err)
+		return fmt.Errorf(i18n.T(i18n.MsgErrWebsocketDialFailed), err)
 	}
 
 	c.mu.Lock()
@@ -502,7 +502,7 @@ func (c *GWClient) readLoop(conn *websocket.Conn) error {
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			return fmt.Errorf("读取消息失败: %w", err)
+			return fmt.Errorf(i18n.T(i18n.MsgErrReadMessageFailed), err)
 		}
 
 		var raw map[string]json.RawMessage

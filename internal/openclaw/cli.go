@@ -1,6 +1,7 @@
 package openclaw
 
 import (
+	"ClawDeckX/internal/i18n"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,7 +31,7 @@ func IsOpenClawInstalled() bool {
 func RunCLI(ctx context.Context, args ...string) (string, error) {
 	cmd := ResolveOpenClawCmd()
 	if cmd == "" {
-		return "", fmt.Errorf("openclaw 未安装")
+		return "", fmt.Errorf(i18n.T(i18n.MsgErrOpenclawNotInstalled))
 	}
 	c := exec.CommandContext(ctx, cmd, args...)
 	out, err := c.CombinedOutput()
@@ -75,7 +76,7 @@ func ConfigUnset(key string) error {
 func ConfigSetBatch(pairs map[string]string) error {
 	for key, value := range pairs {
 		if err := ConfigSet(key, value); err != nil {
-			return fmt.Errorf("设置 %s 失败: %w", key, err)
+			return fmt.Errorf(i18n.T(i18n.MsgErrConfigSetFailed), key, err)
 		}
 	}
 	return nil
@@ -126,10 +127,10 @@ func ConfigApplyFull(config map[string]interface{}) error {
 	for key, value := range config {
 		jsonValue, err := json.Marshal(value)
 		if err != nil {
-			return fmt.Errorf("序列化 %s 失败: %w", key, err)
+			return fmt.Errorf(i18n.T(i18n.MsgErrSerializeKeyFailed), key, err)
 		}
 		if err := ConfigSet(key, string(jsonValue)); err != nil {
-			return fmt.Errorf("设置 %s 失败: %w", key, err)
+			return fmt.Errorf(i18n.T(i18n.MsgErrConfigSetFailed), key, err)
 		}
 	}
 	return nil
@@ -140,7 +141,7 @@ func ConfigApplyFull(config map[string]interface{}) error {
 func InitDefaultConfig() (string, error) {
 	cmd := ResolveOpenClawCmd()
 	if cmd == "" {
-		return "", fmt.Errorf("openclaw 未安装，无法生成配置")
+		return "", fmt.Errorf(i18n.T(i18n.MsgErrOpenclawNotInstalledNoConfig))
 	}
 
 	// 方案1：尝试 onboard --non-interactive
@@ -165,7 +166,7 @@ func InitDefaultConfig() (string, error) {
 
 	for key, value := range pairs {
 		if setErr := ConfigSet(key, value); setErr != nil {
-			return "", fmt.Errorf("config set 降级也失败: onboard 错误: %v, config set 错误: %w", err, setErr)
+			return "", fmt.Errorf(i18n.T(i18n.MsgErrConfigSetFallbackFailed), err, setErr)
 		}
 	}
 
@@ -234,7 +235,7 @@ func PairingList(channel string) (*PairingListResult, error) {
 	}
 	var result PairingListResult
 	if err := json.Unmarshal([]byte(out), &result); err != nil {
-		return nil, fmt.Errorf("解析配对列表失败: %w", err)
+		return nil, fmt.Errorf(i18n.T(i18n.MsgErrParsePairingListFailed), err)
 	}
 	return &result, nil
 }
