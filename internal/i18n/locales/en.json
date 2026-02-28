@@ -445,6 +445,12 @@
   "prompt.enter_number_with_default": "Enter number [{{.Default}}]: ",
   "prompt.enter_number": "Enter number: ",
 
+  "serve.html_index_not_found": "<!DOCTYPE html><html><body><h1>ClawDeckX</h1><p>index.html not found</p></body></html>",
+  "serve.html_frontend_load_failed": "<!DOCTYPE html><html><body><h1>ClawDeckX</h1><p>Frontend resources failed to load</p></body></html>",
+  "serve.port_conflict_401": "127.0.0.1:{{.Port}} returned 401 Unauthorized (may have hit Gateway instead of ClawDeckX)",
+  "serve.port_conflict_http": "127.0.0.1:{{.Port}} returned HTTP {{.Code}} (response snippet: {{.Body}})",
+  "serve.port_conflict_request_failed": "127.0.0.1:{{.Port}} request failed ({{.Error}})",
+
   "service.get_gateway_config_failed": "Failed to get gateway config: {{.Error}}",
   "service.gateway_restart_failed": "Gateway restart failed: {{.Error}}",
   "service.start_gateway_process_failed": "Failed to start gateway process: {{.Error}}",
