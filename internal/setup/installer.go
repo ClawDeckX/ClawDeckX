@@ -153,41 +153,13 @@ func (i *Installer) provideNodeInstallGuide() error {
 	var guide string
 	switch runtime.GOOS {
 	case "windows":
-		guide = `请手动安装 Node.js:
-1. 访问 https://nodejs.org/en/download/
-2. 下载 Windows 安装包（推荐 LTS 版本）
-3. 运行安装程序并完成安装
-4. 重启 ClawDeckX 应用`
+		guide = i18n.T(i18n.MsgInstallerNodeGuideWindows)
 	case "darwin":
-		guide = `请手动安装 Node.js:
-方式 1 (推荐): 使用 Homebrew
-  brew install node@22
-
-方式 2: 官方安装包
-  1. 访问 https://nodejs.org/en/download/
-  2. 下载 macOS 安装包
-  3. 运行安装程序
-
-安装完成后重启 ClawDeckX`
+		guide = i18n.T(i18n.MsgInstallerNodeGuideMacos)
 	case "linux":
-		guide = `请手动安装 Node.js:
-方式 1: 使用包管理器
-  # Ubuntu/Debian
-  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-  sudo apt-get install -y nodejs
-
-  # Fedora/RHEL
-  curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
-  sudo dnf install -y nodejs
-
-方式 2: 使用 nvm
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-  source ~/.bashrc
-  nvm install 22
-
-安装完成后重启 ClawDeckX`
+		guide = i18n.T(i18n.MsgInstallerNodeGuideLinux)
 	default:
-		guide = "请访问 https://nodejs.org/en/download/ 下载并安装 Node.js"
+		guide = i18n.T(i18n.MsgInstallerNodeGuideDefault)
 	}
 
 	i.emitter.EmitLog(guide)
@@ -311,59 +283,32 @@ func (i *Installer) InstallOpenClawWithConfig(ctx context.Context, config Instal
 }
 
 func (i *Installer) provideOpenClawInstallGuideWithVersion(version string) error {
-	guide := `请手动安装 openclaw:
-
-方式 1 (推荐): 使用 npm
-  npm install -g openclaw@latest
-
-方式 2: 使用官方安装脚本`
+	guide := i18n.T(i18n.MsgInstallerOpenclawGuide)
 
 	switch runtime.GOOS {
 	case "windows":
-		guide += `
-  # PowerShell
-  iwr -useb https://openclaw.ai/install.ps1 | iex`
+		guide += i18n.T(i18n.MsgInstallerOpenclawGuideWindows)
 	case "darwin", "linux":
-		guide += `
-  # Bash
-  curl -fsSL https://openclaw.ai/install.sh | bash`
+		guide += i18n.T(i18n.MsgInstallerOpenclawGuideUnix)
 	}
 
-	guide += `
-
-安装完成后:
-  1. 运行 'openclaw config set gateway.mode local' 初始化配置
-  2. 重启 ClawDeckX 应用
-  3. 访问文档: https://docs.openclaw.ai`
+	guide += i18n.T(i18n.MsgInstallerOpenclawPostInstall)
 
 	i.emitter.EmitLog(guide)
 	return fmt.Errorf(i18n.T(i18n.MsgErrNeedManualInstallOpenclaw))
 }
 
 func (i *Installer) provideOpenClawInstallGuide() error {
-	guide := `请手动安装 OpenClaw:
-
-方式 1 (推荐): 使用 npm
-  npm install -g openclaw@latest
-
-方式 2: 使用官方安装脚本`
+	guide := i18n.T(i18n.MsgInstallerOpenclawGuide)
 
 	switch runtime.GOOS {
 	case "windows":
-		guide += `
-  # PowerShell
-  iwr -useb https://openclaw.ai/install.ps1 | iex`
+		guide += i18n.T(i18n.MsgInstallerOpenclawGuideWindows)
 	case "darwin", "linux":
-		guide += `
-  # Bash
-  curl -fsSL https://openclaw.ai/install.sh | bash`
+		guide += i18n.T(i18n.MsgInstallerOpenclawGuideUnix)
 	}
 
-	guide += `
-
-安装完成后:
-  1. 运行 'openclaw config set gateway.mode local' 初始化配置
-  2. 重启 ClawDeckX 应用`
+	guide += i18n.T(i18n.MsgInstallerOpenclawPostInstallShort)
 
 	i.emitter.EmitLog(guide)
 	return fmt.Errorf(i18n.T(i18n.MsgErrNeedManualInstallOpenclaw))

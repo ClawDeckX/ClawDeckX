@@ -365,6 +365,17 @@ const (
 	MsgInstallerCurlNotFound             = "installer.curl_not_found"
 	MsgInstallerManualNodeRequired       = "installer.manual_node_required"
 	MsgInstallerManualOpenclawRequired   = "installer.manual_openclaw_required"
+	MsgInstallerNodeGuideWindows         = "installer.node_guide_windows"
+	MsgInstallerNodeGuideMacos           = "installer.node_guide_macos"
+	MsgInstallerNodeGuideLinux           = "installer.node_guide_linux"
+	MsgInstallerNodeGuideDefault         = "installer.node_guide_default"
+	MsgInstallerOpenclawGuide            = "installer.openclaw_guide"
+	MsgInstallerOpenclawGuideWindows     = "installer.openclaw_guide_windows"
+	MsgInstallerOpenclawGuideUnix        = "installer.openclaw_guide_unix"
+	MsgInstallerRestartAfterInstall      = "installer.restart_after_install"
+	MsgInstallerOpenclawPostInstall      = "installer.openclaw_post_install"
+	MsgInstallerOpenclawPostInstallShort = "installer.openclaw_post_install_short"
+	MsgInstallerExecutingCommand         = "installer.executing_command"
 )
 
 // Service messages
