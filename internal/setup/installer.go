@@ -447,12 +447,12 @@ func (i *Installer) ensureDefaultConfig() error {
 	}
 
 	if exists, valid, _ := checkConfigFileValid(cfgPath); exists && valid {
-		i.emitter.EmitLog(fmt.Sprintf("配置文件已存在: %s", cfgPath))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerConfigExists, map[string]interface{}{"Path": cfgPath}))
 		return nil
 	}
 
 	cmdName := resolveOpenClawFullPath("openclaw")
-	i.emitter.EmitLog(fmt.Sprintf("使用 %s onboard 生成默认配置...", cmdName))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGeneratingDefaultConfig, map[string]interface{}{"Command": cmdName}))
 
 	args := []string{
 		"onboard",
@@ -467,15 +467,15 @@ func (i *Installer) ensureDefaultConfig() error {
 		"--skip-health",
 	}
 
-	i.emitter.EmitLog(fmt.Sprintf("执行: %s %s", cmdName, strings.Join(args, " ")))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerExecutingCommand, map[string]interface{}{"Command": cmdName + " " + strings.Join(args, " ")}))
 
 	sc := NewStreamCommand(i.emitter, "configure", "onboard-default")
 	if err := sc.Run(context.Background(), cmdName, args...); err != nil {
 		return fmt.Errorf(i18n.T(i18n.MsgErrOnboardDefaultConfigFailed), err)
 	}
 
-	i.emitter.EmitLog("✅ 默认配置已通过 onboard 生成")
-	i.emitter.EmitLog("⚠️ 请在配置器中添加 AI 服务商和 API Key")
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerDefaultConfigGenerated))
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerAddProviderReminder))
 	return nil
 }
 
