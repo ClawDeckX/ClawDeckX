@@ -556,6 +556,9 @@ const (
 
 	// Output messages
 	MsgOutputDebugPrefix = "output.debug_prefix"
+
+	// CLI config messages
+	MsgCliDefaultConfigGenerated = "cli.default_config_generated"
 )
 
 // CLI messages (openclaw cli wrapper)
