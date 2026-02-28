@@ -153,7 +153,7 @@ func InitDefaultConfig() (string, error) {
 		}
 	}
 
-	return "默认配置已通过 config set 生成", nil
+	return i18n.T(i18n.MsgCliDefaultConfigGenerated), nil
 }
 
 func DetectOpenClawBinary() (cmd string, version string, installed bool) {
