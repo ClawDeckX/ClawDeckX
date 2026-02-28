@@ -1,6 +1,7 @@
 ﻿package openclaw
 
 import (
+	"ClawDeckX/internal/i18n"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -97,11 +98,11 @@ func DiagnoseGateway(host string, port int) *DiagnoseResult {
 	result.Summary = string(overallStatus)
 	switch overallStatus {
 	case DiagnosePass:
-		result.Message = "Gateway 运行正常"
+		result.Message = i18n.T(i18n.MsgDiagnoseGatewayRunningOk)
 	case DiagnoseWarn:
-		result.Message = "Gateway 存在警告项，建议检查"
+		result.Message = i18n.T(i18n.MsgDiagnoseGatewayHasWarnings)
 	case DiagnoseFail:
-		result.Message = "Gateway 存在异常，请根据建议修复"
+		result.Message = i18n.T(i18n.MsgDiagnoseGatewayHasErrors)
 	}
 
 	return result
@@ -114,7 +115,7 @@ func openclawConfigPath() string {
 func checkOpenClawInstalled() DiagnoseItem {
 	item := DiagnoseItem{
 		Name:    "openclaw_installed",
-		Label:   "OpenClaw 已安装",
+		Label:   i18n.T(i18n.MsgDiagnoseOpenclawInstalled),
 		LabelEn: "OpenClaw Installed",
 	}
 
@@ -135,29 +136,29 @@ func checkOpenClawInstalled() DiagnoseItem {
 	}
 
 	item.Status = DiagnoseFail
-	item.Detail = "未检测到 openclaw 或 openclaw-cn"
-	item.Suggestion = "请先安装 OpenClaw，可通过安装向导或 npm install -g openclaw 安装"
+	item.Detail = i18n.T(i18n.MsgDiagnoseOpenclawNotDetected)
+	item.Suggestion = i18n.T(i18n.MsgDiagnoseOpenclawInstallSuggestion)
 	return item
 }
 
 func checkConfigExists(configPath string) DiagnoseItem {
 	item := DiagnoseItem{
 		Name:    "config_exists",
-		Label:   "配置文件存在",
+		Label:   i18n.T(i18n.MsgDiagnoseConfigExists),
 		LabelEn: "Config File Exists",
 	}
 
 	if configPath == "" {
 		item.Status = DiagnoseFail
-		item.Detail = "无法确定配置文件路径"
-		item.Suggestion = "请确认用户主目录可访问"
+		item.Detail = i18n.T(i18n.MsgDiagnoseConfigPathUnknown)
+		item.Suggestion = i18n.T(i18n.MsgDiagnoseConfigPathSuggestion)
 		return item
 	}
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		item.Status = DiagnoseFail
-		item.Detail = configPath + " 不存在"
-		item.Suggestion = "请在编辑器中点击「生成默认配置」，或运行 openclaw init"
+		item.Detail = i18n.T(i18n.MsgDiagnoseConfigNotExists, map[string]interface{}{"Path": configPath})
+		item.Suggestion = i18n.T(i18n.MsgDiagnoseConfigCreateSuggestion)
 		return item
 	}
 
@@ -169,13 +170,13 @@ func checkConfigExists(configPath string) DiagnoseItem {
 func checkConfigValid(configPath string) DiagnoseItem {
 	item := DiagnoseItem{
 		Name:    "config_valid",
-		Label:   "配置文件格式正确",
+		Label:   i18n.T(i18n.MsgDiagnoseConfigValid),
 		LabelEn: "Config File Valid",
 	}
 
 	if configPath == "" {
 		item.Status = DiagnoseWarn
-		item.Detail = "跳过：配置路径未知"
+		item.Detail = i18n.T(i18n.MsgDiagnoseSkipPathUnknown)
 		return item
 	}
 
@@ -183,51 +184,51 @@ func checkConfigValid(configPath string) DiagnoseItem {
 	if err != nil {
 		if os.IsNotExist(err) {
 			item.Status = DiagnoseWarn
-			item.Detail = "跳过：配置文件不存在"
+			item.Detail = i18n.T(i18n.MsgDiagnoseSkipConfigNotExists)
 			return item
 		}
 		item.Status = DiagnoseFail
-		item.Detail = "读取配置文件失败: " + err.Error()
-		item.Suggestion = "请检查文件权限"
+		item.Detail = i18n.T(i18n.MsgDiagnoseReadConfigFailed, map[string]interface{}{"Error": err.Error()})
+		item.Suggestion = i18n.T(i18n.MsgDiagnoseCheckFilePermission)
 		return item
 	}
 
 	var cfg map[string]interface{}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		item.Status = DiagnoseFail
-		item.Detail = "JSON 解析失败: " + err.Error()
-		item.Suggestion = "请检查配置文件 JSON 语法是否正确"
+		item.Detail = i18n.T(i18n.MsgDiagnoseJsonParseFailed, map[string]interface{}{"Error": err.Error()})
+		item.Suggestion = i18n.T(i18n.MsgDiagnoseCheckJsonSyntax)
 		return item
 	}
 
 	item.Status = DiagnosePass
-	item.Detail = fmt.Sprintf("有效 JSON，%d 个顶级键", len(cfg))
+	item.Detail = i18n.T(i18n.MsgDiagnoseValidJsonKeys, map[string]interface{}{"Count": len(cfg)})
 	return item
 }
 
 func checkGatewayProcess() DiagnoseItem {
 	item := DiagnoseItem{
 		Name:    "gateway_process",
-		Label:   "Gateway 进程",
+		Label:   i18n.T(i18n.MsgDiagnoseGatewayProcess),
 		LabelEn: "Gateway Process",
 	}
 
 	if processExists() {
 		item.Status = DiagnosePass
-		item.Detail = "检测到 openclaw gateway 进程"
+		item.Detail = i18n.T(i18n.MsgDiagnoseGatewayProcessDetected)
 		return item
 	}
 
 	item.Status = DiagnoseFail
-	item.Detail = "未找到 openclaw gateway 进程"
-	item.Suggestion = "请启动 Gateway：点击上方「启动」按钮，或运行 openclaw gateway run"
+	item.Detail = i18n.T(i18n.MsgDiagnoseGatewayProcessNotFound)
+	item.Suggestion = i18n.T(i18n.MsgDiagnoseGatewayStartSuggestion)
 	return item
 }
 
 func checkPortReachable(host string, port int) DiagnoseItem {
 	item := DiagnoseItem{
 		Name:    "port_reachable",
-		Label:   fmt.Sprintf("端口 %d 可达", port),
+		Label:   i18n.T(i18n.MsgDiagnosePortReachable, map[string]interface{}{"Port": port}),
 		LabelEn: fmt.Sprintf("Port %d Reachable", port),
 	}
 
@@ -235,21 +236,21 @@ func checkPortReachable(host string, port int) DiagnoseItem {
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		item.Status = DiagnoseFail
-		item.Detail = fmt.Sprintf("%s 连接被拒绝", addr)
-		item.Suggestion = "Gateway 未在该端口监听，请确认 Gateway 已启动且端口配置正确"
+		item.Detail = i18n.T(i18n.MsgDiagnoseConnectionRefused, map[string]interface{}{"Addr": addr})
+		item.Suggestion = i18n.T(i18n.MsgDiagnosePortNotListening)
 		return item
 	}
 	conn.Close()
 
 	item.Status = DiagnosePass
-	item.Detail = fmt.Sprintf("%s TCP 连接成功", addr)
+	item.Detail = i18n.T(i18n.MsgDiagnoseTcpConnectionSuccess, map[string]interface{}{"Addr": addr})
 	return item
 }
 
 func checkGatewayAPI(host string, port int) DiagnoseItem {
 	item := DiagnoseItem{
 		Name:    "gateway_api",
-		Label:   "Gateway API 响应",
+		Label:   i18n.T(i18n.MsgDiagnoseGatewayApiResponse),
 		LabelEn: "Gateway API Response",
 	}
 
@@ -258,7 +259,7 @@ func checkGatewayAPI(host string, port int) DiagnoseItem {
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		item.Status = DiagnoseFail
-		item.Detail = "跳过：端口不可达"
+		item.Detail = i18n.T(i18n.MsgDiagnoseSkipPortUnreachable)
 		return item
 	}
 	conn.Close()
@@ -268,28 +269,28 @@ func checkGatewayAPI(host string, port int) DiagnoseItem {
 	resp, err := client.Get(url)
 	if err != nil {
 		item.Status = DiagnoseWarn
-		item.Detail = fmt.Sprintf("HTTP 请求失败: %v", err)
-		item.Suggestion = "端口可达但 HTTP 无响应，可能不是 OpenClaw Gateway 在监听"
+		item.Detail = i18n.T(i18n.MsgDiagnoseHttpRequestFailed, map[string]interface{}{"Error": err.Error()})
+		item.Suggestion = i18n.T(i18n.MsgDiagnosePortReachableNoHttp)
 		return item
 	}
 	resp.Body.Close()
 
 	if resp.StatusCode >= 500 {
 		item.Status = DiagnoseWarn
-		item.Detail = fmt.Sprintf("HTTP 状态码 %d", resp.StatusCode)
-		item.Suggestion = "Gateway 返回服务器错误，请检查 Gateway 日志"
+		item.Detail = i18n.T(i18n.MsgDiagnoseHttpStatusCode, map[string]interface{}{"Code": resp.StatusCode})
+		item.Suggestion = i18n.T(i18n.MsgDiagnoseGatewayServerError)
 		return item
 	}
 
 	item.Status = DiagnosePass
-	item.Detail = fmt.Sprintf("HTTP 状态码 %d", resp.StatusCode)
+	item.Detail = i18n.T(i18n.MsgDiagnoseHttpStatusCode, map[string]interface{}{"Code": resp.StatusCode})
 	return item
 }
 
 func checkPortConflict(host string, port int) DiagnoseItem {
 	item := DiagnoseItem{
 		Name:    "port_conflict",
-		Label:   "端口冲突检测",
+		Label:   i18n.T(i18n.MsgDiagnosePortConflictCheck),
 		LabelEn: "Port Conflict Check",
 	}
 
@@ -297,27 +298,27 @@ func checkPortConflict(host string, port int) DiagnoseItem {
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		item.Status = DiagnosePass
-		item.Detail = fmt.Sprintf("端口 %d 未被占用（Gateway 未运行）", port)
+		item.Detail = i18n.T(i18n.MsgDiagnosePortNotInUse, map[string]interface{}{"Port": port})
 		return item
 	}
 	conn.Close()
 
 	if processExists() {
 		item.Status = DiagnosePass
-		item.Detail = fmt.Sprintf("端口 %d 由 Gateway 进程占用", port)
+		item.Detail = i18n.T(i18n.MsgDiagnosePortUsedByGateway, map[string]interface{}{"Port": port})
 		return item
 	}
 
 	item.Status = DiagnoseWarn
-	item.Detail = fmt.Sprintf("端口 %d 被其他程序占用", port)
-	item.Suggestion = fmt.Sprintf("请检查哪个程序占用了端口 %d，或更换 Gateway 端口", port)
+	item.Detail = i18n.T(i18n.MsgDiagnosePortUsedByOther, map[string]interface{}{"Port": port})
+	item.Suggestion = i18n.T(i18n.MsgDiagnosePortConflictSuggestion, map[string]interface{}{"Port": port})
 	return item
 }
 
 func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 	item := DiagnoseItem{
 		Name:    "auth_token",
-		Label:   "鉴权 Token 匹配",
+		Label:   i18n.T(i18n.MsgDiagnoseAuthTokenMatch),
 		LabelEn: "Auth Token Match",
 	}
 
@@ -325,28 +326,28 @@ func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		item.Status = DiagnoseWarn
-		item.Detail = "跳过：Gateway 未运行"
+		item.Detail = i18n.T(i18n.MsgDiagnoseSkipGatewayNotRunning)
 		return item
 	}
 	conn.Close()
 
 	if configPath == "" {
 		item.Status = DiagnoseWarn
-		item.Detail = "跳过：配置路径未知"
+		item.Detail = i18n.T(i18n.MsgDiagnoseSkipPathUnknown)
 		return item
 	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		item.Status = DiagnoseWarn
-		item.Detail = "跳过：无法读取配置文件"
+		item.Detail = i18n.T(i18n.MsgDiagnoseSkipCannotReadConfig)
 		return item
 	}
 
 	var cfg map[string]interface{}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		item.Status = DiagnoseWarn
-		item.Detail = "跳过：配置文件格式错误"
+		item.Detail = i18n.T(i18n.MsgDiagnoseSkipConfigFormatError)
 		return item
 	}
 
@@ -361,7 +362,7 @@ func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 
 	if token == "" {
 		item.Status = DiagnosePass
-		item.Detail = "未配置鉴权 Token（无需验证）"
+		item.Detail = i18n.T(i18n.MsgDiagnoseNoAuthToken)
 		return item
 	}
 
@@ -372,19 +373,19 @@ func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 	resp, err := client.Do(req)
 	if err != nil {
 		item.Status = DiagnoseWarn
-		item.Detail = "HTTP 请求失败，无法验证 Token"
+		item.Detail = i18n.T(i18n.MsgDiagnoseHttpRequestFailedToken)
 		return item
 	}
 	resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		item.Status = DiagnoseFail
-		item.Detail = fmt.Sprintf("Token 验证失败（HTTP %d）", resp.StatusCode)
-		item.Suggestion = "配置文件中的 Token 与 Gateway 不匹配，请检查 gateway.auth.token 配置"
+		item.Detail = i18n.T(i18n.MsgDiagnoseTokenVerifyFailed, map[string]interface{}{"Code": resp.StatusCode})
+		item.Suggestion = i18n.T(i18n.MsgDiagnoseTokenMismatchSuggestion)
 		return item
 	}
 
 	item.Status = DiagnosePass
-	item.Detail = "Token 验证通过"
+	item.Detail = i18n.T(i18n.MsgDiagnoseTokenVerifyPassed)
 	return item
 }
