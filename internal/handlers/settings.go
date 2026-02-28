@@ -7,6 +7,7 @@ import (
 
 	"ClawDeckX/internal/constants"
 	"ClawDeckX/internal/database"
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/openclaw"
 	"ClawDeckX/internal/web"
@@ -146,4 +147,34 @@ func (h *SettingsHandler) UpdateGatewayConfig(w http.ResponseWriter, r *http.Req
 		Msg("gateway config updated, reconnecting")
 
 	web.OK(w, r, map[string]string{"message": "ok"})
+}
+
+// SetLanguage sets the backend language based on frontend selection.
+func (h *SettingsHandler) SetLanguage(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Language string `json:"language"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+
+	lang := req.Language
+	if lang != "en" && lang != "zh" {
+		lang = "en"
+	}
+
+	i18n.SetLanguage(lang)
+
+	logger.Log.Info().
+		Str("user", web.GetUsername(r)).
+		Str("language", lang).
+		Msg("backend language updated")
+
+	web.OK(w, r, map[string]string{"language": lang})
+}
+
+// GetLanguage returns the current backend language.
+func (h *SettingsHandler) GetLanguage(w http.ResponseWriter, r *http.Request) {
+	web.OK(w, r, map[string]string{"language": i18n.GetLanguage()})
 }

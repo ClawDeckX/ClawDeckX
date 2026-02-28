@@ -1,6 +1,7 @@
 ﻿package database
 
 import (
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 
 	"gorm.io/gorm"
@@ -16,7 +17,7 @@ func NewAuditLogRepo() *AuditLogRepo {
 
 func (r *AuditLogRepo) Create(log *AuditLog) error {
 	if err := r.db.Create(log).Error; err != nil {
-		logger.Audit.Error().Err(err).Str("action", log.Action).Msg("审计日志写入失败")
+		logger.Audit.Error().Err(err).Str("action", log.Action).Msg(i18n.T(i18n.MsgLogAuditWriteFailed))
 		return err
 	}
 	return nil

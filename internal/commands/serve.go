@@ -19,6 +19,7 @@ import (
 	"ClawDeckX/internal/constants"
 	"ClawDeckX/internal/database"
 	"ClawDeckX/internal/handlers"
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/monitor"
 	"ClawDeckX/internal/notify"
@@ -83,11 +84,11 @@ func RunServe(args []string) int {
 
 	// Init logger
 	logger.Init(cfg.Log)
-	logger.Log.Info().Str("version", "0.1.0").Msg("ClawDeckX Web 启动中...")
+	logger.Log.Info().Str("version", "0.1.0").Msg(i18n.T(i18n.MsgLogServeStarting))
 
 	// Init database
 	if err := database.Init(cfg.Database, cfg.IsDebug()); err != nil {
-		logger.Log.Fatal().Err(err).Msg("数据库初始化失败")
+		logger.Log.Fatal().Err(err).Msg(i18n.T(i18n.MsgLogDbInitFailed))
 		return 1
 	}
 	defer database.Close()
@@ -150,7 +151,7 @@ func RunServe(args []string) int {
 			Msg("gwToken 为空，尝试从 openclaw.json 读取 gateway auth token")
 		if t := readOpenClawGatewayToken(cfg.OpenClaw.ConfigPath); t != "" {
 			gwToken = t
-			logger.Log.Info().Int("tokenLen", len(t)).Msg("从 openclaw.json 读取到 gateway auth token")
+			logger.Log.Info().Int("tokenLen", len(t)).Msg(i18n.T(i18n.MsgLogGatewayTokenRead))
 		} else {
 			logger.Log.Warn().
 				Str("configPath", cfg.OpenClaw.ConfigPath).
@@ -305,6 +306,8 @@ func RunServe(args []string) int {
 	// 系统设置
 	router.GET("/api/v1/settings", settingsHandler.GetAll)
 	router.PUT("/api/v1/settings", web.RequireAdmin(settingsHandler.Update))
+	router.GET("/api/v1/settings/language", settingsHandler.GetLanguage)
+	router.PUT("/api/v1/settings/language", settingsHandler.SetLanguage)
 	router.GET("/api/v1/settings/gateway", settingsHandler.GetGatewayConfig)
 	router.PUT("/api/v1/settings/gateway", web.RequireAdmin(settingsHandler.UpdateGatewayConfig))
 
@@ -434,7 +437,7 @@ func RunServe(args []string) int {
 	templateHandler := handlers.NewTemplateHandler()
 	// Seed built-in templates on startup
 	if err := templateHandler.SeedBuiltIn(handlers.BuiltInTemplates()); err != nil {
-		logger.Log.Error().Err(err).Msg("内置模板种子写入失败")
+		logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogTemplateSeedFailed))
 	}
 	router.GET("/api/v1/templates", templateHandler.List)
 	router.GET("/api/v1/templates/", templateHandler.Get)
@@ -544,7 +547,7 @@ func RunServe(args []string) int {
 	ln.Close()
 
 	addr := cfg.ListenAddr()
-	logger.Log.Info().Str("addr", addr).Msg("Web 服务已启动")
+	logger.Log.Info().Str("addr", addr).Msg(i18n.T(i18n.MsgLogWebServiceStarted))
 
 	// 启动后快速自检：检测 127.0.0.1 是否被其他进程占用并劫持到非 ClawDeckX 服务
 	if conflict, detail := detectLoopbackRouteConflict(cfg.Server.Port); conflict {
@@ -594,7 +597,7 @@ func RunServe(args []string) int {
 				PasswordHash: string(hash),
 				Role:         constants.RoleAdmin,
 			}); err == nil {
-				logger.Log.Info().Msg("首次启动：已自动创建管理员账户 admin")
+				logger.Log.Info().Msg(i18n.T(i18n.MsgLogAdminAutoCreated))
 			}
 		}
 	}
@@ -670,21 +673,21 @@ func RunServe(args []string) int {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		logger.Log.Info().Msg("正在关闭服务...")
+		logger.Log.Info().Msg(i18n.T(i18n.MsgLogShuttingDown))
 		srv.Close()
 	}()
 
 	// 启动 HTTP 服务
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Log.Fatal().Err(err).Msg("服务启动失败")
+			logger.Log.Fatal().Err(err).Msg(i18n.T(i18n.MsgLogServiceStartFailed))
 		}
 	}()
 
 	// GUI 模式：显示系统托盘图标 + 自动打开浏览器
 	if tray.HasGUI() {
 		tray.Run(addr, func() {
-			logger.Log.Info().Msg("用户通过托盘菜单退出")
+			logger.Log.Info().Msg(i18n.T(i18n.MsgLogUserExitTray))
 			srv.Close()
 		})
 	} else {
@@ -699,7 +702,7 @@ func RunServe(args []string) int {
 		<-done
 	}
 
-	logger.Log.Info().Msg("服务已停止")
+	logger.Log.Info().Msg(i18n.T(i18n.MsgLogServiceStopped))
 	return 0
 }
 
@@ -719,7 +722,7 @@ func spaHandler() http.HandlerFunc {
 	// 使用 embed.FS 提供静态文件，SPA 路由回退到 index.html
 	fsys, err := fs.Sub(web.StaticFS, "dist")
 	if err != nil {
-		logger.Log.Error().Err(err).Msg("无法加载前端静态资源")
+		logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogStaticLoadFailed))
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
@@ -777,12 +780,12 @@ func readOpenClawGatewayToken(configPath string) string {
 	// 回退：无论传入什么路径，都尝试标准路径 ~/.openclaw/openclaw.json
 	home, err := os.UserHomeDir()
 	if err != nil {
-		logger.Log.Debug().Err(err).Msg("readOpenClawGatewayToken: 无法获取用户主目录")
+		logger.Log.Debug().Err(err).Msg(i18n.T(i18n.MsgLogCannotGetHomeDir))
 		return ""
 	}
 	fallback := filepath.Join(home, ".openclaw")
 	if fallback != configPath {
-		logger.Log.Debug().Str("fallback", fallback).Msg("readOpenClawGatewayToken: 传入路径未找到 token，回退到 ~/.openclaw")
+		logger.Log.Debug().Str("fallback", fallback).Msg(i18n.T(i18n.MsgLogFallbackOpenclawPath))
 		return tryReadTokenFromPath(fallback)
 	}
 	return ""
@@ -800,7 +803,7 @@ func tryReadTokenFromPath(configPath string) string {
 	// configPath 可能是目录（~/.openclaw）或文件（~/.openclaw/openclaw.json）
 	info, err := os.Stat(configPath)
 	if err != nil {
-		logger.Log.Debug().Str("configPath", configPath).Err(err).Msg("tryReadTokenFromPath: 路径不存在")
+		logger.Log.Debug().Str("configPath", configPath).Err(err).Msg(i18n.T(i18n.MsgLogPathNotExist))
 		return ""
 	}
 	if info.IsDir() {
@@ -808,30 +811,30 @@ func tryReadTokenFromPath(configPath string) string {
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		logger.Log.Debug().Str("configPath", configPath).Err(err).Msg("tryReadTokenFromPath: 无法读取文件")
+		logger.Log.Debug().Str("configPath", configPath).Err(err).Msg(i18n.T(i18n.MsgLogCannotReadFile))
 		return ""
 	}
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		logger.Log.Debug().Str("configPath", configPath).Err(err).Msg("tryReadTokenFromPath: JSON 解析失败")
+		logger.Log.Debug().Str("configPath", configPath).Err(err).Msg(i18n.T(i18n.MsgLogJsonParseFailed))
 		return ""
 	}
 	gw, ok := raw["gateway"].(map[string]interface{})
 	if !ok {
-		logger.Log.Debug().Str("configPath", configPath).Msg("tryReadTokenFromPath: 缺少 gateway 字段")
+		logger.Log.Debug().Str("configPath", configPath).Msg(i18n.T(i18n.MsgLogMissingGatewayField))
 		return ""
 	}
 	auth, ok := gw["auth"].(map[string]interface{})
 	if !ok {
-		logger.Log.Debug().Str("configPath", configPath).Msg("tryReadTokenFromPath: 缺少 auth 字段")
+		logger.Log.Debug().Str("configPath", configPath).Msg(i18n.T(i18n.MsgLogMissingAuthField))
 		return ""
 	}
 	token, ok := auth["token"].(string)
 	if !ok || token == "" {
-		logger.Log.Debug().Str("configPath", configPath).Msg("tryReadTokenFromPath: token 为空")
+		logger.Log.Debug().Str("configPath", configPath).Msg(i18n.T(i18n.MsgLogTokenEmpty))
 		return ""
 	}
-	logger.Log.Debug().Str("configPath", configPath).Int("tokenLen", len(token)).Msg("tryReadTokenFromPath: 成功读取 token")
+	logger.Log.Debug().Str("configPath", configPath).Int("tokenLen", len(token)).Msg(i18n.T(i18n.MsgLogTokenReadSuccess))
 	return token
 }
 

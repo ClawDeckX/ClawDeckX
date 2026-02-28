@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 )
 
@@ -167,11 +168,11 @@ func (c *GWClient) SetHealthCheckEnabled(enabled bool) {
 		c.healthRunning = true
 		c.healthStopCh = make(chan struct{})
 		go c.healthCheckLoop()
-		logger.Gateway.Info().Msg("心跳健康检查已启用")
+		logger.Gateway.Info().Msg(i18n.T(i18n.MsgLogHealthCheckEnabled))
 	} else if !enabled && c.healthRunning {
 		c.healthRunning = false
 		close(c.healthStopCh)
-		logger.Gateway.Info().Msg("心跳健康检查已禁用")
+		logger.Gateway.Info().Msg(i18n.T(i18n.MsgLogHealthCheckDisabled))
 	}
 }
 
@@ -230,9 +231,9 @@ func (c *GWClient) healthCheckLoop() {
 				)
 				if err == nil {
 					healthy = true
-					logger.Gateway.Debug().Msg("心跳检测：WebSocket ping 成功")
+					logger.Gateway.Debug().Msg(i18n.T(i18n.MsgLogHeartbeatWsPingOk))
 				} else {
-					logger.Gateway.Debug().Err(err).Msg("心跳检测：WebSocket ping 失败")
+					logger.Gateway.Debug().Err(err).Msg(i18n.T(i18n.MsgLogHeartbeatWsPingFail))
 				}
 			}
 			c.mu.Unlock()
@@ -243,9 +244,9 @@ func (c *GWClient) healthCheckLoop() {
 				if conn, tcpErr := net.DialTimeout("tcp", tcpAddr, 3*time.Second); tcpErr == nil {
 					conn.Close()
 					healthy = true
-					logger.Gateway.Debug().Msg("心跳检测：TCP 端口可达")
+					logger.Gateway.Debug().Msg(i18n.T(i18n.MsgLogHeartbeatTcpOk))
 				} else {
-					logger.Gateway.Debug().Err(tcpErr).Msg("心跳检测：TCP 端口不可达")
+					logger.Gateway.Debug().Err(tcpErr).Msg(i18n.T(i18n.MsgLogHeartbeatTcpFail))
 				}
 			}
 
@@ -597,15 +598,15 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 	token := c.cfg.Token
 	if token == "" {
 		configPath := ResolveConfigPath()
-		logger.Log.Debug().Str("configPath", configPath).Msg("GWClient token 为空，尝试从 openclaw.json 读取")
+		logger.Log.Debug().Str("configPath", configPath).Msg(i18n.T(i18n.MsgLogGwclientTokenEmpty))
 		if t := readGatewayTokenFromConfig(); t != "" {
 			token = t
 			c.mu.Lock()
 			c.cfg.Token = token
 			c.mu.Unlock()
-			logger.Log.Info().Msg("从 openclaw.json 自动读取到 gateway auth token")
+			logger.Log.Info().Msg(i18n.T(i18n.MsgLogGwclientTokenRead))
 		} else {
-			logger.Log.Warn().Str("configPath", configPath).Msg("未能从 openclaw.json 读取到 gateway auth token，RPC 请求可能被拒绝")
+			logger.Log.Warn().Str("configPath", configPath).Msg(i18n.T(i18n.MsgLogGwclientTokenReadFail))
 		}
 	}
 	if token != "" {
@@ -613,13 +614,13 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 			Token: token,
 		}
 	} else {
-		logger.Log.Warn().Msg("GWClient 无 auth token，将以无认证方式连接 Gateway")
+		logger.Log.Warn().Msg(i18n.T(i18n.MsgLogGwclientNoAuth))
 	}
 
 	// 加载或生成 device identity
 	identity, err := LoadOrCreateDeviceIdentity("")
 	if err != nil {
-		logger.Log.Error().Err(err).Msg("加载 device identity 失败")
+		logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogDeviceIdentityLoadFail))
 	} else {
 		// 构建 device auth payload
 		signedAt := time.Now().UnixMilli()
@@ -645,12 +646,12 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 		// 签名
 		signature, err := SignDevicePayload(identity.PrivateKeyPem, payload)
 		if err != nil {
-			logger.Log.Error().Err(err).Msg("签名 device payload 失败")
+			logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogDevicePayloadSignFail))
 		} else {
 			// 获取公钥的 base64url 编码
 			publicKeyBase64URL, err := PublicKeyRawBase64URLFromPem(identity.PublicKeyPem)
 			if err != nil {
-				logger.Log.Error().Err(err).Msg("编码公钥失败")
+				logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogPublicKeyEncodeFail))
 			} else {
 				params.Device = &ConnectDevice{
 					ID:        identity.DeviceID,
@@ -688,12 +689,12 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 	}
 	data, err := json.Marshal(frame)
 	if err != nil {
-		logger.Log.Error().Err(err).Msg("序列化 connect 请求失败")
+		logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogConnectSerializeFail))
 		return
 	}
 
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		logger.Log.Error().Err(err).Msg("发送 connect 请求失败")
+		logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogConnectSendFail))
 		return
 	}
 
@@ -714,11 +715,11 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 			if resp != nil && resp.Error != nil {
 				msg = resp.Error.Message
 			}
-			logger.Log.Error().Str("error", msg).Msg("Gateway WS 连接鉴权失败")
+			logger.Log.Error().Str("error", msg).Msg(i18n.T(i18n.MsgLogGatewayWsAuthFail))
 			conn.Close()
 		}
 	case <-time.After(10 * time.Second):
-		logger.Log.Error().Msg("Gateway WS connect 超时")
+		logger.Log.Error().Msg(i18n.T(i18n.MsgLogGatewayWsConnectTimeout))
 		conn.Close()
 	case <-c.stopCh:
 		return

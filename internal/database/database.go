@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/webconfig"
 
@@ -26,13 +27,13 @@ func Init(cfg webconfig.DatabaseConfig, debug bool) error {
 			return fmt.Errorf("failed to create database directory: %w", err)
 		}
 		dialector = sqlite.Open(cfg.SQLitePath)
-		logger.DB.Info().Str("driver", "sqlite").Str("path", cfg.SQLitePath).Msg("初始化数据库")
+		logger.DB.Info().Str("driver", "sqlite").Str("path", cfg.SQLitePath).Msg(i18n.T(i18n.MsgLogDbInit))
 	case "postgres":
 		if cfg.PostgresDSN == "" {
 			return fmt.Errorf("postgres_dsn is required when driver is postgres")
 		}
 		dialector = postgres.Open(cfg.PostgresDSN)
-		logger.DB.Info().Str("driver", "postgres").Msg("初始化数据库")
+		logger.DB.Info().Str("driver", "postgres").Msg(i18n.T(i18n.MsgLogDbInit))
 	default:
 		return fmt.Errorf("unsupported database driver: %s", cfg.Driver)
 	}
@@ -63,7 +64,7 @@ func Init(cfg webconfig.DatabaseConfig, debug bool) error {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	logger.DB.Info().Msg("数据库初始化完成")
+	logger.DB.Info().Msg(i18n.T(i18n.MsgLogDbInitComplete))
 	return nil
 }
 

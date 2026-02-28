@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"ClawDeckX/internal/database"
+	"ClawDeckX/internal/i18n" // 添加 i18n 包导入
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/openclaw"
 	"ClawDeckX/internal/web"
@@ -70,7 +71,7 @@ func (c *GWCollector) Start() {
 			c.poll()
 		case <-c.stopCh:
 			c.running = false
-			logger.Monitor.Info().Msg("GW 事件采集器已停止")
+			logger.Monitor.Info().Msg(i18n.T(i18n.MsgLogGwCollectorStopped))
 			return
 		}
 	}
@@ -245,14 +246,14 @@ func (c *GWCollector) handleCronEvent(event string, payload json.RawMessage) {
 // poll 定时轮询 Gateway 会话数据，检测变化
 func (c *GWCollector) poll() {
 	if !c.client.IsConnected() {
-		logger.Monitor.Debug().Msg("GW 轮询跳过：未连接")
+		logger.Monitor.Debug().Msg(i18n.T(i18n.MsgLogGwPollSkipNotConnected))
 		return
 	}
 
 	// 获取会话列表
 	data, err := c.client.Request("sessions.list", map[string]interface{}{})
 	if err != nil {
-		logger.Monitor.Debug().Err(err).Msg("GW 轮询会话列表失败")
+		logger.Monitor.Debug().Err(err).Msg(i18n.T(i18n.MsgLogGwPollSessionsFailed))
 		return
 	}
 
@@ -271,11 +272,11 @@ func (c *GWCollector) poll() {
 		} `json:"sessions"`
 	}
 	if err := json.Unmarshal(data, &result); err != nil {
-		logger.Monitor.Debug().Err(err).Msg("解析会话列表失败")
+		logger.Monitor.Debug().Err(err).Msg(i18n.T(i18n.MsgLogGwParseSessionsFailed))
 		return
 	}
 
-	logger.Monitor.Debug().Int("sessions", len(result.Sessions)).Int("known", len(c.lastSessions)).Msg("GW 轮询会话")
+	logger.Monitor.Debug().Int("sessions", len(result.Sessions)).Int("known", len(c.lastSessions)).Msg(i18n.T(i18n.MsgLogGwPollSessions))
 
 	firstRun := len(c.lastSessions) == 0
 	newCount := 0
@@ -366,7 +367,7 @@ func (c *GWCollector) poll() {
 	}
 
 	if newCount > 0 {
-		logger.Monitor.Debug().Int("new_events", newCount).Msg("GW 轮询发现新活动")
+		logger.Monitor.Debug().Int("new_events", newCount).Msg(i18n.T(i18n.MsgLogGwPollNewEvents))
 	}
 }
 
@@ -387,7 +388,7 @@ func (c *GWCollector) writeActivity(category, risk, summary, detail, source, act
 	}
 
 	if err := c.activityRepo.Create(activity); err != nil {
-		logger.Monitor.Warn().Str("event_id", eventID).Err(err).Msg("写入 GW 活动记录失败")
+		logger.Monitor.Warn().Str("event_id", eventID).Err(err).Msg(i18n.T(i18n.MsgLogGwActivityWriteFailed))
 		return
 	}
 

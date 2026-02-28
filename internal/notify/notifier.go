@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"ClawDeckX/internal/database"
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 
 	nfy "github.com/nikoksr/notify"
@@ -65,10 +66,10 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 				n.UseServices(tgSvc)
 				names = append(names, "telegram")
 			} else {
-				logger.Log.Warn().Str("chat_id", tgChatID).Msg("Telegram chat ID 格式无效")
+				logger.Log.Warn().Str("chat_id", tgChatID).Msg(i18n.T(i18n.MsgLogTelegramChatIdInvalid))
 			}
 		} else {
-			logger.Log.Warn().Err(err).Msg("Telegram 服务初始化失败")
+			logger.Log.Warn().Err(err).Msg(i18n.T(i18n.MsgLogTelegramInitFailed))
 		}
 	}
 
@@ -108,7 +109,7 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 			n.UseServices(dcSvc)
 			names = append(names, "discord")
 		} else {
-			logger.Log.Warn().Err(err).Msg("Discord 服务初始化失败")
+			logger.Log.Warn().Err(err).Msg(i18n.T(i18n.MsgLogDiscordInitFailed))
 		}
 	}
 
@@ -207,7 +208,7 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 	m.notifier = n
 	m.channelNames = names
 
-	logger.Log.Info().Int("channels", len(names)).Strs("names", names).Msg("通知渠道已重载 (nikoksr/notify)")
+	logger.Log.Info().Int("channels", len(names)).Strs("names", names).Msg(i18n.T(i18n.MsgLogNotifyChannelsReloaded))
 }
 
 // Send dispatches a message to all configured channels.
@@ -220,7 +221,7 @@ func (m *Manager) Send(text string) {
 		return
 	}
 	if err := n.Send(context.Background(), "ClawDeckX", text); err != nil {
-		logger.Log.Warn().Err(err).Msg("通知发送失败")
+		logger.Log.Warn().Err(err).Msg(i18n.T(i18n.MsgLogNotifySendFailed))
 	}
 }
 

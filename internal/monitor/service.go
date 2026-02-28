@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"ClawDeckX/internal/database"
+	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/web"
 )
@@ -52,7 +53,7 @@ func (s *Service) Start() {
 			s.scan()
 		case <-s.stopCh:
 			s.running = false
-			logger.Monitor.Info().Msg("监控服务已停止")
+			logger.Monitor.Info().Msg(i18n.T(i18n.MsgLogMonitorStopped))
 			return
 		}
 	}
@@ -70,7 +71,7 @@ func (s *Service) Stop() {
 func (s *Service) scan() {
 	events, err := s.parser.ReadNewEvents()
 	if err != nil {
-		logger.Monitor.Error().Err(err).Msg("扫描 session 文件失败")
+		logger.Monitor.Error().Err(err).Msg(i18n.T(i18n.MsgLogMonitorScanFailed))
 		return
 	}
 
@@ -78,7 +79,7 @@ func (s *Service) scan() {
 		return
 	}
 
-	logger.Monitor.Debug().Int("count", len(events)).Msg("发现新事件")
+	logger.Monitor.Debug().Int("count", len(events)).Msg(i18n.T(i18n.MsgLogMonitorNewEvents))
 
 	for _, evt := range events {
 		actionTaken := "allow"
@@ -98,7 +99,7 @@ func (s *Service) scan() {
 		}
 
 		if err := s.activityRepo.Create(activity); err != nil {
-			logger.Monitor.Warn().Str("event_id", evt.EventID).Err(err).Msg("写入活动记录失败")
+			logger.Monitor.Warn().Str("event_id", evt.EventID).Err(err).Msg(i18n.T(i18n.MsgLogMonitorActivityWriteFailed))
 			continue
 		}
 
