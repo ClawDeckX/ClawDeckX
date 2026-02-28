@@ -1163,20 +1163,20 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 	}
 
 	if gwRunning {
-		summary = append(summary, InstallSummaryItem{Label: "Gateway", Status: "ok", Detail: fmt.Sprintf("运行中  端口: %d  模式: %s  绑定: %s", gwPort, gwMode, gwBind), Category: "gateway"})
+		summary = append(summary, InstallSummaryItem{Label: "Gateway", Status: "ok", Detail: i18n.T(i18n.MsgInstallerSummaryRunning, map[string]interface{}{"Port": gwPort, "Mode": gwMode, "Bind": gwBind}), Category: "gateway"})
 	} else if config.SkipGateway {
-		summary = append(summary, InstallSummaryItem{Label: "Gateway", Status: "skip", Detail: "已跳过启动", Category: "gateway"})
+		summary = append(summary, InstallSummaryItem{Label: "Gateway", Status: "skip", Detail: i18n.T(i18n.MsgInstallerSummarySkipped), Category: "gateway"})
 	} else {
-		summary = append(summary, InstallSummaryItem{Label: "Gateway", Status: "warn", Detail: fmt.Sprintf("未运行  端口: %d", gwPort), Category: "gateway"})
+		summary = append(summary, InstallSummaryItem{Label: "Gateway", Status: "warn", Detail: i18n.T(i18n.MsgInstallerSummaryNotRunning, map[string]interface{}{"Port": gwPort}), Category: "gateway"})
 	}
 
 	var completeMsg string
 	if needsRestart {
-		completeMsg = "OpenClaw 安装完成！请重启应用以使环境变量生效。"
+		completeMsg = i18n.T(i18n.MsgInstallerCompleteRestartRequired)
 	} else if config.SkipConfig {
-		completeMsg = "OpenClaw 安装完成！请稍后手动配置。"
+		completeMsg = i18n.T(i18n.MsgInstallerCompleteManualConfig)
 	} else {
-		completeMsg = "OpenClaw 安装完成！"
+		completeMsg = i18n.T(i18n.MsgInstallerCompleteSuccess)
 	}
 
 	i.emitter.EmitComplete(completeMsg, map[string]interface{}{
