@@ -1037,27 +1037,27 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 	} else {
 		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerSkipConfigGenerateDefault))
 		if err := i.ensureDefaultConfig(); err != nil {
-			i.emitter.EmitLog(fmt.Sprintf("⚠️ 生成默认配置失败: %v", err))
+			i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGenerateDefaultConfigFailed, map[string]interface{}{"Error": err.Error()}))
 		}
 	}
 
 	if !config.SkipGateway {
-		i.emitter.EmitPhase("start", "启动 Gateway...", 75)
+		i.emitter.EmitPhase("start", i18n.T(i18n.MsgInstallerPhaseStartGateway), 75)
 		if err := i.StartGatewayWithConfig(ctx, config); err != nil {
-			result.ErrorMessage = "Gateway 启动失败"
+			result.ErrorMessage = i18n.T(i18n.MsgInstallerGatewayStartFailedMsg)
 			result.ErrorDetails = err.Error()
 			i.emitter.EmitError(result.ErrorMessage, result)
 			return result, err
 		}
 	} else {
-		i.emitter.EmitLog("跳过启动 Gateway，稍后可手动启动")
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerSkipGatewayManualStart))
 	}
 
-	i.emitter.EmitPhase("verify", "验证安装...", 90)
-	i.emitter.EmitLog("🔍 正在进行全面测试 / Running comprehensive tests...")
+	i.emitter.EmitPhase("verify", i18n.T(i18n.MsgInstallerPhaseVerify), 90)
+	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerRunningTests))
 	doctor, err := i.RunDoctor(ctx)
 	if err != nil {
-		i.emitter.EmitLog(fmt.Sprintf("诊断警告: %s", err.Error()))
+		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerDiagnosticWarning, map[string]interface{}{"Error": err.Error()}))
 	}
 
 	result.Success = true
