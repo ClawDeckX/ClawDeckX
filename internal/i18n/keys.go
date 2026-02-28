@@ -486,6 +486,17 @@ const (
 	MsgServiceGatewayRestartFailed      = "service.gateway_restart_failed"
 	MsgServiceStartGatewayProcessFailed = "service.start_gateway_process_failed"
 	MsgServiceCommandFailed             = "service.command_failed"
+
+	// Service messages
+	MsgServiceRuntimeSystemd            = "service.runtime_systemd"
+	MsgServiceRuntimeDockerNotFound     = "service.runtime_docker_not_found"
+	MsgServiceRuntimeDockerContainer    = "service.runtime_docker_container"
+	MsgServiceRuntimeProcess            = "service.runtime_process"
+	MsgServiceRuntimeUnknown            = "service.runtime_unknown"
+	MsgServiceRuntimeRunning            = "service.runtime_running"
+	MsgServiceRemoteGatewayUnreachable  = "service.remote_gateway_unreachable"
+	MsgServiceRemoteGatewayTcpReachable = "service.remote_gateway_tcp_reachable"
+	MsgServiceRemoteGatewayHttpOk       = "service.remote_gateway_http_ok"
 )
 
 // Stream messages
