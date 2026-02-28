@@ -464,6 +464,8 @@
 
   "notify.test_message": "🔔 ClawDeckX 通知测试",
 
+  "helpers.env_header": "# OpenClaw 环境变量（由 ClawDeckX 生成）",
+
   "service.get_gateway_config_failed": "获取网关配置失败: {{.Error}}",
   "service.gateway_restart_failed": "网关重启失败: {{.Error}}",
   "service.start_gateway_process_failed": "启动网关进程失败: {{.Error}}",
