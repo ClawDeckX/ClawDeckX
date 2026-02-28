@@ -97,27 +97,27 @@ func runDoctorChecks(configPath string) doctorReport {
 
 	if _, err := os.Stat(configPath); err != nil {
 		issues = append(issues, doctorIssue{
-			Level:      "错误",
-			Message:    "配置文件不存在: " + configPath,
-			Suggestion: "运行 `ClawDeckX init` 生成最小安全配置",
+			Level:      "error",
+			Message:    i18n.T(i18n.MsgDoctorConfigNotExist, map[string]interface{}{"Path": configPath}),
+			Suggestion: i18n.T(i18n.MsgDoctorConfigNotExistSuggestion),
 		})
 		hasErrors = true
 	} else {
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			issues = append(issues, doctorIssue{
-				Level:      "错误",
-				Message:    "配置文件读取失败",
-				Suggestion: "检查文件权限",
+				Level:      "error",
+				Message:    i18n.T(i18n.MsgDoctorConfigReadFailed),
+				Suggestion: i18n.T(i18n.MsgDoctorConfigReadSuggestion),
 			})
 			hasErrors = true
 		} else {
 			var raw map[string]any
 			if err := json.Unmarshal(data, &raw); err != nil {
 				issues = append(issues, doctorIssue{
-					Level:      "错误",
-					Message:    "配置 JSON 解析失败",
-					Suggestion: "修正配置格式或重新运行 `ClawDeckX init`",
+					Level:      "error",
+					Message:    i18n.T(i18n.MsgDoctorConfigParseFailed),
+					Suggestion: i18n.T(i18n.MsgDoctorConfigParseSuggestion),
 				})
 				hasErrors = true
 			} else {
@@ -130,39 +130,39 @@ func runDoctorChecks(configPath string) doctorReport {
 				authEnabled := authMode == "token" && authToken != ""
 				if _, exists := auth["enabled"]; exists {
 					issues = append(issues, doctorIssue{
-						Level:      "警告",
-						Message:    "检测到已废弃配置项 gateway.auth.enabled",
-						Suggestion: "运行 `ClawDeckX doctor --fix` 自动迁移并移除该字段",
+						Level:      "warning",
+						Message:    i18n.T(i18n.MsgDoctorDeprecatedAuthEnabled),
+						Suggestion: i18n.T(i18n.MsgDoctorDeprecatedAuthSuggestion),
 					})
 				}
 
 				if strings.TrimSpace(mode) == "" {
 					issues = append(issues, doctorIssue{
-						Level:      "错误",
-						Message:    "未设置 gateway.mode",
-						Suggestion: "建议设置为 `local`",
+						Level:      "error",
+						Message:    i18n.T(i18n.MsgDoctorModeNotSet),
+						Suggestion: i18n.T(i18n.MsgDoctorModeSuggestion),
 					})
 					hasErrors = true
 				}
 				if strings.TrimSpace(bind) == "" {
 					issues = append(issues, doctorIssue{
-						Level:      "错误",
-						Message:    "未设置 gateway.bind",
-						Suggestion: "建议设置为 `loopback`",
+						Level:      "error",
+						Message:    i18n.T(i18n.MsgDoctorBindNotSet),
+						Suggestion: i18n.T(i18n.MsgDoctorBindSuggestion),
 					})
 					hasErrors = true
 				} else if !isLoopbackBind(bind) && !authEnabled {
 					issues = append(issues, doctorIssue{
-						Level:      "警告",
-						Message:    "网关绑定非回环地址且未启用鉴权",
-						Suggestion: "设置 gateway.auth.mode=token 和 gateway.auth.token，或改为回环地址",
+						Level:      "warning",
+						Message:    i18n.T(i18n.MsgDoctorBindNoAuth),
+						Suggestion: i18n.T(i18n.MsgDoctorBindNoAuthSuggestion),
 					})
 				}
 				if authMode == "token" && authToken == "" {
 					issues = append(issues, doctorIssue{
-						Level:      "错误",
-						Message:    "gateway.auth.mode=token 但未设置 gateway.auth.token",
-						Suggestion: "设置 gateway.auth.token 或切换为回环地址",
+						Level:      "error",
+						Message:    i18n.T(i18n.MsgDoctorTokenNotSet),
+						Suggestion: i18n.T(i18n.MsgDoctorTokenSuggestion),
 					})
 					hasErrors = true
 				}
@@ -171,25 +171,25 @@ func runDoctorChecks(configPath string) doctorReport {
 					remoteURL := strings.TrimSpace(asString(remote["url"]))
 					if remoteURL == "" {
 						issues = append(issues, doctorIssue{
-							Level:      "错误",
-							Message:    "gateway.mode=remote 但未设置 gateway.remote.url",
-							Suggestion: "设置远程网关地址（如 ws://host:18789）",
+							Level:      "error",
+							Message:    i18n.T(i18n.MsgDoctorRemoteUrlNotSet),
+							Suggestion: i18n.T(i18n.MsgDoctorRemoteUrlSuggestion),
 						})
 						hasErrors = true
 					} else if !strings.HasPrefix(remoteURL, "ws://") && !strings.HasPrefix(remoteURL, "wss://") {
 						issues = append(issues, doctorIssue{
-							Level:      "警告",
-							Message:    "gateway.remote.url 不是 ws:// 或 wss:// 开头",
-							Suggestion: "请检查远程网关地址",
+							Level:      "warning",
+							Message:    i18n.T(i18n.MsgDoctorRemoteUrlInvalid),
+							Suggestion: i18n.T(i18n.MsgDoctorRemoteUrlCheck),
 						})
 					}
 					remoteToken := strings.TrimSpace(asString(remote["token"]))
 					remotePwd := strings.TrimSpace(asString(remote["password"]))
 					if remoteToken == "" && remotePwd == "" {
 						issues = append(issues, doctorIssue{
-							Level:      "警告",
-							Message:    "远程网关未配置 token/password",
-							Suggestion: "确认远程网关是否需要鉴权",
+							Level:      "warning",
+							Message:    i18n.T(i18n.MsgDoctorRemoteNoAuth),
+							Suggestion: i18n.T(i18n.MsgDoctorRemoteAuthCheck),
 						})
 					}
 				}
@@ -205,9 +205,9 @@ func runDoctorChecks(configPath string) doctorReport {
 
 	if _, err := os.Stat(filepath.Join(expandPath("~/.openclaw"), "backups")); err != nil {
 		issues = append(issues, doctorIssue{
-			Level:      "信息",
-			Message:    "备份目录不存在",
-			Suggestion: "首次写配置后会自动创建",
+			Level:      "info",
+			Message:    i18n.T(i18n.MsgDoctorBackupNotExist),
+			Suggestion: i18n.T(i18n.MsgDoctorBackupSuggestion),
 		})
 	}
 
@@ -215,14 +215,14 @@ func runDoctorChecks(configPath string) doctorReport {
 	st := svc.Status()
 	if !st.Running {
 		issues = append(issues, doctorIssue{
-			Level:      "警告",
-			Message:    "网关未运行",
-			Suggestion: "运行 `ClawDeckX gateway start` 启动",
+			Level:      "warning",
+			Message:    i18n.T(i18n.MsgDoctorGatewayNotRunning),
+			Suggestion: i18n.T(i18n.MsgDoctorGatewayStartSuggestion),
 		})
 	} else {
 		issues = append(issues, doctorIssue{
-			Level:      "信息",
-			Message:    "网关运行正常",
+			Level:      "info",
+			Message:    i18n.T(i18n.MsgDoctorGatewayRunning),
 			Suggestion: "",
 		})
 	}
