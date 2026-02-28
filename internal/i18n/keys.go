@@ -523,6 +523,13 @@ const (
 	MsgPromptDefaultMarker          = "prompt.default_marker"
 	MsgPromptEnterNumberWithDefault = "prompt.enter_number_with_default"
 	MsgPromptEnterNumber            = "prompt.enter_number"
+
+	// Serve messages
+	MsgServeHtmlIndexNotFound         = "serve.html_index_not_found"
+	MsgServeHtmlFrontendLoadFailed    = "serve.html_frontend_load_failed"
+	MsgServePortConflict401           = "serve.port_conflict_401"
+	MsgServePortConflictHttp          = "serve.port_conflict_http"
+	MsgServePortConflictRequestFailed = "serve.port_conflict_request_failed"
 )
 
 // CLI messages (openclaw cli wrapper)
