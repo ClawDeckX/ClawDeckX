@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"time"
@@ -6,7 +6,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ActivityRepo 活动事件数据仓库
 type ActivityRepo struct {
 	db *gorm.DB
 }
@@ -15,26 +14,22 @@ func NewActivityRepo() *ActivityRepo {
 	return &ActivityRepo{db: DB}
 }
 
-// Create 创建活动记录
 func (r *ActivityRepo) Create(activity *Activity) error {
 	return r.db.Create(activity).Error
 }
 
-// Count 统计活动总数
 func (r *ActivityRepo) Count() (int64, error) {
 	var count int64
 	err := r.db.Model(&Activity{}).Count(&count).Error
 	return count, err
 }
 
-// CountSince 统计指定时间之后的活动数
 func (r *ActivityRepo) CountSince(since time.Time) (int64, error) {
 	var count int64
 	err := r.db.Model(&Activity{}).Where("created_at >= ?", since).Count(&count).Error
 	return count, err
 }
 
-// CountByRisk 按风险等级统计（指定时间之后）
 func (r *ActivityRepo) CountByRisk(since time.Time) (map[string]int64, error) {
 	type result struct {
 		Risk  string
@@ -56,7 +51,6 @@ func (r *ActivityRepo) CountByRisk(since time.Time) (map[string]int64, error) {
 	return counts, nil
 }
 
-// CountByCategory 按分类统计（指定时间之后）
 func (r *ActivityRepo) CountByCategory(since time.Time) (map[string]int64, error) {
 	type result struct {
 		Category string
@@ -78,7 +72,6 @@ func (r *ActivityRepo) CountByCategory(since time.Time) (map[string]int64, error
 	return counts, nil
 }
 
-// CountByTool 按工具名统计（工具名存储在 source 字段）
 func (r *ActivityRepo) CountByTool(since time.Time) (map[string]int64, error) {
 	type result struct {
 		Source string
@@ -100,7 +93,6 @@ func (r *ActivityRepo) CountByTool(since time.Time) (map[string]int64, error) {
 	return counts, nil
 }
 
-// CountByHour 按小时统计（返回 "2026-02-07T18" 格式的 key）
 func (r *ActivityRepo) CountByHour(since time.Time) (map[string]int64, error) {
 	type result struct {
 		Hour  string
@@ -122,7 +114,6 @@ func (r *ActivityRepo) CountByHour(since time.Time) (map[string]int64, error) {
 	return counts, nil
 }
 
-// CountByDay 按天统计（返回 "2026-02-07" 格式的 key）
 func (r *ActivityRepo) CountByDay(since time.Time) (map[string]int64, error) {
 	type result struct {
 		Day   string
@@ -144,7 +135,6 @@ func (r *ActivityRepo) CountByDay(since time.Time) (map[string]int64, error) {
 	return counts, nil
 }
 
-// List 分页查询活动
 func (r *ActivityRepo) List(filter ActivityFilter) ([]Activity, int64, error) {
 	var activities []Activity
 	var total int64
@@ -186,7 +176,6 @@ func (r *ActivityRepo) List(filter ActivityFilter) ([]Activity, int64, error) {
 	return activities, total, err
 }
 
-// GetByID 根据 ID 获取活动详情
 func (r *ActivityRepo) GetByID(id uint) (*Activity, error) {
 	var activity Activity
 	err := r.db.First(&activity, id).Error
@@ -196,7 +185,6 @@ func (r *ActivityRepo) GetByID(id uint) (*Activity, error) {
 	return &activity, nil
 }
 
-// ActivityFilter 活动查询筛选条件
 type ActivityFilter struct {
 	Page      int
 	PageSize  int

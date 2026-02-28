@@ -187,7 +187,6 @@ func (h *TemplateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // SeedBuiltIn inserts or updates all built-in templates from the provided list.
 // Called once at startup. Skips if the DB already has the expected number of built-in templates.
 func (h *TemplateHandler) SeedBuiltIn(templates []database.Template) error {
-	// 快速检查：如果数据库中内置模板数量与预期一致，跳过 seed
 	if count, err := h.repo.CountBuiltIn(); err == nil && count == int64(len(templates)) {
 		return nil
 	}

@@ -9,7 +9,6 @@ import (
 	"ClawDeckX/internal/web"
 )
 
-// Service 监控服务，定时扫描 session 文件并推送新事件
 type Service struct {
 	parser       *SessionParser
 	activityRepo *database.ActivityRepo
@@ -29,19 +28,16 @@ func NewService(openclawDir string, wsHub *web.WSHub, intervalSec int) *Service 
 	}
 }
 
-// IsRunning 是否正在运行
 func (s *Service) IsRunning() bool {
 	return s.running
 }
 
-// Start 启动监控循环
 func (s *Service) Start() {
 	s.running = true
 	logger.Monitor.Info().
 		Dur("interval", s.interval).
 		Msg(i18n.T(i18n.MsgLogMonitorStarted))
 
-	// 首次立即扫描
 	s.scan()
 
 	ticker := time.NewTicker(s.interval)
@@ -59,7 +55,6 @@ func (s *Service) Start() {
 	}
 }
 
-// Stop 停止监控循环
 func (s *Service) Stop() {
 	if s.running {
 		close(s.stopCh)
@@ -67,7 +62,6 @@ func (s *Service) Stop() {
 	}
 }
 
-// scan 执行一次扫描
 func (s *Service) scan() {
 	events, err := s.parser.ReadNewEvents()
 	if err != nil {
@@ -85,7 +79,6 @@ func (s *Service) scan() {
 		actionTaken := "allow"
 		risk := evt.Risk
 
-		// 写入数据库
 		activity := &database.Activity{
 			EventID:     evt.EventID,
 			Timestamp:   evt.Timestamp,
@@ -103,7 +96,6 @@ func (s *Service) scan() {
 			continue
 		}
 
-		// 通过 WebSocket 推送给前端
 		s.wsHub.Broadcast("activity", "activity", map[string]interface{}{
 			"event_id":     evt.EventID,
 			"timestamp":    evt.Timestamp.Format(time.RFC3339),

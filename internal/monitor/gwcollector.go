@@ -1,4 +1,4 @@
-package monitor
+﻿package monitor
 
 import (
 	"encoding/json"
@@ -13,8 +13,6 @@ import (
 	"ClawDeckX/internal/web"
 )
 
-// GWCollector 通过 Gateway WebSocket 采集活动事件
-// 替代本地文件扫描，适用于远程 Gateway 模式
 type GWCollector struct {
 	client       *openclaw.GWClient
 	activityRepo *database.ActivityRepo
@@ -23,7 +21,6 @@ type GWCollector struct {
 	stopCh       chan struct{}
 	running      bool
 
-	// 已处理的会话快照（用于增量检测）
 	lastSessions map[string]sessionSnapshot
 }
 
@@ -34,7 +31,6 @@ type sessionSnapshot struct {
 	UpdatedAt    int64
 }
 
-// NewGWCollector 创建 GW 事件采集器
 func NewGWCollector(client *openclaw.GWClient, wsHub *web.WSHub, intervalSec int) *GWCollector {
 	if intervalSec < 10 {
 		intervalSec = 30
@@ -49,17 +45,14 @@ func NewGWCollector(client *openclaw.GWClient, wsHub *web.WSHub, intervalSec int
 	}
 }
 
-// Start 启动采集循环
 func (c *GWCollector) Start() {
 	c.running = true
 	logger.Monitor.Info().
 		Dur("interval", c.interval).
 		Msg(i18n.T(i18n.MsgLogGwCollectorStarted))
 
-	// 注册 Gateway WS 事件回调
 	c.client.SetEventHandler(c.handleEvent)
 
-	// 首次立即采集
 	c.poll()
 
 	ticker := time.NewTicker(c.interval)
@@ -77,7 +70,6 @@ func (c *GWCollector) Start() {
 	}
 }
 
-// Stop 停止采集
 func (c *GWCollector) Stop() {
 	if c.running {
 		close(c.stopCh)
@@ -85,21 +77,17 @@ func (c *GWCollector) Stop() {
 	}
 }
 
-// IsRunning 是否正在运行
 func (c *GWCollector) IsRunning() bool {
 	return c.running
 }
 
-// handleEvent 处理 Gateway WS 推送的实时事件
 func (c *GWCollector) handleEvent(event string, payload json.RawMessage) {
-	// 转发到前端 WebSocket
 	c.wsHub.Broadcast("gw_event", event, payload)
 	// Compatibility alias: some UIs listen for "chat" only.
 	if event == "session.message" {
 		c.wsHub.Broadcast("gw_event", "chat", payload)
 	}
 
-	// 解析并记录有意义的事件
 	switch {
 	case event == "session.updated" || event == "session.created":
 		c.handleSessionEvent(event, payload)
@@ -116,7 +104,6 @@ func (c *GWCollector) handleEvent(event string, payload json.RawMessage) {
 	}
 }
 
-// handleChatStreamEvent 处理 chat 流式事件（delta/final/error）。
 func (c *GWCollector) handleChatStreamEvent(payload json.RawMessage) {
 	var data struct {
 		SessionKey   string `json:"sessionKey"`
@@ -139,7 +126,6 @@ func (c *GWCollector) handleChatStreamEvent(payload json.RawMessage) {
 	}
 }
 
-// handleSessionEvent 处理会话事件
 func (c *GWCollector) handleSessionEvent(event string, payload json.RawMessage) {
 	var data struct {
 		Key       string `json:"key"`
@@ -155,7 +141,6 @@ func (c *GWCollector) handleSessionEvent(event string, payload json.RawMessage) 
 	c.writeActivity("Session", "low", summary, string(payload), data.Key, "allow", data.SessionID)
 }
 
-// handleMessageEvent 处理消息事件
 func (c *GWCollector) handleMessageEvent(payload json.RawMessage) {
 	var data struct {
 		Role    string `json:"role"`
@@ -175,7 +160,6 @@ func (c *GWCollector) handleMessageEvent(payload json.RawMessage) {
 	c.writeActivity("Message", "low", summary, string(payload), data.Model, "allow", "")
 }
 
-// handleToolEvent 处理工具调用事件
 func (c *GWCollector) handleToolEvent(event string, payload json.RawMessage) {
 	var data struct {
 		Tool      string `json:"tool"`
@@ -193,7 +177,6 @@ func (c *GWCollector) handleToolEvent(event string, payload json.RawMessage) {
 		toolName = data.Name
 	}
 
-	// 工具调用记录
 	category := classifyTool(toolName)
 	risk := "low"
 	actionTaken := "allow"
@@ -211,7 +194,6 @@ func (c *GWCollector) handleToolEvent(event string, payload json.RawMessage) {
 	c.writeActivity(category, risk, summary, string(payload), toolName, actionTaken, data.SessionID)
 }
 
-// handleErrorEvent 处理错误事件
 func (c *GWCollector) handleErrorEvent(payload json.RawMessage) {
 	var data struct {
 		Message string `json:"message"`
@@ -225,7 +207,6 @@ func (c *GWCollector) handleErrorEvent(payload json.RawMessage) {
 	c.writeActivity("System", "medium", summary, string(payload), "gateway", "alert", "")
 }
 
-// handleCronEvent 处理定时任务事件
 func (c *GWCollector) handleCronEvent(event string, payload json.RawMessage) {
 	var data struct {
 		Name string `json:"name"`
@@ -243,14 +224,12 @@ func (c *GWCollector) handleCronEvent(event string, payload json.RawMessage) {
 	c.writeActivity("System", "low", summary, string(payload), "cron", "allow", "")
 }
 
-// poll 定时轮询 Gateway 会话数据，检测变化
 func (c *GWCollector) poll() {
 	if !c.client.IsConnected() {
 		logger.Monitor.Debug().Msg(i18n.T(i18n.MsgLogGwPollSkipNotConnected))
 		return
 	}
 
-	// 获取会话列表
 	data, err := c.client.Request("sessions.list", map[string]interface{}{})
 	if err != nil {
 		logger.Monitor.Debug().Err(err).Msg(i18n.T(i18n.MsgLogGwPollSessionsFailed))
@@ -284,7 +263,6 @@ func (c *GWCollector) poll() {
 		prev, exists := c.lastSessions[sess.Key]
 
 		if !exists {
-			// 记录快照
 			c.lastSessions[sess.Key] = sessionSnapshot{
 				InputTokens:  sess.InputTokens,
 				OutputTokens: sess.OutputTokens,
@@ -292,7 +270,6 @@ func (c *GWCollector) poll() {
 				UpdatedAt:    sess.UpdatedAt,
 			}
 
-			// 首次运行：为每个现有会话创建一条概览记录
 			displayName := sess.DisplayName
 			if displayName == "" {
 				displayName = sess.Key
@@ -324,7 +301,6 @@ func (c *GWCollector) poll() {
 			continue
 		}
 
-		// 检测 token 变化（有新的对话活动）
 		if sess.TotalTokens > prev.TotalTokens && sess.UpdatedAt > prev.UpdatedAt {
 			deltaTokens := sess.TotalTokens - prev.TotalTokens
 			deltaInput := sess.InputTokens - prev.InputTokens
@@ -371,7 +347,6 @@ func (c *GWCollector) poll() {
 	}
 }
 
-// writeActivity 写入活动记录并推送 WebSocket
 func (c *GWCollector) writeActivity(category, risk, summary, detail, source, actionTaken, sessionID string) {
 	eventID := fmt.Sprintf("gw-%d", time.Now().UnixNano())
 
@@ -392,7 +367,6 @@ func (c *GWCollector) writeActivity(category, risk, summary, detail, source, act
 		return
 	}
 
-	// 推送到前端 WebSocket
 	c.wsHub.Broadcast("activity", "activity", map[string]interface{}{
 		"event_id":     eventID,
 		"timestamp":    activity.Timestamp.Format(time.RFC3339),
@@ -404,7 +378,6 @@ func (c *GWCollector) writeActivity(category, risk, summary, detail, source, act
 	})
 }
 
-// classifyTool 根据工具名分类
 func classifyTool(tool string) string {
 	lower := strings.ToLower(tool)
 	switch {

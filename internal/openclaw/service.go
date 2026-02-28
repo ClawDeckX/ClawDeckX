@@ -1,4 +1,4 @@
-package openclaw
+﻿package openclaw
 
 import (
 	"ClawDeckX/internal/i18n"
@@ -41,7 +41,6 @@ type Service struct {
 	GatewayPort     int
 	GatewayToken    string
 	gwClient        *GWClient // 远程模式下通过 JSON-RPC 控制网关
-	// 运行时检测缓存
 	runtimeCache     Runtime
 	runtimeCacheTime time.Time
 	runtimeCacheTTL  time.Duration
@@ -55,19 +54,16 @@ func NewService() *Service {
 	}
 }
 
-// SetGWClient 注入 Gateway WebSocket 客户端（远程控制用）
 func (s *Service) SetGWClient(client *GWClient) {
 	s.gwClient = client
 }
 
-// IsRemote 判断是否连接远程 Gateway
 func (s *Service) IsRemote() bool {
 	h := strings.TrimSpace(s.GatewayHost)
 	return h != "" && h != "127.0.0.1" && h != "localhost" && h != "::1"
 }
 
 func (s *Service) DetectRuntime() Runtime {
-	// 如果缓存未过期且有效，直接返回
 	if time.Since(s.runtimeCacheTime) < s.runtimeCacheTTL && s.runtimeCache != RuntimeUnknown {
 		logger.Gateway.Debug().
 			Str("cached_runtime", string(s.runtimeCache)).
@@ -76,10 +72,8 @@ func (s *Service) DetectRuntime() Runtime {
 		return s.runtimeCache
 	}
 
-	// 执行实际检测
 	rt := s.detectRuntimeImpl()
 
-	// 更新缓存
 	s.runtimeCache = rt
 	s.runtimeCacheTime = time.Now()
 
@@ -128,18 +122,14 @@ func (s *Service) detectRuntimeImpl() Runtime {
 }
 
 func (s *Service) Status() Status {
-	// 远程模式：通过 TCP/HTTP 探测
 	if s.IsRemote() {
 		return s.remoteStatus()
 	}
 
-	// 本地模式：获取运行时类型（使用长期缓存）
 	rt := s.DetectRuntime()
 
-	// 轻量级运行状态检查（不依赖运行时类型，避免重复调用 systemctl/docker）
 	running := s.isRunning()
 
-	// 构建详细信息
 	var detail string
 	switch rt {
 	case RuntimeSystemd:
@@ -163,12 +153,10 @@ func (s *Service) Status() Status {
 	return Status{Runtime: rt, Running: running, Detail: detail}
 }
 
-// isRunning 轻量级运行状态检查（只检查进程/端口，不检测 systemd/docker）
 func (s *Service) isRunning() bool {
 	return processExists() || gatewayPortListening()
 }
 
-// remoteStatus 远程 Gateway 状态探测
 func (s *Service) remoteStatus() Status {
 	port := s.GatewayPort
 	if port == 0 {
@@ -176,7 +164,6 @@ func (s *Service) remoteStatus() Status {
 	}
 	addr := fmt.Sprintf("%s:%d", s.GatewayHost, port)
 
-	// TCP 连接探测
 	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
 	if err != nil {
 		return Status{
@@ -187,7 +174,6 @@ func (s *Service) remoteStatus() Status {
 	}
 	conn.Close()
 
-	// HTTP 探测（尝试访问 Gateway 根路径）
 	detail := fmt.Sprintf("远程 Gateway %s（TCP 可达）", addr)
 	client := &http.Client{Timeout: 3 * time.Second}
 	url := fmt.Sprintf("http://%s/health", addr)
@@ -207,7 +193,6 @@ func (s *Service) remoteStatus() Status {
 }
 
 func (s *Service) Start() error {
-	// 远程模式：OpenClaw 网关不支持通过 JSON-RPC 启动，需要在远程服务器上操作
 	if s.IsRemote() {
 		return errors.New(i18n.T(i18n.MsgErrRemoteGatewayNoStart))
 	}
@@ -226,7 +211,6 @@ func (s *Service) Start() error {
 			return errors.New(i18n.T(i18n.MsgErrCommandNotFound))
 		}
 
-		// 读取配置中的端口和 bind
 		port := defaultGatewayPort
 		bind := "loopback"
 		cfgPath := ResolveConfigPath()
@@ -242,7 +226,6 @@ func (s *Service) Start() error {
 		if runtime.GOOS == "windows" {
 			return s.startWindowsGateway(cmdName, bind, port)
 		}
-		// Unix: nohup 后台启动
 		return runCommand("sh", "-c", fmt.Sprintf("nohup %s gateway run --bind %s --port %s > /tmp/openclaw-gateway.log 2>&1 &", cmdName, bind, port))
 	default:
 		return errors.New(i18n.T(i18n.MsgErrUnknownRuntimeStart))
@@ -250,7 +233,6 @@ func (s *Service) Start() error {
 }
 
 func (s *Service) Stop() error {
-	// 远程模式：OpenClaw 网关不支持通过 JSON-RPC 停止，需要在远程服务器上操作
 	if s.IsRemote() {
 		return errors.New(i18n.T(i18n.MsgErrRemoteGatewayNoStop))
 	}
@@ -273,10 +255,7 @@ func (s *Service) Stop() error {
 			}
 		}
 		if runtime.GOOS == "windows" {
-			// Windows: 精确终止 openclaw 相关进程
-			// 注意：不能使用 WINDOWTITLE 过滤，因为浏览器标签页标题 "ClawDeckX" 也会匹配，导致浏览器被关闭
 			_ = runCommand("taskkill", "/F", "/IM", "openclaw.exe")
-			// 终止 node.exe 中运行的 openclaw gateway 进程
 			_ = runCommand("powershell", "-NoProfile", "-Command",
 				"Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'openclaw' -and $_.CommandLine -match 'gateway' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }")
 		} else {
@@ -306,7 +285,6 @@ func waitGatewayDown(maxAttempts int, interval time.Duration) bool {
 }
 
 func (s *Service) Restart() error {
-	// 优先通过 WebSocket JSON-RPC 触发 SIGUSR1 进程内重启
 	if s.gwClient != nil && s.gwClient.IsConnected() {
 		return s.gwClientRestart()
 	}
@@ -340,14 +318,11 @@ func (s *Service) Restart() error {
 	}
 }
 
-// gwClientRestart 通过 config.patch + restartDelayMs 触发网关 SIGUSR1 进程内重启
 func (s *Service) gwClientRestart() error {
-	// 第一步：获取当前配置快照的 hash
 	cfgData, err := s.gwClient.RequestWithTimeout("config.get", map[string]interface{}{}, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf(i18n.T(i18n.MsgErrGetGatewayConfigFailed), err)
 	}
-	// 从返回结果中提取 hash
 	var baseHash string
 	if len(cfgData) > 0 {
 		var result map[string]interface{}
@@ -357,7 +332,6 @@ func (s *Service) gwClientRestart() error {
 			}
 		}
 	}
-	// 第二步：空 patch + restartDelayMs=0 触发 SIGUSR1 重启
 	params := map[string]interface{}{
 		"raw":            "{}",
 		"restartDelayMs": 0,
@@ -411,7 +385,6 @@ func processExists() bool {
 }
 
 func processExistsWindows() bool {
-	// 方法1: PowerShell Get-CimInstance（Windows 10/11 推荐）
 	out, err := runOutput("powershell", "-NoProfile", "-Command",
 		"Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Select-Object -ExpandProperty CommandLine")
 	if err == nil {
@@ -423,7 +396,6 @@ func processExistsWindows() bool {
 		}
 	}
 
-	// 方法2: wmic 降级（旧版 Windows）
 	out, err = runOutput("wmic", "process", "where", "name='node.exe'", "get", "commandline")
 	if err == nil {
 		for _, line := range strings.Split(out, "\n") {
@@ -530,10 +502,7 @@ func configGatewayBind(path string) string {
 	return ""
 }
 
-// startWindowsGateway Windows 专用：启动网关子进程，stdout/stderr 重定向到日志文件，
-// 使用 CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS 使子进程完全独立于父进程。
 func (s *Service) startWindowsGateway(cmdName, bind, port string) error {
-	// 准备日志文件
 	stateDir := ResolveStateDir()
 	if stateDir == "" {
 		stateDir = filepath.Join(os.TempDir(), ".openclaw")
@@ -544,7 +513,6 @@ func (s *Service) startWindowsGateway(cmdName, bind, port string) error {
 
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
-		// 降级到 NUL
 		logFile, _ = os.Open(os.DevNull)
 	}
 
@@ -554,7 +522,6 @@ func (s *Service) startWindowsGateway(cmdName, bind, port string) error {
 	c.Stdin = nil
 
 	// CREATE_NEW_PROCESS_GROUP (0x200) | DETACHED_PROCESS (0x8)
-	// 使子进程不继承父进程的控制台，也不共享进程组信号
 	c.SysProcAttr = &sysProcAttrDetached
 
 	if err := c.Start(); err != nil {
@@ -562,13 +529,11 @@ func (s *Service) startWindowsGateway(cmdName, bind, port string) error {
 		return fmt.Errorf(i18n.T(i18n.MsgErrStartGatewayProcessFailed), err)
 	}
 
-	// 释放进程句柄，让子进程完全独立运行
 	go func() {
 		c.Wait()
 		logFile.Close()
 	}()
 
-	// 等待网关端口就绪（最多 15 秒）
 	for i := 0; i < 30; i++ {
 		time.Sleep(500 * time.Millisecond)
 		if gatewayPortListening() {
@@ -577,7 +542,6 @@ func (s *Service) startWindowsGateway(cmdName, bind, port string) error {
 		}
 	}
 
-	// 端口未就绪但进程可能还在启动中，不算失败
 	output.Debugf("网关启动命令已执行，日志: %s\n", logPath)
 	return nil
 }
@@ -640,7 +604,6 @@ func runOutput(cmd string, args ...string) (string, error) {
 }
 
 func portListedBySocketTools(port string) bool {
-	// 跨平台首选：直接 TCP 连接探测
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+port, time.Second)
 	if err == nil {
 		conn.Close()

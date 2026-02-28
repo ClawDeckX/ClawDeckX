@@ -1,4 +1,4 @@
-package openclaw
+﻿package openclaw
 
 import (
 	"encoding/json"
@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// DiagnoseItemStatus 诊断项状态
 type DiagnoseItemStatus string
 
 const (
@@ -20,7 +19,6 @@ const (
 	DiagnoseWarn DiagnoseItemStatus = "warn"
 )
 
-// DiagnoseItem 单个诊断项
 type DiagnoseItem struct {
 	Name       string             `json:"name"`
 	Label      string             `json:"label"`
@@ -30,14 +28,12 @@ type DiagnoseItem struct {
 	Suggestion string             `json:"suggestion,omitempty"`
 }
 
-// DiagnoseResult 诊断结果
 type DiagnoseResult struct {
 	Items   []DiagnoseItem `json:"items"`
 	Summary string         `json:"summary"` // pass | fail | warn
 	Message string         `json:"message"`
 }
 
-// DiagnoseGateway 执行网关诊断
 func DiagnoseGateway(host string, port int) *DiagnoseResult {
 	if host == "" {
 		host = "127.0.0.1"
@@ -49,14 +45,12 @@ func DiagnoseGateway(host string, port int) *DiagnoseResult {
 	result := &DiagnoseResult{}
 	overallStatus := DiagnosePass
 
-	// 1. OpenClaw 是否已安装
 	item := checkOpenClawInstalled()
 	result.Items = append(result.Items, item)
 	if item.Status == DiagnoseFail {
 		overallStatus = DiagnoseFail
 	}
 
-	// 2. 配置文件是否存在
 	configPath := openclawConfigPath()
 	item = checkConfigExists(configPath)
 	result.Items = append(result.Items, item)
@@ -64,42 +58,36 @@ func DiagnoseGateway(host string, port int) *DiagnoseResult {
 		overallStatus = DiagnoseFail
 	}
 
-	// 3. 配置文件是否合法
 	item = checkConfigValid(configPath)
 	result.Items = append(result.Items, item)
 	if item.Status == DiagnoseFail && overallStatus != DiagnoseFail {
 		overallStatus = DiagnoseFail
 	}
 
-	// 4. Gateway 进程是否存在
 	item = checkGatewayProcess()
 	result.Items = append(result.Items, item)
 	if item.Status == DiagnoseFail && overallStatus != DiagnoseFail {
 		overallStatus = DiagnoseFail
 	}
 
-	// 5. Gateway 端口是否可达
 	item = checkPortReachable(host, port)
 	result.Items = append(result.Items, item)
 	if item.Status == DiagnoseFail && overallStatus != DiagnoseFail {
 		overallStatus = DiagnoseFail
 	}
 
-	// 6. Gateway API 是否响应
 	item = checkGatewayAPI(host, port)
 	result.Items = append(result.Items, item)
 	if item.Status == DiagnoseFail && overallStatus != DiagnoseFail {
 		overallStatus = DiagnoseFail
 	}
 
-	// 7. 端口占用检测
 	item = checkPortConflict(host, port)
 	result.Items = append(result.Items, item)
 	if item.Status == DiagnoseWarn && overallStatus == DiagnosePass {
 		overallStatus = DiagnoseWarn
 	}
 
-	// 8. Auth Token 匹配检测
 	item = checkAuthToken(host, port, configPath)
 	result.Items = append(result.Items, item)
 	if item.Status == DiagnoseWarn && overallStatus == DiagnosePass {
@@ -130,7 +118,6 @@ func checkOpenClawInstalled() DiagnoseItem {
 		LabelEn: "OpenClaw Installed",
 	}
 
-	// 检测 openclaw
 	out, err := exec.Command("openclaw", "--version").CombinedOutput()
 	if err == nil {
 		version := strings.TrimSpace(string(out))
@@ -139,7 +126,6 @@ func checkOpenClawInstalled() DiagnoseItem {
 		return item
 	}
 
-	// 检测 openclaw-cn
 	out, err = exec.Command("openclaw-cn", "--version").CombinedOutput()
 	if err == nil {
 		version := strings.TrimSpace(string(out))
@@ -269,7 +255,6 @@ func checkGatewayAPI(host string, port int) DiagnoseItem {
 
 	addr := fmt.Sprintf("%s:%d", host, port)
 
-	// 先检查端口是否可达
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		item.Status = DiagnoseFail
@@ -278,7 +263,6 @@ func checkGatewayAPI(host string, port int) DiagnoseItem {
 	}
 	conn.Close()
 
-	// 尝试 HTTP 请求
 	client := &http.Client{Timeout: 3 * time.Second}
 	url := fmt.Sprintf("http://%s/health", addr)
 	resp, err := client.Get(url)
@@ -312,14 +296,12 @@ func checkPortConflict(host string, port int) DiagnoseItem {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
-		// 端口没人监听，无冲突
 		item.Status = DiagnosePass
 		item.Detail = fmt.Sprintf("端口 %d 未被占用（Gateway 未运行）", port)
 		return item
 	}
 	conn.Close()
 
-	// 端口有人监听，检查是否是 Gateway
 	if processExists() {
 		item.Status = DiagnosePass
 		item.Detail = fmt.Sprintf("端口 %d 由 Gateway 进程占用", port)
@@ -339,7 +321,6 @@ func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 		LabelEn: "Auth Token Match",
 	}
 
-	// 先检查端口是否可达
 	addr := fmt.Sprintf("%s:%d", host, port)
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
@@ -349,7 +330,6 @@ func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 	}
 	conn.Close()
 
-	// 读取配置中的 token
 	if configPath == "" {
 		item.Status = DiagnoseWarn
 		item.Detail = "跳过：配置路径未知"
@@ -370,7 +350,6 @@ func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 		return item
 	}
 
-	// 提取 token
 	token := ""
 	if gw, ok := cfg["gateway"].(map[string]interface{}); ok {
 		if auth, ok := gw["auth"].(map[string]interface{}); ok {
@@ -386,7 +365,6 @@ func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 		return item
 	}
 
-	// 用 token 请求 Gateway API
 	client := &http.Client{Timeout: 3 * time.Second}
 	url := fmt.Sprintf("http://%s/api/v1/status", addr)
 	req, _ := http.NewRequest("GET", url, nil)

@@ -1,4 +1,4 @@
-package diagnostics
+﻿package diagnostics
 
 type Issue struct {
 	Level      string
@@ -12,7 +12,6 @@ type Report struct {
 }
 
 func Run() Report {
-	// 占位报告，后续补充配置与环境检查。
 	return Report{
 		Issues: []Issue{
 			{

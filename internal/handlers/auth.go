@@ -292,7 +292,6 @@ func (h *AuthHandler) ChangeUsername(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		h.auditRepo.Create(&database.AuditLog{
 			UserID:   user.ID,
@@ -306,7 +305,6 @@ func (h *AuthHandler) ChangeUsername(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 检查用户名是否已存在
 	if existing, _ := h.userRepo.FindByUsername(req.NewUsername); existing != nil && existing.ID != user.ID {
 		web.Fail(w, r, "USERNAME_EXISTS", "用户名已存在", http.StatusBadRequest)
 		return

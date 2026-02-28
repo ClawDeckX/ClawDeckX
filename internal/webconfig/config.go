@@ -68,7 +68,6 @@ type Config struct {
 	Alert    AlertConfig    `json:"alert"`
 }
 
-// defaultDataDir 返回 ClawDeckX 自身的数据目录（存放 ClawDeckX.db/json/log）
 func defaultDataDir() string {
 	exe, err := os.Executable()
 	if err != nil {
@@ -78,7 +77,6 @@ func defaultDataDir() string {
 	return filepath.Join(exeDir, "data")
 }
 
-// defaultOpenClawConfigDir 返回 OpenClaw 网关的配置目录（~/.openclaw）
 func defaultOpenClawConfigDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {

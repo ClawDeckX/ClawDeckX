@@ -14,13 +14,11 @@ import (
 	"time"
 )
 
-// InstallConfig 安装配置
 type InstallConfig struct {
 	Provider string `json:"provider"` // anthropic | openai | ...
 	APIKey   string `json:"apiKey"`
 	Model    string `json:"model,omitempty"`
 	BaseURL  string `json:"baseUrl,omitempty"`
-	// 安装选项
 	Version           string `json:"version,omitempty"`           // "openclaw"
 	Registry          string `json:"registry,omitempty"`          // npm 镜像源
 	SkipConfig        bool   `json:"skipConfig,omitempty"`        // 跳过配置
@@ -31,7 +29,6 @@ type InstallConfig struct {
 	SudoPassword      string `json:"sudoPassword,omitempty"`      // sudo 密码（非 root 且需要密码时）
 }
 
-// InstallSummaryItem 安装详单条目
 type InstallSummaryItem struct {
 	Label    string `json:"label"`              // 显示名称
 	Status   string `json:"status"`             // ok | warn | fail | skip
@@ -39,7 +36,6 @@ type InstallSummaryItem struct {
 	Category string `json:"category,omitempty"` // deps | optional | config | gateway
 }
 
-// InstallResult 安装结果
 type InstallResult struct {
 	Success      bool   `json:"success"`
 	Version      string `json:"version,omitempty"`
@@ -49,14 +45,12 @@ type InstallResult struct {
 	ErrorDetails string `json:"errorDetails,omitempty"`
 }
 
-// Installer 安装器
 type Installer struct {
 	emitter      *EventEmitter
 	env          *EnvironmentReport
 	sudoPassword string // sudo 密码（非 root 且需要密码时使用）
 }
 
-// NewInstaller 创建安装器
 func NewInstaller(emitter *EventEmitter, env *EnvironmentReport) *Installer {
 	return &Installer{
 		emitter: emitter,
@@ -64,7 +58,6 @@ func NewInstaller(emitter *EventEmitter, env *EnvironmentReport) *Installer {
 	}
 }
 
-// newSC 创建带 sudo 密码的 StreamCommand
 func (i *Installer) newSC(phase, step string) *StreamCommand {
 	if i.sudoPassword != "" {
 		return NewStreamCommandWithSudo(i.emitter, phase, step, i.sudoPassword)
@@ -72,7 +65,6 @@ func (i *Installer) newSC(phase, step string) *StreamCommand {
 	return NewStreamCommand(i.emitter, phase, step)
 }
 
-// InstallNode 安装 Node.js（多层级降级策略）
 func (i *Installer) InstallNode(ctx context.Context) error {
 	if i.env.Tools["node"].Installed {
 		i.emitter.EmitLog("Node.js 已安装，跳过")
@@ -81,10 +73,8 @@ func (i *Installer) InstallNode(ctx context.Context) error {
 
 	i.emitter.EmitStep("install", "install-node", "正在安装 Node.js...", 10)
 
-	// 策略 1: 尝试系统包管理器
 	i.emitter.EmitLog("尝试使用系统包管理器安装...")
 	if err := i.installNodeViaPackageManager(ctx); err == nil {
-		// 验证安装
 		if i.verifyNodeInstalled() {
 			i.emitter.EmitLog("✓ Node.js 通过系统包管理器安装成功")
 			return nil
@@ -94,7 +84,6 @@ func (i *Installer) InstallNode(ctx context.Context) error {
 		i.emitter.EmitLog(fmt.Sprintf("系统包管理器安装失败: %v", err))
 	}
 
-	// 策略 2: 尝试 fnm (Fast Node Manager)
 	if runtime.GOOS != "linux" || i.env.HasSudo {
 		i.emitter.EmitLog("尝试使用 fnm 安装...")
 		if err := i.installNodeViaFnm(ctx); err == nil {
@@ -108,12 +97,10 @@ func (i *Installer) InstallNode(ctx context.Context) error {
 		}
 	}
 
-	// 策略 3: 提供手动安装指引
 	i.emitter.EmitLog("自动安装失败，请手动安装 Node.js")
 	return i.provideNodeInstallGuide()
 }
 
-// installNodeViaPackageManager 使用系统包管理器安装 Node.js
 func (i *Installer) installNodeViaPackageManager(ctx context.Context) error {
 	cmd := getNodeInstallCommand(i.env)
 	if cmd == "" || strings.Contains(cmd, "请访问") {
@@ -124,36 +111,29 @@ func (i *Installer) installNodeViaPackageManager(ctx context.Context) error {
 	return sc.RunShell(ctx, cmd)
 }
 
-// installNodeViaFnm 使用 fnm 安装 Node.js
 func (i *Installer) installNodeViaFnm(ctx context.Context) error {
 	switch runtime.GOOS {
 	case "windows":
-		// Windows: 使用 PowerShell 安装 fnm
 		if !i.env.Tools["powershell"].Installed {
 			return fmt.Errorf(i18n.T(i18n.MsgErrNeedPowershell))
 		}
 		sc := NewStreamCommand(i.emitter, "install", "install-fnm")
-		// 安装 fnm
 		installCmd := "irm https://fnm.vercel.app/install.ps1 | iex"
 		if err := sc.RunShell(ctx, installCmd); err != nil {
 			return err
 		}
-		// 使用 fnm 安装 Node.js 22
 		fnmCmd := "fnm install 22 && fnm default 22 && fnm use 22"
 		return sc.RunShell(ctx, fnmCmd)
 
 	case "darwin", "linux":
-		// Unix: 使用 curl 安装 fnm
 		if !i.env.Tools["curl"].Installed {
 			return fmt.Errorf(i18n.T(i18n.MsgErrNeedCurl))
 		}
 		sc := NewStreamCommand(i.emitter, "install", "install-fnm")
-		// 安装 fnm
 		installCmd := "curl -fsSL https://fnm.vercel.app/install | bash"
 		if err := sc.RunShell(ctx, installCmd); err != nil {
 			return err
 		}
-		// 配置环境并安装 Node.js
 		home, _ := os.UserHomeDir()
 		fnmPath := filepath.Join(home, ".fnm")
 		fnmCmd := fmt.Sprintf("export PATH=%s:$PATH && fnm install 22 && fnm default 22 && fnm use 22", fnmPath)
@@ -164,14 +144,11 @@ func (i *Installer) installNodeViaFnm(ctx context.Context) error {
 	}
 }
 
-// verifyNodeInstalled 验证 Node.js 是否安装成功
 func (i *Installer) verifyNodeInstalled() bool {
-	// 重新扫描以检测新安装的 Node.js
 	info := detectNodeWithFallback()
 	return info.Installed
 }
 
-// provideNodeInstallGuide 提供 Node.js 手动安装指引
 func (i *Installer) provideNodeInstallGuide() error {
 	var guide string
 	switch runtime.GOOS {
@@ -217,7 +194,6 @@ func (i *Installer) provideNodeInstallGuide() error {
 	return fmt.Errorf(i18n.T(i18n.MsgErrNeedManualInstallNode))
 }
 
-// InstallGit 安装 Git
 func (i *Installer) InstallGit(ctx context.Context) error {
 	if i.env.Tools["git"].Installed {
 		i.emitter.EmitLog("Git 已安装，跳过")
@@ -240,7 +216,6 @@ func (i *Installer) InstallGit(ctx context.Context) error {
 	return nil
 }
 
-// InstallOpenClaw 安装 OpenClaw（多层级降级策略）
 func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 	if i.env.OpenClawInstalled {
 		i.emitter.EmitLog("OpenClaw 已安装，跳过")
@@ -249,7 +224,6 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 
 	i.emitter.EmitStep("install", "install-openclaw", "正在安装 OpenClaw...", 30)
 
-	// 策略 1: 优先使用 npm（最可靠）
 	npmAvailable := i.env.Tools["npm"].Installed || detectTool("npm", "--version").Installed
 	if npmAvailable {
 		i.emitter.EmitLog("尝试使用 npm 安装...")
@@ -264,7 +238,6 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 		}
 	}
 
-	// 策略 2: 尝试官方安装脚本
 	if i.env.RecommendedMethod == "installer-script" || i.env.Tools["curl"].Installed {
 		i.emitter.EmitLog("尝试使用官方安装脚本...")
 		if err := i.installViaScript(ctx); err == nil {
@@ -278,12 +251,10 @@ func (i *Installer) InstallOpenClaw(ctx context.Context) error {
 		}
 	}
 
-	// 策略 3: 提供手动安装指引
 	i.emitter.EmitLog("自动安装失败，请手动安装 OpenClaw")
 	return i.provideOpenClawInstallGuide()
 }
 
-// InstallClawHub 安装 ClawHub CLI（技能市场工具）
 func (i *Installer) InstallClawHub(ctx context.Context, registry string) error {
 	if detectTool("clawhub", "--version").Installed {
 		i.emitter.EmitLog("ClawHub CLI 已安装，跳过")
@@ -311,20 +282,16 @@ func (i *Installer) InstallClawHub(ctx context.Context, registry string) error {
 	return nil
 }
 
-// verifyOpenClawInstalled 验证 OpenClaw 是否安装成功
 func (i *Installer) verifyOpenClawInstalled() bool {
-	// 重新检测
 	info := detectTool("openclaw", "--version")
 	return info.Installed
 }
 
-// InstallOpenClawWithConfig 使用配置安装 OpenClaw（支持镜像源选择）
 func (i *Installer) InstallOpenClawWithConfig(ctx context.Context, config InstallConfig) error {
 	i.emitter.EmitStep("install", "install-openclaw", "正在安装 OpenClaw...", 30)
 
 	cmdName := "openclaw"
 
-	// 使用 npm 全局安装（所有平台统一方案）
 	if i.env.Tools["npm"].Installed || detectTool("npm", "--version").Installed {
 		i.emitter.EmitLog("使用 npm 全局安装...")
 		if err := i.installViaNpmWithOptions(ctx, "openclaw", config.Registry); err == nil {
@@ -333,19 +300,16 @@ func (i *Installer) InstallOpenClawWithConfig(ctx context.Context, config Instal
 				return nil
 			}
 			i.emitter.EmitLog("⚠ npm 安装完成但未检测到命令，可能需要重启")
-			// 即使未检测到命令，也认为安装成功（可能需要重启）
 			return nil
 		} else {
 			i.emitter.EmitLog(fmt.Sprintf("npm 安装失败: %v", err))
 		}
 	}
 
-	// 策略 3: 提供手动安装指引
 	i.emitter.EmitLog("自动安装失败，请手动安装 OpenClaw")
 	return i.provideOpenClawInstallGuideWithVersion(config.Version)
 }
 
-// provideOpenClawInstallGuideWithVersion 提供 OpenClaw 手动安装指引
 func (i *Installer) provideOpenClawInstallGuideWithVersion(version string) error {
 	guide := `请手动安装 openclaw:
 
@@ -376,7 +340,6 @@ func (i *Installer) provideOpenClawInstallGuideWithVersion(version string) error
 	return fmt.Errorf(i18n.T(i18n.MsgErrNeedManualInstallOpenclaw))
 }
 
-// provideOpenClawInstallGuide 提供 OpenClaw 手动安装指引
 func (i *Installer) provideOpenClawInstallGuide() error {
 	guide := `请手动安装 OpenClaw:
 
@@ -406,16 +369,13 @@ func (i *Installer) provideOpenClawInstallGuide() error {
 	return fmt.Errorf(i18n.T(i18n.MsgErrNeedManualInstallOpenclaw))
 }
 
-// installViaScript 使用安装脚本安装（旧版，保留兼容）
 func (i *Installer) installViaScript(ctx context.Context) error {
 	return i.installViaScriptWithConfig(ctx, InstallConfig{Version: "openclaw"})
 }
 
-// installViaScriptWithConfig 使用安装脚本安装（支持版本和 --no-onboard）
 func (i *Installer) installViaScriptWithConfig(ctx context.Context, config InstallConfig) error {
 	sc := i.newSC("install", "install-openclaw")
 
-	// 安装脚本 URL
 	scriptURL := "https://openclaw.ai/install"
 
 	// Windows
@@ -423,45 +383,37 @@ func (i *Installer) installViaScriptWithConfig(ctx context.Context, config Insta
 		if !i.env.Tools["powershell"].Installed {
 			return fmt.Errorf(i18n.T(i18n.MsgErrPowershellNotDetected))
 		}
-		// 使用 --no-onboard 参数跳过引导向导
 		cmd := fmt.Sprintf("iwr -useb %s.ps1 | iex -Command '& { $input | iex } --no-onboard'", scriptURL)
 		i.emitter.EmitLog(fmt.Sprintf("执行: %s", cmd))
 		return sc.RunShell(ctx, cmd)
 	}
 
-	// 需要 curl
 	if !i.env.Tools["curl"].Installed {
 		return fmt.Errorf(i18n.T(i18n.MsgErrCurlNotDetected))
 	}
 
-	// Linux/macOS - 使用 --no-onboard 参数
 	cmd := fmt.Sprintf("curl -fsSL %s.sh | bash -s -- --no-onboard", scriptURL)
 	i.emitter.EmitLog(fmt.Sprintf("执行: %s", cmd))
 	return sc.RunShell(ctx, cmd)
 }
 
-// installViaNpm 使用 npm 安装
 func (i *Installer) installViaNpm(ctx context.Context) error {
 	return i.installViaNpmWithOptions(ctx, "openclaw", "")
 }
 
-// installViaNpmWithOptions 使用 npm 安装（支持版本和镜像源选择）
 func (i *Installer) installViaNpmWithOptions(ctx context.Context, version string, registry string) error {
 	sc := i.newSC("install", "install-"+version)
 
 	pkgName := version + "@latest"
 	i.emitter.EmitLog(fmt.Sprintf("安装 %s...", version))
 
-	// 构建安装命令
 	cmd := "npm install -g " + pkgName
 
-	// 添加镜像源
 	if registry != "" {
 		cmd += " --registry=" + registry
 		i.emitter.EmitLog(fmt.Sprintf("使用镜像源: %s", registry))
 	}
 
-	// 非 root 的 Linux/macOS 需要 sudo 执行全局安装
 	if runtime.GOOS != "windows" && os.Getuid() != 0 {
 		cmd = "sudo " + cmd
 	}
@@ -469,16 +421,12 @@ func (i *Installer) installViaNpmWithOptions(ctx context.Context, version string
 	return sc.RunShell(ctx, cmd)
 }
 
-// ConfigureOpenClaw 通过 onboard --non-interactive 配置 OpenClaw
-// 这会生成正确格式的 openclaw.json，包括网关、模型、workspace 等配置
 func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig) error {
 	i.emitter.EmitStep("configure", "configure-openclaw", "正在配置 OpenClaw...", 60)
 
-	// 解析完整路径（安装后 PATH 可能未刷新）
 	cmdName := resolveOpenClawFullPath("openclaw")
 	i.emitter.EmitLog(fmt.Sprintf("使用命令: %s", cmdName))
 
-	// 构建 onboard --non-interactive 参数
 	args := []string{
 		"onboard",
 		"--non-interactive",
@@ -491,13 +439,11 @@ func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig)
 		"--skip-health",
 	}
 
-	// 自定义 provider 或带 baseUrl 的配置，onboard 无法处理，直接写入最小配置
 	if config.Provider == "custom" || config.BaseURL != "" {
 		i.emitter.EmitLog("自定义服务商/端点，直接写入配置...")
 		return i.writeMinimalConfig(config)
 	}
 
-	// 根据 provider 设置 auth-choice 和 API Key
 	if config.APIKey != "" {
 		switch config.Provider {
 		case "anthropic":
@@ -513,7 +459,6 @@ func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig)
 		case "xai":
 			args = append(args, "--xai-api-key", config.APIKey)
 		case "deepseek", "together", "groq":
-			// OpenAI 兼容 API，直接写入最小配置（onboard 不支持这些 provider）
 			i.emitter.EmitLog(fmt.Sprintf("%s 使用 OpenAI 兼容 API，直接写入配置...", config.Provider))
 			return i.writeMinimalConfig(config)
 		default:
@@ -535,7 +480,6 @@ func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig)
 	return nil
 }
 
-// maskSensitiveArgs 遮蔽敏感参数用于日志输出
 func maskSensitiveArgs(args []string) []string {
 	masked := make([]string, len(args))
 	copy(masked, args)
@@ -551,20 +495,17 @@ func maskSensitiveArgs(args []string) []string {
 	return masked
 }
 
-// ensureDefaultConfig 确保配置文件存在，通过 openclaw onboard 生成默认配置
 func (i *Installer) ensureDefaultConfig() error {
 	cfgPath := GetOpenClawConfigPath()
 	if cfgPath == "" {
 		return fmt.Errorf(i18n.T(i18n.MsgErrCannotGetConfigPath))
 	}
 
-	// 如果配置文件已存在且合法，不覆盖
 	if exists, valid, _ := checkConfigFileValid(cfgPath); exists && valid {
 		i.emitter.EmitLog(fmt.Sprintf("配置文件已存在: %s", cfgPath))
 		return nil
 	}
 
-	// 通过 openclaw onboard --non-interactive 生成默认配置
 	cmdName := resolveOpenClawFullPath("openclaw")
 	i.emitter.EmitLog(fmt.Sprintf("使用 %s onboard 生成默认配置...", cmdName))
 
@@ -593,7 +534,6 @@ func (i *Installer) ensureDefaultConfig() error {
 	return nil
 }
 
-// writeMinimalConfig 写入最小可用配置（onboard 失败或自定义 provider 时使用）
 func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 	configDir := ResolveStateDir()
 	if configDir == "" {
@@ -605,13 +545,11 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 		return fmt.Errorf(i18n.T(i18n.MsgErrCreateConfigDirFailed), err)
 	}
 
-	// 确定 provider 名称（custom 映射为实际使用的 API 类型）
 	providerName := config.Provider
 	if providerName == "custom" {
 		providerName = "custom"
 	}
 
-	// 确定默认模型
 	model := config.Model
 	if model == "" {
 		switch providerName {
@@ -630,7 +568,6 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 		}
 	}
 
-	// 确定默认 baseUrl
 	baseUrl := config.BaseURL
 	if baseUrl == "" {
 		switch providerName {
@@ -639,7 +576,6 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 		}
 	}
 
-	// 构建符合 openclaw schema 的最小配置
 	minConfig := map[string]interface{}{
 		"gateway": map[string]interface{}{
 			"mode": "local",
@@ -649,7 +585,6 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 	}
 
 	if config.APIKey != "" {
-		// 构建 provider 配置
 		providerConfig := map[string]interface{}{
 			"apiKey": config.APIKey,
 			"api":    "openai-completions",
@@ -658,7 +593,6 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 			},
 		}
 
-		// 设置 API 类型
 		switch providerName {
 		case "anthropic":
 			providerConfig["api"] = "anthropic"
@@ -666,7 +600,6 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 			providerConfig["api"] = "google-genai"
 		}
 
-		// 设置 baseUrl
 		if baseUrl != "" {
 			providerConfig["baseUrl"] = baseUrl
 		}
@@ -677,7 +610,6 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 			},
 		}
 
-		// 设置主模型
 		minConfig["agents"] = map[string]interface{}{
 			"defaults": map[string]interface{}{
 				"model": map[string]interface{}{
@@ -700,16 +632,13 @@ func (i *Installer) writeMinimalConfig(config InstallConfig) error {
 	return nil
 }
 
-// StartGateway 启动 Gateway
 func (i *Installer) StartGateway(ctx context.Context) error {
 	return i.StartGatewayWithConfig(ctx, InstallConfig{})
 }
 
-// StartGatewayWithConfig 启动 Gateway
 func (i *Installer) StartGatewayWithConfig(ctx context.Context, config InstallConfig) error {
 	i.emitter.EmitStep("start", "check-config", "检查配置文件...", 76)
 
-	// 先检查配置文件是否存在且合法
 	cfgPath := GetOpenClawConfigPath()
 	cfgExists, cfgValid, cfgDetail := checkConfigFileValid(cfgPath)
 	if !cfgExists {
@@ -730,7 +659,6 @@ func (i *Installer) StartGatewayWithConfig(ctx context.Context, config InstallCo
 		i.emitter.EmitLog("⚠️ 尚未配置模型服务商，Gateway 启动后请在配置器中添加")
 	}
 
-	// 安装完成后等待 3 秒再启动网关，确保环境就绪
 	for countdown := 3; countdown > 0; countdown-- {
 		i.emitter.EmitLog(fmt.Sprintf("⏳ %d 秒后启动 Gateway...", countdown))
 		time.Sleep(1 * time.Second)
@@ -738,7 +666,6 @@ func (i *Installer) StartGatewayWithConfig(ctx context.Context, config InstallCo
 
 	i.emitter.EmitStep("start", "start-gateway", "正在启动 Gateway...", 80)
 
-	// 使用与网关监控页面相同的 Service.Start() 启动网关
 	svc := openclaw.NewService()
 	st := svc.Status()
 	if st.Running {
@@ -753,7 +680,6 @@ func (i *Installer) StartGatewayWithConfig(ctx context.Context, config InstallCo
 		return nil // 不视为致命错误
 	}
 
-	// 等待 Gateway 就绪
 	i.emitter.EmitLog("⏳ 正在等待 Gateway 就绪...")
 	time.Sleep(2 * time.Second)
 	for attempt := 1; attempt <= 15; attempt++ {
@@ -766,7 +692,6 @@ func (i *Installer) StartGatewayWithConfig(ctx context.Context, config InstallCo
 		time.Sleep(1 * time.Second)
 	}
 
-	// 30 秒后仍未就绪，读取日志尾部帮助诊断
 	i.emitter.EmitLog("⚠️ Gateway 30 秒内未就绪")
 	if stateDir := ResolveStateDir(); stateDir != "" {
 		logPath := filepath.Join(stateDir, "logs", "gateway.log")
@@ -788,15 +713,11 @@ func (i *Installer) StartGatewayWithConfig(ctx context.Context, config InstallCo
 	return nil
 }
 
-// resolveOpenClawFullPath 解析 openclaw 命令的完整路径
-// 安装后当前进程的 PATH 可能未刷新，需要主动查找 npm 全局 bin 目录
 func resolveOpenClawFullPath(cmdName string) string {
-	// 1. 先尝试 LookPath（PATH 中已有）
 	if p, err := exec.LookPath(cmdName); err == nil {
 		return p
 	}
 
-	// 2. 查询 npm 全局 bin 目录
 	npmBin := getNpmGlobalBin()
 	if npmBin != "" {
 		var candidate string
@@ -810,7 +731,6 @@ func resolveOpenClawFullPath(cmdName string) string {
 		}
 	}
 
-	// 3. Windows 常见 npm 全局路径
 	if runtime.GOOS == "windows" {
 		home, _ := os.UserHomeDir()
 		candidates := []string{
@@ -827,17 +747,14 @@ func resolveOpenClawFullPath(cmdName string) string {
 		}
 	}
 
-	// 4. 降级返回原始命令名
 	return cmdName
 }
 
-// getNpmGlobalBin 获取 npm 全局 bin 目录
 func getNpmGlobalBin() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "npm", "bin", "-g").Output()
 	if err != nil {
-		// 降级: npm prefix -g
 		out, err = exec.CommandContext(ctx, "npm", "prefix", "-g").Output()
 		if err != nil {
 			return ""
@@ -851,7 +768,6 @@ func getNpmGlobalBin() string {
 	return strings.TrimSpace(string(out))
 }
 
-// RunDoctor 运行诊断
 func (i *Installer) RunDoctor(ctx context.Context) (*DoctorResult, error) {
 	i.emitter.EmitStep("verify", "doctor", "正在运行诊断...", 90)
 
@@ -872,16 +788,13 @@ func (i *Installer) RunDoctor(ctx context.Context) (*DoctorResult, error) {
 	return result, nil
 }
 
-// DoctorResult 诊断结果
 type DoctorResult struct {
 	Success bool   `json:"success"`
 	Output  string `json:"output"`
 	Error   string `json:"error,omitempty"`
 }
 
-// InstallVPNTool 安装内网穿透工具（ZeroTier 或 Tailscale）
 func (i *Installer) InstallVPNTool(ctx context.Context, tool string) error {
-	// 检查是否已安装
 	if tool == "zerotier" {
 		if detectTool("zerotier-cli", "--version").Installed {
 			i.emitter.EmitLog("ZeroTier 已安装，跳过")
@@ -901,7 +814,6 @@ func (i *Installer) InstallVPNTool(ctx context.Context, tool string) error {
 	case "zerotier":
 		switch runtime.GOOS {
 		case "windows":
-			// Windows: 使用 winget 或提供下载链接
 			if detectTool("winget", "--version").Installed {
 				return sc.RunShell(ctx, "winget install --id ZeroTier.ZeroTierOne --accept-package-agreements --accept-source-agreements")
 			}
@@ -1086,27 +998,21 @@ func (i *Installer) installSingleSkillDep(ctx context.Context, dep skillDep) err
 	return fmt.Errorf("no suitable install method for %s on %s", dep.label, runtime.GOOS)
 }
 
-// AutoInstall 一键全自动安装
 func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*InstallResult, error) {
 	result := &InstallResult{}
 	needsRestart := false
 
-	// 设置默认值
 	if config.Version == "" {
 		config.Version = "openclaw" // 默认国际版
 	}
 
-	// 存储 sudo 密码
 	if config.SudoPassword != "" {
 		i.sudoPassword = config.SudoPassword
-		// 有密码时视为有 sudo 权限
 		i.env.HasSudo = true
 	}
 
-	// 阶段 1: 安装依赖
 	i.emitter.EmitPhase("install", "开始安装依赖...", 0)
 
-	// 安装 Node.js
 	if !i.env.Tools["node"].Installed {
 		if err := i.InstallNode(ctx); err != nil {
 			result.ErrorMessage = "Node.js 安装失败"
@@ -1114,7 +1020,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 			i.emitter.EmitError(result.ErrorMessage, result)
 			return result, err
 		}
-		// 刷新 node/npm 检测状态
 		if nodeInfo := detectNodeWithFallback(); nodeInfo.Installed {
 			i.env.Tools["node"] = nodeInfo
 			if npmInfo := detectTool("npm", "--version"); npmInfo.Installed {
@@ -1127,7 +1032,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		}
 	}
 
-	// 安装 OpenClaw（使用配置的版本和镜像源）
 	if !i.env.OpenClawInstalled {
 		if err := i.InstallOpenClawWithConfig(ctx, config); err != nil {
 			result.ErrorMessage = "OpenClaw 安装失败"
@@ -1135,33 +1039,28 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 			i.emitter.EmitError(result.ErrorMessage, result)
 			return result, err
 		}
-		// 检查是否需要重启
 		if !detectTool("openclaw", "--version").Installed {
 			needsRestart = true
 			i.emitter.EmitLog("⚠️ OpenClaw 已安装但环境变量未生效，需要重启应用")
 		}
 	}
 
-	// 安装 ClawHub CLI（技能市场工具，非致命）
 	if !needsRestart {
 		if err := i.InstallClawHub(ctx, config.Registry); err != nil {
 			i.emitter.EmitLog(fmt.Sprintf("⚠️ ClawHub CLI 安装失败: %v（跳过）", err))
 		}
 	}
 
-	// 安装技能运行时依赖（Go, uv, ffmpeg, jq, rg — 全部非致命）
 	if !needsRestart {
 		i.InstallSkillDeps(ctx)
 	}
 
-	// 安装可选工具（ZeroTier / Tailscale）
 	if config.InstallZeroTier || config.InstallTailscale {
 		i.emitter.EmitPhase("vpn-tools", "安装内网穿透工具...", 45)
 		if config.InstallZeroTier {
 			if err := i.InstallVPNTool(ctx, "zerotier"); err != nil {
 				i.emitter.EmitLog(fmt.Sprintf("⚠️ ZeroTier 安装失败: %v（跳过）", err))
 			} else if config.ZerotierNetworkId != "" {
-				// 安装成功后自动加入网络
 				i.emitter.EmitLog(fmt.Sprintf("正在加入 ZeroTier 网络: %s", config.ZerotierNetworkId))
 				sc := i.newSC("install", "zerotier-join")
 				joinCmd := "sudo zerotier-cli join " + config.ZerotierNetworkId
@@ -1182,7 +1081,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		}
 	}
 
-	// 阶段 2: 配置（可选）
 	if !config.SkipConfig {
 		i.emitter.EmitPhase("configure", "开始配置...", 50)
 		if err := i.ConfigureOpenClaw(ctx, config); err != nil {
@@ -1198,7 +1096,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		}
 	}
 
-	// 阶段 3: 启动（可选）
 	if !config.SkipGateway {
 		i.emitter.EmitPhase("start", "启动 Gateway...", 75)
 		if err := i.StartGatewayWithConfig(ctx, config); err != nil {
@@ -1211,7 +1108,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		i.emitter.EmitLog("跳过启动 Gateway，稍后可手动启动")
 	}
 
-	// 阶段 4: 验证
 	i.emitter.EmitPhase("verify", "验证安装...", 90)
 	i.emitter.EmitLog("🔍 正在进行全面测试 / Running comprehensive tests...")
 	doctor, err := i.RunDoctor(ctx)
@@ -1219,7 +1115,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		i.emitter.EmitLog(fmt.Sprintf("诊断警告: %s", err.Error()))
 	}
 
-	// 获取最终状态
 	result.Success = true
 	if info := detectTool("openclaw", "--version"); info.Installed {
 		result.Version = info.Version
@@ -1230,10 +1125,8 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 	gwRunning, gwPort := checkGatewayRunning()
 	result.GatewayPort = gwPort
 
-	// 收集安装详单
 	var summary []InstallSummaryItem
 
-	// — 必装依赖 —
 	nodeInfo := detectNodeWithFallback()
 	if nodeInfo.Installed {
 		summary = append(summary, InstallSummaryItem{Label: "Node.js", Status: "ok", Detail: nodeInfo.Version, Category: "deps"})
@@ -1266,7 +1159,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		summary = append(summary, InstallSummaryItem{Label: "ClawHub CLI", Status: "warn", Detail: "未安装（可选）", Category: "deps"})
 	}
 
-	// — 选装工具 —
 	if config.InstallZeroTier {
 		ztInfo := detectTool("zerotier-cli", "--version")
 		if ztInfo.Installed {
@@ -1288,7 +1180,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		}
 	}
 
-	// — 技能运行时依赖（非致命） —
 	for _, dep := range []struct{ name, flag string }{
 		{"go", "--version"}, {"uv", "--version"}, {"ffmpeg", "-version"}, {"jq", "--version"}, {"rg", "--version"},
 	} {
@@ -1298,7 +1189,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		}
 	}
 
-	// — 配置信息 —
 	summary = append(summary, InstallSummaryItem{Label: "配置文件", Status: func() string {
 		if cfgValid {
 			return "ok"
@@ -1312,7 +1202,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		summary = append(summary, InstallSummaryItem{Label: "模型服务商", Status: "warn", Detail: "未配置", Category: "config"})
 	}
 
-	// — 网关状态 —
 	gwMode := "local"
 	gwBind := "loopback"
 	if cfgValid {
@@ -1336,7 +1225,6 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		summary = append(summary, InstallSummaryItem{Label: "Gateway", Status: "warn", Detail: fmt.Sprintf("未运行  端口: %d", gwPort), Category: "gateway"})
 	}
 
-	// 发送完成事件
 	var completeMsg string
 	if needsRestart {
 		completeMsg = "OpenClaw 安装完成！请重启应用以使环境变量生效。"

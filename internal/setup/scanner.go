@@ -1,4 +1,4 @@
-package setup
+﻿package setup
 
 import (
 	"ClawDeckX/internal/openclaw"
@@ -18,14 +18,12 @@ import (
 	"time"
 )
 
-// ToolInfo 工具信息
 type ToolInfo struct {
 	Installed bool   `json:"installed"`
 	Version   string `json:"version,omitempty"`
 	Path      string `json:"path,omitempty"`
 }
 
-// Step 安装步骤
 type Step struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -33,9 +31,7 @@ type Step struct {
 	Required    bool   `json:"required"`
 }
 
-// EnvironmentReport 环境扫描报告
 type EnvironmentReport struct {
-	// 系统信息
 	OS            string `json:"os"`
 	Arch          string `json:"arch"`
 	Distro        string `json:"distro,omitempty"`
@@ -48,23 +44,18 @@ type EnvironmentReport struct {
 	IsRoot        bool   `json:"isRoot"`
 	CurrentUser   string `json:"currentUser"`
 
-	// 包管理器
 	PackageManager string `json:"packageManager"` // "brew" | "apt" | "dnf" | "yum" | "apk" | "winget" | "choco"
 	HasSudo        bool   `json:"hasSudo"`
 
-	// 已安装工具
 	Tools map[string]ToolInfo `json:"tools"`
 
-	// 网络
 	InternetAccess  bool   `json:"internetAccess"`
 	NpmRegistry     string `json:"npmRegistry,omitempty"`
 	RegistryLatency int    `json:"registryLatency,omitempty"` // ms
 
-	// 磁盘
 	HomeDirWritable bool    `json:"homeDirWritable"`
 	DiskFreeGB      float64 `json:"diskFreeGb,omitempty"`
 
-	// OpenClaw 状态
 	OpenClawInstalled   bool   `json:"openClawInstalled"`
 	OpenClawConfigured  bool   `json:"openClawConfigured"`
 	OpenClawVersion     string `json:"openClawVersion,omitempty"`
@@ -74,20 +65,16 @@ type EnvironmentReport struct {
 	GatewayRunning      bool   `json:"gatewayRunning"`
 	GatewayPort         int    `json:"gatewayPort,omitempty"`
 
-	// 推荐安装方案
 	RecommendedMethod string   `json:"recommendedMethod"` // "installer-script" | "npm" | "docker"
 	RecommendedSteps  []Step   `json:"recommendedSteps"`
 	Warnings          []string `json:"warnings,omitempty"`
 
-	// 版本检查
 	LatestOpenClawVersion string `json:"latestOpenClawVersion,omitempty"`
 	UpdateAvailable       bool   `json:"updateAvailable"`
 
-	// 扫描时间
 	ScanTime string `json:"scanTime"`
 }
 
-// Scan 执行完整环境扫描
 func Scan() (*EnvironmentReport, error) {
 	report := &EnvironmentReport{
 		OS:       runtime.GOOS,
@@ -96,7 +83,6 @@ func Scan() (*EnvironmentReport, error) {
 		ScanTime: time.Now().Format(time.RFC3339),
 	}
 
-	// 系统信息
 	report.Hostname, _ = os.Hostname()
 	report.CurrentUser = getCurrentUser()
 	report.IsRoot = isRoot()
@@ -104,32 +90,25 @@ func Scan() (*EnvironmentReport, error) {
 	report.IsDocker = detectDocker()
 	report.IsSSH = detectSSH()
 
-	// Linux 发行版检测
 	if runtime.GOOS == "linux" {
 		report.Distro, report.DistroVersion = detectDistro()
 	}
 
-	// 内核版本
 	report.Kernel = detectKernel()
 
-	// 包管理器检测
 	report.PackageManager = detectPackageManager()
 	report.HasSudo = detectSudo()
 
-	// 工具检测
 	report.Tools = detectTools()
 
-	// 网络检测
 	report.InternetAccess = checkInternetAccess()
 	if report.Tools["npm"].Installed {
 		report.NpmRegistry, report.RegistryLatency = detectNpmRegistry()
 	}
 
-	// 磁盘检测
 	report.HomeDirWritable = checkHomeDirWritable()
 	report.DiskFreeGB = getDiskFreeGB()
 
-	// OpenClaw 状态
 	report.OpenClawInstalled = report.Tools["openclaw"].Installed
 	report.OpenClawVersion = report.Tools["openclaw"].Version
 	report.OpenClawCnInstalled = report.Tools["openclaw-cn"].Installed
@@ -144,21 +123,16 @@ func Scan() (*EnvironmentReport, error) {
 	report.OpenClawConfigured = checkOpenClawConfigured(report.OpenClawConfigPath)
 	report.GatewayRunning, report.GatewayPort = checkGatewayRunning()
 
-	// 检查更新 (仅当已安装 OpenClaw 时)
 	if report.OpenClawInstalled {
 		latest := fetchLatestVersion()
 		if latest != "" {
 			report.LatestOpenClawVersion = latest
-			// 简单的版本比较: latest != current
-			// 实际场景可能需要 semver 比较，这里简化处理
-			// 只有当 version != latest 且 latest 不为空时认为有更新
 			if report.OpenClawVersion != "" && report.OpenClawVersion != latest {
 				report.UpdateAvailable = true
 			}
 		}
 	}
 
-	// 推荐安装方案
 	report.RecommendedMethod = recommendInstallMethod(report)
 	report.RecommendedSteps = generateRecommendedSteps(report)
 	report.Warnings = generateWarnings(report)
@@ -166,7 +140,6 @@ func Scan() (*EnvironmentReport, error) {
 	return report, nil
 }
 
-// getCurrentUser 获取当前用户名
 func getCurrentUser() string {
 	if u, err := user.Current(); err == nil {
 		return u.Username
@@ -174,7 +147,6 @@ func getCurrentUser() string {
 	return os.Getenv("USER")
 }
 
-// isRoot 检测是否为 root 用户
 func isRoot() bool {
 	if runtime.GOOS == "windows" {
 		return false // Windows 不使用 root 概念
@@ -182,12 +154,10 @@ func isRoot() bool {
 	return os.Getuid() == 0
 }
 
-// detectWSL 检测是否在 WSL 环境
 func detectWSL() bool {
 	if runtime.GOOS != "linux" {
 		return false
 	}
-	// 检查 /proc/version 是否包含 Microsoft
 	data, err := os.ReadFile("/proc/version")
 	if err != nil {
 		return false
@@ -195,13 +165,10 @@ func detectWSL() bool {
 	return strings.Contains(strings.ToLower(string(data)), "microsoft")
 }
 
-// detectDocker 检测是否在 Docker 容器中
 func detectDocker() bool {
-	// 检查 /.dockerenv 文件
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		return true
 	}
-	// 检查 /proc/1/cgroup 是否包含 docker
 	data, err := os.ReadFile("/proc/1/cgroup")
 	if err == nil && strings.Contains(string(data), "docker") {
 		return true
@@ -209,14 +176,11 @@ func detectDocker() bool {
 	return false
 }
 
-// detectSSH 检测是否通过 SSH 连接
 func detectSSH() bool {
 	return os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_CLIENT") != ""
 }
 
-// detectDistro 检测 Linux 发行版
 func detectDistro() (name, version string) {
-	// 尝试读取 /etc/os-release
 	data, err := os.ReadFile("/etc/os-release")
 	if err != nil {
 		return "", ""
@@ -233,7 +197,6 @@ func detectDistro() (name, version string) {
 	return name, version
 }
 
-// detectKernel 检测内核版本
 func detectKernel() string {
 	if runtime.GOOS == "windows" {
 		out, err := exec.Command("cmd", "/c", "ver").Output()
@@ -249,7 +212,6 @@ func detectKernel() string {
 	return ""
 }
 
-// detectPackageManager 检测系统包管理器
 func detectPackageManager() string {
 	switch runtime.GOOS {
 	case "darwin":
@@ -258,7 +220,6 @@ func detectPackageManager() string {
 		}
 		return ""
 	case "linux":
-		// 按优先级检测
 		managers := []string{"apt", "dnf", "yum", "apk", "pacman", "zypper"}
 		for _, m := range managers {
 			if commandExists(m) {
@@ -278,7 +239,6 @@ func detectPackageManager() string {
 	return ""
 }
 
-// detectSudo 检测是否有 sudo 权限
 func detectSudo() bool {
 	if runtime.GOOS == "windows" {
 		return false
@@ -286,21 +246,17 @@ func detectSudo() bool {
 	if isRoot() {
 		return true
 	}
-	// 尝试 sudo -n true 检测无密码 sudo
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sudo", "-n", "true")
 	return cmd.Run() == nil
 }
 
-// detectTools 检测已安装工具
 func detectTools() map[string]ToolInfo {
 	tools := make(map[string]ToolInfo)
 
-	// Node.js - 使用增强检测
 	tools["node"] = detectNodeWithFallback()
 
-	// npm - 使用增强检测
 	tools["npm"] = detectNpmWithFallback()
 
 	// Git
@@ -349,7 +305,6 @@ func detectTools() map[string]ToolInfo {
 	return tools
 }
 
-// detectTool 检测单个工具
 func detectTool(name string, versionArg string) ToolInfo {
 	path, err := exec.LookPath(name)
 	if err != nil {
@@ -361,14 +316,12 @@ func detectTool(name string, versionArg string) ToolInfo {
 		Path:      path,
 	}
 
-	// 获取版本
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, versionArg)
 	out, err := cmd.Output()
 	if err == nil {
 		version := strings.TrimSpace(string(out))
-		// 提取版本号
 		version = extractVersion(version)
 		info.Version = version
 	}
@@ -405,23 +358,18 @@ func detectXcodeCLI() ToolInfo {
 	return ToolInfo{Installed: true, Path: path, Version: version}
 }
 
-// detectPython 检测 Python
 func detectPython() ToolInfo {
-	// 优先检测 python3
 	if info := detectTool("python3", "--version"); info.Installed {
 		return info
 	}
 	return detectTool("python", "--version")
 }
 
-// detectNodeWithFallback 增强的 Node.js 检测（支持多路径）
 func detectNodeWithFallback() ToolInfo {
-	// 1. 先尝试 PATH
 	if info := detectTool("node", "--version"); info.Installed {
 		return info
 	}
 
-	// 2. 检测常见路径
 	paths := getNodePaths()
 	for _, path := range paths {
 		if fileExists(path) {
@@ -431,7 +379,6 @@ func detectNodeWithFallback() ToolInfo {
 		}
 	}
 
-	// 3. Unix 系统尝试通过 shell 加载用户环境
 	if runtime.GOOS != "windows" {
 		if info := detectNodeViaShell(); info.Installed {
 			return info
@@ -441,14 +388,11 @@ func detectNodeWithFallback() ToolInfo {
 	return ToolInfo{Installed: false}
 }
 
-// detectNpmWithFallback 增强的 npm 检测（支持多路径）
 func detectNpmWithFallback() ToolInfo {
-	// 1. 先尝试 PATH
 	if info := detectTool("npm", "--version"); info.Installed {
 		return info
 	}
 
-	// 2. 检测常见路径
 	paths := getNpmPaths()
 	for _, path := range paths {
 		if fileExists(path) {
@@ -461,7 +405,6 @@ func detectNpmWithFallback() ToolInfo {
 	return ToolInfo{Installed: false}
 }
 
-// getNodePaths 获取 Node.js 可能的安装路径
 func getNodePaths() []string {
 	var paths []string
 	home, _ := os.UserHomeDir()
@@ -471,11 +414,9 @@ func getNodePaths() []string {
 		// Homebrew
 		paths = append(paths, "/opt/homebrew/bin/node") // Apple Silicon
 		paths = append(paths, "/usr/local/bin/node")    // Intel Mac
-		// 系统安装
 		paths = append(paths, "/usr/bin/node")
 		// nvm
 		if home != "" {
-			// 尝试读取 nvm default alias
 			nvmDefault := filepath.Join(home, ".nvm", "alias", "default")
 			if data, err := os.ReadFile(nvmDefault); err == nil {
 				version := strings.TrimSpace(string(data))
@@ -483,7 +424,6 @@ func getNodePaths() []string {
 					paths = append(paths, filepath.Join(home, ".nvm", "versions", "node", "v"+version, "bin", "node"))
 				}
 			}
-			// 常见版本
 			for _, v := range []string{"22.12.0", "22.11.0", "22.0.0", "23.0.0"} {
 				paths = append(paths, filepath.Join(home, ".nvm", "versions", "node", "v"+v, "bin", "node"))
 			}
@@ -498,7 +438,6 @@ func getNodePaths() []string {
 		}
 
 	case "linux":
-		// 系统安装
 		paths = append(paths, "/usr/bin/node")
 		paths = append(paths, "/usr/local/bin/node")
 		// nvm
@@ -522,19 +461,15 @@ func getNodePaths() []string {
 		}
 
 	case "windows":
-		// 标准安装路径
 		paths = append(paths, "C:\\Program Files\\nodejs\\node.exe")
 		paths = append(paths, "C:\\Program Files (x86)\\nodejs\\node.exe")
 
 		if home != "" {
 			// nvm-windows
-			// 尝试读取 NVM_SYMLINK 环境变量
 			if nvmSymlink := os.Getenv("NVM_SYMLINK"); nvmSymlink != "" {
 				paths = append(paths, filepath.Join(nvmSymlink, "node.exe"))
 			}
-			// 尝试读取 NVM_HOME
 			if nvmHome := os.Getenv("NVM_HOME"); nvmHome != "" {
-				// 读取 settings.txt 获取当前版本
 				settingsPath := filepath.Join(nvmHome, "settings.txt")
 				if data, err := os.ReadFile(settingsPath); err == nil {
 					for _, line := range strings.Split(string(data), "\n") {
@@ -547,7 +482,6 @@ func getNodePaths() []string {
 					}
 				}
 			}
-			// 常见 nvm-windows 路径
 			paths = append(paths, filepath.Join(home, "AppData\\Roaming\\nvm\\current\\node.exe"))
 			// fnm
 			paths = append(paths, filepath.Join(home, "AppData\\Roaming\\fnm\\aliases\\default\\node.exe"))
@@ -566,7 +500,6 @@ func getNodePaths() []string {
 	return paths
 }
 
-// getNpmPaths 获取 npm 可能的安装路径
 func getNpmPaths() []string {
 	var paths []string
 	home, _ := os.UserHomeDir()
@@ -602,14 +535,12 @@ func getNpmPaths() []string {
 	return paths
 }
 
-// detectToolByPath 通过完整路径检测工具
 func detectToolByPath(path string, versionArg string) ToolInfo {
 	info := ToolInfo{
 		Installed: true,
 		Path:      path,
 	}
 
-	// 获取版本
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, versionArg)
@@ -623,7 +554,6 @@ func detectToolByPath(path string, versionArg string) ToolInfo {
 	return info
 }
 
-// detectNodeViaShell 通过 shell 加载用户环境检测 Node.js (Unix only)
 func detectNodeViaShell() ToolInfo {
 	shells := []string{
 		"source ~/.zshrc 2>/dev/null || source ~/.bashrc 2>/dev/null; node --version 2>/dev/null",
@@ -650,27 +580,21 @@ func detectNodeViaShell() ToolInfo {
 	return ToolInfo{Installed: false}
 }
 
-// fileExists 检查文件是否存在
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
-// extractVersion 从输出中提取版本号
 func extractVersion(output string) string {
-	// 常见格式: "v22.0.0", "node v22.0.0", "git version 2.40.0", "22.0.0"
 	output = strings.TrimPrefix(output, "v")
 	parts := strings.Fields(output)
 	for _, part := range parts {
 		part = strings.TrimPrefix(part, "v")
-		// 检查是否像版本号
 		if len(part) > 0 && (part[0] >= '0' && part[0] <= '9') {
-			// 只取第一行
 			lines := strings.Split(part, "\n")
 			return lines[0]
 		}
 	}
-	// 返回第一行
 	lines := strings.Split(output, "\n")
 	if len(lines) > 0 {
 		return lines[0]
@@ -678,15 +602,12 @@ func extractVersion(output string) string {
 	return output
 }
 
-// commandExists 检测命令是否存在
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
 }
 
-// checkInternetAccess 检测网络连通性
 func checkInternetAccess() bool {
-	// 尝试连接常用地址
 	targets := []string{
 		"registry.npmjs.org:443",
 		"github.com:443",
@@ -702,7 +623,6 @@ func checkInternetAccess() bool {
 	return false
 }
 
-// detectNpmRegistry 检测 npm 镜像源
 func detectNpmRegistry() (registry string, latency int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -714,7 +634,6 @@ func detectNpmRegistry() (registry string, latency int) {
 		registry = "https://registry.npmjs.org/"
 	}
 
-	// 测试延迟
 	start := time.Now()
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(registry)
@@ -726,7 +645,6 @@ func detectNpmRegistry() (registry string, latency int) {
 	return registry, latency
 }
 
-// checkHomeDirWritable 检测 home 目录是否可写
 func checkHomeDirWritable() bool {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -742,7 +660,6 @@ func checkHomeDirWritable() bool {
 	return true
 }
 
-// getDiskFreeGB 获取磁盘剩余空间 (GB)
 func getDiskFreeGB() float64 {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -751,7 +668,6 @@ func getDiskFreeGB() float64 {
 
 	switch runtime.GOOS {
 	case "windows":
-		// Windows: 使用 wmic
 		drive := filepath.VolumeName(home)
 		if drive == "" {
 			drive = "C:"
@@ -771,7 +687,6 @@ func getDiskFreeGB() float64 {
 			}
 		}
 	default:
-		// Unix: 使用 df
 		cmd := exec.Command("df", "-k", home)
 		out, err := cmd.Output()
 		if err != nil {
@@ -790,17 +705,14 @@ func getDiskFreeGB() float64 {
 	return 0
 }
 
-// ResolveStateDir 解析 OpenClaw 状态目录（委托给 openclaw 包）
 func ResolveStateDir() string {
 	return openclaw.ResolveStateDir()
 }
 
-// GetOpenClawConfigPath 获取 OpenClaw 配置文件路径（委托给 openclaw 包）
 func GetOpenClawConfigPath() string {
 	return openclaw.ResolveConfigPath()
 }
 
-// checkOpenClawConfigured 检测 OpenClaw 是否已配置（有模型服务商）
 func checkOpenClawConfigured(configPath string) bool {
 	if configPath == "" {
 		return false
@@ -813,13 +725,11 @@ func checkOpenClawConfigured(configPath string) bool {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return false
 	}
-	// 新 schema: models.providers 是一个非空对象
 	if models, ok := config["models"].(map[string]interface{}); ok {
 		if providers, ok := models["providers"].(map[string]interface{}); ok && len(providers) > 0 {
 			return true
 		}
 	}
-	// 旧 schema: model.provider
 	if model, ok := config["model"].(map[string]interface{}); ok {
 		if _, hasProvider := model["provider"]; hasProvider {
 			return true
@@ -828,7 +738,6 @@ func checkOpenClawConfigured(configPath string) bool {
 	return false
 }
 
-// readOpenClawConfigRaw 读取 openclaw.json 并返回原始 map
 func readOpenClawConfigRaw(configPath string) map[string]interface{} {
 	if configPath == "" {
 		return nil
@@ -844,7 +753,6 @@ func readOpenClawConfigRaw(configPath string) map[string]interface{} {
 	return raw
 }
 
-// checkConfigFileValid 检查配置文件是否存在且为合法 JSON，返回 (exists, valid, error描述)
 func checkConfigFileValid(configPath string) (exists bool, valid bool, detail string) {
 	if configPath == "" {
 		return false, false, "config path is empty"
@@ -863,14 +771,12 @@ func checkConfigFileValid(configPath string) (exists bool, valid bool, detail st
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return true, false, fmt.Sprintf("invalid JSON: %v", err)
 	}
-	// 至少需要 gateway 段
 	if _, ok := raw["gateway"]; !ok {
 		return true, false, "missing gateway section"
 	}
 	return true, true, ""
 }
 
-// configGatewayPortFromFile 从配置文件读取 gateway.port
 func configGatewayPortFromFile(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -895,7 +801,6 @@ func configGatewayPortFromFile(path string) string {
 	return ""
 }
 
-// configGatewayBindFromFile 从配置文件读取 gateway.bind
 func configGatewayBindFromFile(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -915,7 +820,6 @@ func configGatewayBindFromFile(path string) string {
 	return ""
 }
 
-// checkGatewayRunning 检测 Gateway 是否运行（通过 HTTP 健康检查确认是真正的 OpenClaw Gateway）
 func checkGatewayRunning() (running bool, port int) {
 	ports := []int{}
 	if cfgPath := GetOpenClawConfigPath(); cfgPath != "" {
@@ -925,7 +829,6 @@ func checkGatewayRunning() (running bool, port int) {
 			}
 		}
 	}
-	// 常见本地网关端口（不包含 ClawDeckX Web 面板默认端口 18791）
 	ports = append(ports, 18789, 18790, 19001)
 	seen := map[int]struct{}{}
 
@@ -936,7 +839,6 @@ func checkGatewayRunning() (running bool, port int) {
 		}
 		seen[p] = struct{}{}
 
-		// 优先通过 /health 端点确认是 OpenClaw Gateway
 		url := fmt.Sprintf("http://127.0.0.1:%d/health", p)
 		resp, err := client.Get(url)
 		if err != nil {
@@ -947,7 +849,6 @@ func checkGatewayRunning() (running bool, port int) {
 		if resp.StatusCode != http.StatusOK {
 			continue
 		}
-		// 需要具备基础网关特征，避免把本地 Web 服务 404/健康页误判成 Gateway。
 		lower := strings.ToLower(string(body))
 		if strings.Contains(lower, "openclaw") || strings.Contains(lower, "gateway") || strings.Contains(lower, "\"ok\":true") || strings.Contains(lower, "\"status\":\"ok\"") {
 			return true, p
@@ -956,8 +857,6 @@ func checkGatewayRunning() (running bool, port int) {
 	return false, 0
 }
 
-// detectBrowser 检测系统已安装的 Chromium 内核浏览器
-// 按 openclaw 相同优先级: Chrome → Brave → Edge → Chromium
 func detectBrowser() ToolInfo {
 	switch runtime.GOOS {
 	case "windows":
@@ -1064,9 +963,6 @@ func detectBrowserLinux() ToolInfo {
 	return ToolInfo{Installed: false}
 }
 
-// detectBrowserVersion 获取浏览器版本号
-// Windows: 读取 exe 文件版本信息（避免 chrome.exe --version 会启动浏览器窗口）
-// Unix: 直接执行 --version
 func detectBrowserVersion(browserPath string) string {
 	if browserPath == "" {
 		return ""
@@ -1095,7 +991,6 @@ func detectBrowserVersion(browserPath string) string {
 	return extractVersion(strings.TrimSpace(string(out)))
 }
 
-// getBrowserInstallCommand 获取浏览器安装命令
 func getBrowserInstallCommand(report *EnvironmentReport) string {
 	switch report.PackageManager {
 	case "brew":
@@ -1116,28 +1011,21 @@ func getBrowserInstallCommand(report *EnvironmentReport) string {
 	}
 }
 
-// recommendInstallMethod 推荐安装方式
 func recommendInstallMethod(report *EnvironmentReport) string {
-	// 如果已安装，返回空
 	if report.OpenClawInstalled {
 		return ""
 	}
 
-	// 优先使用 npm，因为脚本安装包含交互式向导
 	if report.Tools["node"].Installed && report.Tools["npm"].Installed {
 		return "npm"
 	}
 
-	// 如果没有 npm，推荐先安装依赖（Node.js），然后再用 npm 安装
-	// 即使有 curl，也不推荐 installer-script，因为它不可控
 	return "install-deps-first"
 }
 
-// generateRecommendedSteps 生成推荐安装步骤
 func generateRecommendedSteps(report *EnvironmentReport) []Step {
 	var steps []Step
 
-	// 如果已安装
 	if report.OpenClawInstalled {
 		if !report.OpenClawConfigured {
 			steps = append(steps, Step{
@@ -1156,7 +1044,6 @@ func generateRecommendedSteps(report *EnvironmentReport) []Step {
 		return steps
 	}
 
-	// 检测缺失依赖
 	if !report.Tools["node"].Installed {
 		steps = append(steps, Step{
 			Name:        "install-node",
@@ -1175,7 +1062,6 @@ func generateRecommendedSteps(report *EnvironmentReport) []Step {
 		})
 	}
 
-	// 安装 OpenClaw
 	steps = append(steps, Step{
 		Name:        "install-openclaw",
 		Description: "安装 OpenClaw",
@@ -1183,21 +1069,18 @@ func generateRecommendedSteps(report *EnvironmentReport) []Step {
 		Required:    true,
 	})
 
-	// 配置
 	steps = append(steps, Step{
 		Name:        "configure",
 		Description: "配置 AI 服务商和 API Key",
 		Required:    true,
 	})
 
-	// 启动
 	steps = append(steps, Step{
 		Name:        "start-gateway",
 		Description: "启动 Gateway",
 		Required:    true,
 	})
 
-	// 验证
 	steps = append(steps, Step{
 		Name:        "verify",
 		Description: "验证安装",
@@ -1208,7 +1091,6 @@ func generateRecommendedSteps(report *EnvironmentReport) []Step {
 	return steps
 }
 
-// getNodeInstallCommand 获取 Node.js 安装命令
 func getNodeInstallCommand(report *EnvironmentReport) string {
 	switch report.PackageManager {
 	case "brew":
@@ -1228,7 +1110,6 @@ func getNodeInstallCommand(report *EnvironmentReport) string {
 	}
 }
 
-// getGitInstallCommand 获取 Git 安装命令
 func getGitInstallCommand(report *EnvironmentReport) string {
 	switch report.PackageManager {
 	case "brew":
@@ -1248,7 +1129,6 @@ func getGitInstallCommand(report *EnvironmentReport) string {
 	}
 }
 
-// getOpenClawInstallCommand 获取 OpenClaw 安装命令
 func getOpenClawInstallCommand(report *EnvironmentReport) string {
 	switch report.RecommendedMethod {
 	case "installer-script":
@@ -1265,11 +1145,9 @@ func getOpenClawInstallCommand(report *EnvironmentReport) string {
 	}
 }
 
-// generateWarnings 生成警告信息
 func generateWarnings(report *EnvironmentReport) []string {
 	var warnings []string
 
-	// Node.js 版本检查
 	if report.Tools["node"].Installed {
 		version := report.Tools["node"].Version
 		if version != "" {
@@ -1280,22 +1158,18 @@ func generateWarnings(report *EnvironmentReport) []string {
 		}
 	}
 
-	// 权限警告
 	if report.IsRoot {
 		warnings = append(warnings, "不建议以 root 用户运行 OpenClaw")
 	}
 
-	// 网络警告
 	if !report.InternetAccess {
 		warnings = append(warnings, "无法访问互联网，安装可能失败")
 	}
 
-	// 磁盘空间警告
 	if report.DiskFreeGB > 0 && report.DiskFreeGB < 1 {
 		warnings = append(warnings, fmt.Sprintf("磁盘剩余空间不足 (%.1f GB)，建议至少 1 GB", report.DiskFreeGB))
 	}
 
-	// WSL 警告
 	if report.IsWSL {
 		warnings = append(warnings, "检测到 WSL 环境，部分功能可能受限")
 	}
@@ -1303,7 +1177,6 @@ func generateWarnings(report *EnvironmentReport) []string {
 	return warnings
 }
 
-// extractMajorVersion 提取主版本号
 func extractMajorVersion(version string) int {
 	version = strings.TrimPrefix(version, "v")
 	parts := strings.Split(version, ".")

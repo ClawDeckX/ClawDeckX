@@ -18,9 +18,7 @@ import (
 	"ClawDeckX/internal/logger"
 )
 
-// ── 协议帧定义 ──────────────────────────────────────────
 
-// RequestFrame 请求帧
 type RequestFrame struct {
 	Type   string      `json:"type"`   // "req"
 	ID     string      `json:"id"`     // uuid
@@ -28,7 +26,6 @@ type RequestFrame struct {
 	Params interface{} `json:"params,omitempty"`
 }
 
-// ResponseFrame 响应帧
 type ResponseFrame struct {
 	ID      string          `json:"id"`
 	OK      bool            `json:"ok"`
@@ -36,20 +33,17 @@ type ResponseFrame struct {
 	Error   *RPCError       `json:"error,omitempty"`
 }
 
-// EventFrame 事件帧
 type EventFrame struct {
 	Event   string          `json:"event"`
 	Seq     *int            `json:"seq,omitempty"`
 	Payload json.RawMessage `json:"payload,omitempty"`
 }
 
-// RPCError RPC 错误
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-// ConnectParams 连接参数
 type ConnectParams struct {
 	MinProtocol int                    `json:"minProtocol"`
 	MaxProtocol int                    `json:"maxProtocol"`
@@ -62,7 +56,6 @@ type ConnectParams struct {
 	Permissions map[string]interface{} `json:"permissions,omitempty"`
 }
 
-// ConnectDevice 设备身份信息
 type ConnectDevice struct {
 	ID        string `json:"id"`
 	PublicKey string `json:"publicKey"`
@@ -71,7 +64,6 @@ type ConnectDevice struct {
 	Nonce     string `json:"nonce,omitempty"`
 }
 
-// ConnectClient 客户端标识
 type ConnectClient struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName,omitempty"`
@@ -80,27 +72,21 @@ type ConnectClient struct {
 	Mode        string `json:"mode"`
 }
 
-// ConnectAuth 鉴权信息
 type ConnectAuth struct {
 	Token    string `json:"token,omitempty"`
 	Password string `json:"password,omitempty"`
 }
 
-// ── 回调 & 配置 ─────────────────────────────────────────
 
-// GWClientConfig Gateway WebSocket 客户端配置
 type GWClientConfig struct {
 	Host  string // Gateway 地址
 	Port  int    // Gateway 端口
 	Token string // 鉴权 Token
 }
 
-// GWEventHandler 事件回调
 type GWEventHandler func(event string, payload json.RawMessage)
 
-// ── 客户端实现 ──────────────────────────────────────────
 
-// GWClient OpenClaw Gateway WebSocket 客户端
 type GWClient struct {
 	cfg       GWClientConfig
 	conn      *websocket.Conn
@@ -111,11 +97,9 @@ type GWClient struct {
 	stopCh    chan struct{}
 	onEvent   GWEventHandler
 
-	// 重连
 	reconnectCount int
 	backoffMs      int
 
-	// 心跳健康检查
 	healthMu        sync.Mutex
 	healthEnabled   bool          // 是否启用心跳自动重启
 	healthInterval  time.Duration // 探测间隔（默认 30s）
@@ -128,7 +112,6 @@ type GWClient struct {
 	onNotify        func(string) // 通知回调（由外部注入）
 }
 
-// NewGWClient 创建 Gateway WebSocket 客户端
 func NewGWClient(cfg GWClientConfig) *GWClient {
 	return &GWClient{
 		cfg:            cfg,
@@ -140,26 +123,22 @@ func NewGWClient(cfg GWClientConfig) *GWClient {
 	}
 }
 
-// SetEventHandler 设置事件回调
 func (c *GWClient) SetEventHandler(h GWEventHandler) {
 	c.onEvent = h
 }
 
-// SetRestartCallback 设置网关重启回调
 func (c *GWClient) SetRestartCallback(fn func() error) {
 	c.healthMu.Lock()
 	defer c.healthMu.Unlock()
 	c.onRestart = fn
 }
 
-// SetNotifyCallback 设置外部通知回调
 func (c *GWClient) SetNotifyCallback(fn func(string)) {
 	c.healthMu.Lock()
 	defer c.healthMu.Unlock()
 	c.onNotify = fn
 }
 
-// SetHealthCheckEnabled 启用/禁用心跳健康检查自动重启
 func (c *GWClient) SetHealthCheckEnabled(enabled bool) {
 	c.healthMu.Lock()
 	defer c.healthMu.Unlock()
@@ -176,14 +155,12 @@ func (c *GWClient) SetHealthCheckEnabled(enabled bool) {
 	}
 }
 
-// IsHealthCheckEnabled 返回心跳健康检查是否启用
 func (c *GWClient) IsHealthCheckEnabled() bool {
 	c.healthMu.Lock()
 	defer c.healthMu.Unlock()
 	return c.healthEnabled
 }
 
-// HealthStatus 返回心跳健康检查状态
 func (c *GWClient) HealthStatus() map[string]interface{} {
 	c.healthMu.Lock()
 	defer c.healthMu.Unlock()
@@ -199,7 +176,6 @@ func (c *GWClient) HealthStatus() map[string]interface{} {
 	}
 }
 
-// healthCheckLoop 后台心跳健康检查循环
 func (c *GWClient) healthCheckLoop() {
 	ticker := time.NewTicker(c.healthInterval)
 	defer ticker.Stop()
@@ -218,12 +194,10 @@ func (c *GWClient) healthCheckLoop() {
 				continue
 			}
 
-			// 优先使用 WebSocket ping（最轻量，< 50ms）
 			healthy := false
 			c.mu.Lock()
 			wsConnected := c.connected && c.conn != nil
 			if wsConnected {
-				// 发送 WebSocket ping，等待 pong
 				err := c.conn.WriteControl(
 					websocket.PingMessage,
 					[]byte{},
@@ -238,7 +212,6 @@ func (c *GWClient) healthCheckLoop() {
 			}
 			c.mu.Unlock()
 
-			// 回退：TCP 端口探测（WebSocket 未连接或 ping 失败时）
 			if !healthy {
 				tcpAddr := fmt.Sprintf("%s:%d", c.cfg.Host, c.cfg.Port)
 				if conn, tcpErr := net.DialTimeout("tcp", tcpAddr, 3*time.Second); tcpErr == nil {
@@ -252,7 +225,6 @@ func (c *GWClient) healthCheckLoop() {
 
 			c.healthMu.Lock()
 			if healthy {
-				// 健康检查通过
 				if c.healthFailCount > 0 {
 					logger.Gateway.Info().
 						Int("prev_fails", c.healthFailCount).
@@ -261,7 +233,6 @@ func (c *GWClient) healthCheckLoop() {
 				c.healthFailCount = 0
 				c.healthLastOK = time.Now()
 			} else {
-				// 健康检查失败
 				c.healthFailCount++
 				logger.Gateway.Warn().
 					Int("fail_count", c.healthFailCount).
@@ -296,19 +267,16 @@ func (c *GWClient) healthCheckLoop() {
 	}
 }
 
-// IsConnected 是否已连接
 func (c *GWClient) IsConnected() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.connected
 }
 
-// Start 启动客户端（后台运行）
 func (c *GWClient) Start() {
 	go c.connectLoop()
 }
 
-// Stop 停止客户端
 func (c *GWClient) Stop() {
 	c.mu.Lock()
 	if c.closed {
@@ -323,25 +291,21 @@ func (c *GWClient) Stop() {
 	c.mu.Unlock()
 }
 
-// Reconnect 使用新配置重新连接 Gateway
 func (c *GWClient) Reconnect(newCfg GWClientConfig) {
 	logger.Log.Info().
 		Str("host", newCfg.Host).
 		Int("port", newCfg.Port).
 		Msg(i18n.T(i18n.MsgLogGatewayConfigUpdated))
 
-	// 先断开旧连接
 	c.mu.Lock()
 	if c.conn != nil {
 		c.conn.Close()
 	}
 	c.connected = false
-	// 清理 pending 请求
 	for id, ch := range c.pending {
 		close(ch)
 		delete(c.pending, id)
 	}
-	// 如果之前已 Stop，需要重置
 	if c.closed {
 		c.closed = false
 		c.stopCh = make(chan struct{})
@@ -351,23 +315,19 @@ func (c *GWClient) Reconnect(newCfg GWClientConfig) {
 	c.backoffMs = 1000
 	c.mu.Unlock()
 
-	// 启动新的连接循环
 	go c.connectLoop()
 }
 
-// GetConfig 获取当前配置
 func (c *GWClient) GetConfig() GWClientConfig {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.cfg
 }
 
-// Request 发送 RPC 请求并等待响应
 func (c *GWClient) Request(method string, params interface{}) (json.RawMessage, error) {
 	return c.RequestWithTimeout(method, params, 15*time.Second)
 }
 
-// RequestWithTimeout 带超时的 RPC 请求
 func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout time.Duration) (json.RawMessage, error) {
 	c.mu.Lock()
 	if !c.connected || c.conn == nil {
@@ -402,7 +362,6 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 		return nil, fmt.Errorf(i18n.T(i18n.MsgErrSendRequestFailed), err)
 	}
 
-	// 等待响应
 	select {
 	case resp := <-ch:
 		if resp == nil {
@@ -426,7 +385,6 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 	}
 }
 
-// ── 内部实现 ────────────────────────────────────────────
 
 func (c *GWClient) connectLoop() {
 	for {
@@ -444,7 +402,6 @@ func (c *GWClient) connectLoop() {
 				Msg(i18n.T(i18n.MsgLogGatewayWsConnectFailed))
 		}
 
-		// 等待重连
 		select {
 		case <-c.stopCh:
 			return
@@ -476,7 +433,6 @@ func (c *GWClient) dial() error {
 	c.conn = conn
 	c.mu.Unlock()
 
-	// 读取消息循环
 	return c.readLoop(conn)
 }
 
@@ -487,7 +443,6 @@ func (c *GWClient) readLoop(conn *websocket.Conn) error {
 		if c.conn == conn {
 			c.conn = nil
 		}
-		// 清空所有 pending
 		for id, ch := range c.pending {
 			close(ch)
 			delete(c.pending, id)
@@ -510,15 +465,12 @@ func (c *GWClient) readLoop(conn *websocket.Conn) error {
 			continue
 		}
 
-		// 判断帧类型
 		if _, hasEvent := raw["event"]; hasEvent {
-			// 事件帧
 			var evt EventFrame
 			if err := json.Unmarshal(message, &evt); err != nil {
 				continue
 			}
 
-			// connect.challenge → 发送 connect
 			if evt.Event == "connect.challenge" {
 				var payload struct {
 					Nonce string `json:"nonce"`
@@ -533,32 +485,27 @@ func (c *GWClient) readLoop(conn *websocket.Conn) error {
 				continue
 			}
 
-			// tick 事件 → 心跳
 			if evt.Event == "tick" {
 				continue
 			}
 
-			// 其他事件 → 回调
 			if c.onEvent != nil {
 				c.onEvent(evt.Event, evt.Payload)
 			}
 			continue
 		}
 
-		// 响应帧
 		if _, hasID := raw["id"]; hasID {
 			var resp ResponseFrame
 			if err := json.Unmarshal(message, &resp); err != nil {
 				continue
 			}
 
-			// 检查是否是 connect 的 ack（status: accepted）
 			if resp.OK && resp.Payload != nil {
 				var ack struct {
 					Status string `json:"status"`
 				}
 				if json.Unmarshal(resp.Payload, &ack) == nil && ack.Status == "accepted" {
-					// 等待最终响应
 					continue
 				}
 			}
@@ -594,7 +541,6 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 		Caps:   []string{},
 	}
 
-	// 如果 token 为空，尝试从 openclaw.json 自动读取
 	token := c.cfg.Token
 	if token == "" {
 		configPath := ResolveConfigPath()
@@ -617,19 +563,16 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 		logger.Log.Warn().Msg(i18n.T(i18n.MsgLogGwclientNoAuth))
 	}
 
-	// 加载或生成 device identity
 	identity, err := LoadOrCreateDeviceIdentity("")
 	if err != nil {
 		logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogDeviceIdentityLoadFail))
 	} else {
-		// 构建 device auth payload
 		signedAt := time.Now().UnixMilli()
 		scopesStr := ""
 		if len(params.Scopes) > 0 {
 			scopesStr = strings.Join(params.Scopes, ",")
 		}
 
-		// 构建 payload: version|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce
 		payloadParts := []string{
 			"v2",
 			identity.DeviceID,
@@ -643,12 +586,10 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 		}
 		payload := strings.Join(payloadParts, "|")
 
-		// 签名
 		signature, err := SignDevicePayload(identity.PrivateKeyPem, payload)
 		if err != nil {
 			logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogDevicePayloadSignFail))
 		} else {
-			// 获取公钥的 base64url 编码
 			publicKeyBase64URL, err := PublicKeyRawBase64URLFromPem(identity.PublicKeyPem)
 			if err != nil {
 				logger.Log.Error().Err(err).Msg(i18n.T(i18n.MsgLogPublicKeyEncodeFail))
@@ -698,7 +639,6 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 		return
 	}
 
-	// 等待 connect 响应
 	select {
 	case resp := <-ch:
 		if resp != nil && resp.OK {
@@ -726,7 +666,6 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 	}
 }
 
-// readGatewayTokenFromConfig 从 openclaw.json 读取 gateway.auth.token
 func readGatewayTokenFromConfig() string {
 	configPath := ResolveConfigPath()
 	if configPath == "" {

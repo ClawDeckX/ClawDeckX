@@ -13,7 +13,6 @@ import (
 	"ClawDeckX/internal/logger"
 )
 
-// RawEvent Sessions JSONL 中的原始事件结构
 type RawEvent struct {
 	Type      string                 `json:"type"`
 	Timestamp string                 `json:"timestamp"`
@@ -25,7 +24,6 @@ type RawEvent struct {
 	Extra     map[string]interface{} `json:"extra"`
 }
 
-// NormalizedEvent 归一化后的事件
 type NormalizedEvent struct {
 	EventID   string    `json:"event_id"`
 	Timestamp time.Time `json:"timestamp"`
@@ -37,7 +35,6 @@ type NormalizedEvent struct {
 	SessionID string    `json:"session_id"`
 }
 
-// SessionParser Sessions JSONL 增量解析器
 type SessionParser struct {
 	sessionsDir string
 	offsets     map[string]int64 // 文件名 → 已读取偏移量
@@ -50,7 +47,6 @@ func NewSessionParser(openclawDir string) *SessionParser {
 	}
 }
 
-// ReadNewEvents 增量读取所有 session 文件中的新事件
 func (p *SessionParser) ReadNewEvents() ([]NormalizedEvent, error) {
 	var allEvents []NormalizedEvent
 
@@ -71,7 +67,6 @@ func (p *SessionParser) ReadNewEvents() ([]NormalizedEvent, error) {
 	return allEvents, nil
 }
 
-// readFile 增量读取单个 JSONL 文件
 func (p *SessionParser) readFile(filePath string) ([]NormalizedEvent, error) {
 	fileName := filepath.Base(filePath)
 	offset := p.offsets[fileName]
@@ -82,7 +77,6 @@ func (p *SessionParser) readFile(filePath string) ([]NormalizedEvent, error) {
 	}
 	defer f.Close()
 
-	// 跳到上次读取位置
 	if offset > 0 {
 		if _, err := f.Seek(offset, 0); err != nil {
 			return nil, err
@@ -91,7 +85,6 @@ func (p *SessionParser) readFile(filePath string) ([]NormalizedEvent, error) {
 
 	var events []NormalizedEvent
 	scanner := bufio.NewScanner(f)
-	// 增大缓冲区以处理大行
 	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
 
 	for scanner.Scan() {
@@ -112,14 +105,12 @@ func (p *SessionParser) readFile(filePath string) ([]NormalizedEvent, error) {
 		}
 	}
 
-	// 更新偏移量
 	newOffset, _ := f.Seek(0, 1) // 获取当前位置
 	p.offsets[fileName] = newOffset
 
 	return events, scanner.Err()
 }
 
-// normalizeEvent 将原始事件归一化
 func normalizeEvent(raw RawEvent) *NormalizedEvent {
 	ts := parseTimestamp(raw.Timestamp)
 	category := classifyCategory(raw.Tool, raw.Type)
@@ -127,7 +118,6 @@ func normalizeEvent(raw RawEvent) *NormalizedEvent {
 	summary := buildSummary(raw)
 	detail, _ := json.Marshal(raw)
 
-	// 生成事件 ID
 	eventID := "evt_" + ts.Format("20060102150405") + "_" + sanitize(raw.Tool)
 
 	return &NormalizedEvent{
@@ -142,7 +132,6 @@ func normalizeEvent(raw RawEvent) *NormalizedEvent {
 	}
 }
 
-// classifyCategory 根据工具名分类
 func classifyCategory(tool, eventType string) string {
 	tool = strings.ToLower(tool)
 
@@ -164,16 +153,13 @@ func classifyCategory(tool, eventType string) string {
 	}
 }
 
-// assessRisk 评估风险等级
 func assessRisk(tool string, input map[string]interface{}) string {
 	tool = strings.ToLower(tool)
 
-	// Shell 命令风险评估
 	if strings.Contains(tool, "bash") || strings.Contains(tool, "shell") {
 		cmd := extractCommand(input)
 		cmdLower := strings.ToLower(cmd)
 
-		// 高危命令
 		highRiskPatterns := []string{
 			"rm -rf", "rm -r /", "mkfs", "dd if=",
 			"chmod 777", "curl | sh", "wget | sh",
@@ -187,7 +173,6 @@ func assessRisk(tool string, input map[string]interface{}) string {
 			}
 		}
 
-		// 中等风险
 		mediumRiskPatterns := []string{
 			"sudo ", "pip install", "npm install",
 			"apt install", "yum install", "brew install",
@@ -200,12 +185,10 @@ func assessRisk(tool string, input map[string]interface{}) string {
 		}
 	}
 
-	// 网络请求风险
 	if strings.Contains(tool, "http") || strings.Contains(tool, "fetch") {
 		return constants.RiskMedium
 	}
 
-	// 文件写入风险
 	if strings.Contains(tool, "write") || strings.Contains(tool, "edit") {
 		return constants.RiskLow
 	}
@@ -213,14 +196,12 @@ func assessRisk(tool string, input map[string]interface{}) string {
 	return constants.RiskLow
 }
 
-// buildSummary 构建事件摘要
 func buildSummary(raw RawEvent) string {
 	tool := raw.Tool
 	if tool == "" {
 		tool = raw.Type
 	}
 
-	// 尝试从 input 中提取关键信息
 	if cmd := extractCommand(raw.Input); cmd != "" {
 		if len(cmd) > 120 {
 			cmd = cmd[:120] + "..."
@@ -239,7 +220,6 @@ func buildSummary(raw RawEvent) string {
 	return tool
 }
 
-// extractCommand 从 input 中提取命令字符串
 func extractCommand(input map[string]interface{}) string {
 	for _, key := range []string{"command", "cmd", "script", "code"} {
 		if v, ok := input[key].(string); ok && v != "" {
@@ -249,7 +229,6 @@ func extractCommand(input map[string]interface{}) string {
 	return ""
 }
 
-// parseTimestamp 解析时间戳
 func parseTimestamp(s string) time.Time {
 	formats := []string{
 		time.RFC3339,
@@ -266,7 +245,6 @@ func parseTimestamp(s string) time.Time {
 	return time.Now().UTC()
 }
 
-// sanitize 清理字符串用于 ID 生成
 func sanitize(s string) string {
 	s = strings.ReplaceAll(s, ".", "_")
 	s = strings.ReplaceAll(s, " ", "_")

@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"time"
@@ -81,12 +81,10 @@ func (r *UserRepo) FirstUsername() string {
 	return user.Username
 }
 
-// UpdateUsername 更新用户名
 func (r *UserRepo) UpdateUsername(id uint, username string) error {
 	return r.db.Model(&User{}).Where("id = ?", id).Update("username", username).Error
 }
 
-// Delete 删除用户
 func (r *UserRepo) Delete(id uint) error {
 	return r.db.Delete(&User{}, id).Error
 }

@@ -82,7 +82,6 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 		names = append(names, "dingtalk")
 	}
 
-	// ── Lark/飞书 (via nikoksr/notify/service/lark webhook) ──
 	larkURL, _ := settingRepo.Get("notify_lark_webhook_url")
 	if larkURL != "" {
 		larkSvc := nfylark.NewWebhookService(larkURL)
@@ -132,7 +131,6 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 		names = append(names, "slack")
 	}
 
-	// ── WeCom/企微 (via webhook, using nikoksr/notify/service/http) ──
 	wecomURL, _ := settingRepo.Get("notify_wecom_webhook_url")
 	if wecomURL != "" {
 		wecomSvc := nfyhttp.New()

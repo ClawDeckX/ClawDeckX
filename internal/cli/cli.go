@@ -54,7 +54,6 @@ func Run(args []string) int {
 	case "reset-password":
 		return commands.ResetPassword(args[2:])
 	default:
-		// 所有其他参数传递给 serve
 		return commands.RunServe(args[1:])
 	}
 }
