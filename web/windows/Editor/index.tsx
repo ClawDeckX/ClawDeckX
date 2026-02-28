@@ -150,7 +150,9 @@ const Editor: React.FC<EditorProps> = ({ language }) => {
 
   useEffect(() => {
     if (!editor.config || !mainScrollRef.current) return;
-    const targetSection = pendingRestoreSectionRef.current || activeSection;
+    // Only restore scroll position when switching sections, not on config updates
+    if (!pendingRestoreSectionRef.current) return;
+    const targetSection = pendingRestoreSectionRef.current;
     const targetTop = scrollBySectionRef.current[targetSection] ?? 0;
     const raf = window.requestAnimationFrame(() => {
       if (mainScrollRef.current) {
@@ -159,7 +161,7 @@ const Editor: React.FC<EditorProps> = ({ language }) => {
       pendingRestoreSectionRef.current = null;
     });
     return () => window.cancelAnimationFrame(raf);
-  }, [activeSection, editor.config]);
+  }, [activeSection]);
 
   useEffect(() => {
     if (!sidebarOpen) return;
