@@ -503,6 +503,18 @@ const (
 	MsgStreamCreateStderrPipeFailed = "stream.create_stderr_pipe_failed"
 	MsgStreamStartCommandFailed     = "stream.start_command_failed"
 	MsgStreamCommandExecFailed      = "stream.command_exec_failed"
+
+	// Verifier messages
+	MsgVerifierCheckInstall             = "verifier.check_install"
+	MsgVerifierCheckConfig              = "verifier.check_config"
+	MsgVerifierCheckGateway             = "verifier.check_gateway"
+	MsgVerifierHealthCheck              = "verifier.health_check"
+	MsgVerifierRunningDoctor            = "verifier.running_doctor"
+	MsgVerifierErrOpenclawNotInstalled  = "verifier.err_openclaw_not_installed"
+	MsgVerifierErrOpenclawNotConfigured = "verifier.err_openclaw_not_configured"
+	MsgVerifierErrGatewayNotRunning     = "verifier.err_gateway_not_running"
+	MsgVerifierErrHealthCheckFailed     = "verifier.err_health_check_failed"
+	MsgVerifierErrDoctorFailed          = "verifier.err_doctor_failed"
 )
 
 // CLI messages (openclaw cli wrapper)

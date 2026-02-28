@@ -427,6 +427,17 @@
 
   "gwclient.unknown_error": "Unknown error",
 
+  "verifier.check_install": "Checking OpenClaw installation...",
+  "verifier.check_config": "Checking configuration...",
+  "verifier.check_gateway": "Checking Gateway...",
+  "verifier.health_check": "Gateway health check...",
+  "verifier.running_doctor": "Running diagnostics...",
+  "verifier.err_openclaw_not_installed": "OpenClaw not installed",
+  "verifier.err_openclaw_not_configured": "OpenClaw not configured",
+  "verifier.err_gateway_not_running": "Gateway not running",
+  "verifier.err_health_check_failed": "Gateway health check failed",
+  "verifier.err_doctor_failed": "Diagnostics failed: {{.Error}}",
+
   "service.get_gateway_config_failed": "Failed to get gateway config: {{.Error}}",
   "service.gateway_restart_failed": "Gateway restart failed: {{.Error}}",
   "service.start_gateway_process_failed": "Failed to start gateway process: {{.Error}}",

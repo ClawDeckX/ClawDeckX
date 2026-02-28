@@ -1,6 +1,7 @@
 ﻿package setup
 
 import (
+	"ClawDeckX/internal/i18n"
 	"context"
 	"fmt"
 	"net"
@@ -38,54 +39,54 @@ func (v *Verifier) Verify(ctx context.Context) (*VerifyResult, error) {
 	}
 
 	if v.emitter != nil {
-		v.emitter.EmitStep("verify", "check-install", "检查 OpenClaw 安装...", 10)
+		v.emitter.EmitStep("verify", "check-install", i18n.T(i18n.MsgVerifierCheckInstall), 10)
 	}
 
 	if info := detectTool("openclaw", "--version"); info.Installed {
 		result.OpenClawInstalled = true
 		result.OpenClawVersion = info.Version
 	} else {
-		result.Errors = append(result.Errors, "OpenClaw 未安装")
+		result.Errors = append(result.Errors, i18n.T(i18n.MsgVerifierErrOpenclawNotInstalled))
 	}
 
 	if v.emitter != nil {
-		v.emitter.EmitStep("verify", "check-config", "检查配置...", 30)
+		v.emitter.EmitStep("verify", "check-config", i18n.T(i18n.MsgVerifierCheckConfig), 30)
 	}
 
 	configPath := GetOpenClawConfigPath()
 	result.OpenClawConfigured = checkOpenClawConfigured(configPath)
 	if !result.OpenClawConfigured {
-		result.Errors = append(result.Errors, "OpenClaw 未配置")
+		result.Errors = append(result.Errors, i18n.T(i18n.MsgVerifierErrOpenclawNotConfigured))
 	}
 
 	if v.emitter != nil {
-		v.emitter.EmitStep("verify", "check-gateway", "检查 Gateway...", 50)
+		v.emitter.EmitStep("verify", "check-gateway", i18n.T(i18n.MsgVerifierCheckGateway), 50)
 	}
 
 	result.GatewayRunning, result.GatewayPort = checkGatewayRunning()
 	if !result.GatewayRunning {
-		result.Errors = append(result.Errors, "Gateway 未运行")
+		result.Errors = append(result.Errors, i18n.T(i18n.MsgVerifierErrGatewayNotRunning))
 	}
 
 	if result.GatewayRunning {
 		if v.emitter != nil {
-			v.emitter.EmitStep("verify", "health-check", "Gateway 健康检查...", 70)
+			v.emitter.EmitStep("verify", "health-check", i18n.T(i18n.MsgVerifierHealthCheck), 70)
 		}
 		result.GatewayHealthy = v.healthCheck(result.GatewayPort)
 		if !result.GatewayHealthy {
-			result.Errors = append(result.Errors, "Gateway 健康检查失败")
+			result.Errors = append(result.Errors, i18n.T(i18n.MsgVerifierErrHealthCheckFailed))
 		}
 	}
 
 	if result.OpenClawInstalled {
 		if v.emitter != nil {
-			v.emitter.EmitStep("verify", "doctor", "运行诊断...", 90)
+			v.emitter.EmitStep("verify", "doctor", i18n.T(i18n.MsgVerifierRunningDoctor), 90)
 		}
 		doctorResult := v.runDoctor(ctx)
 		result.DoctorPassed = doctorResult.Success
 		result.DoctorOutput = doctorResult.Output
 		if !result.DoctorPassed && doctorResult.Error != "" {
-			result.Errors = append(result.Errors, fmt.Sprintf("诊断失败: %s", doctorResult.Error))
+			result.Errors = append(result.Errors, i18n.T(i18n.MsgVerifierErrDoctorFailed, map[string]interface{}{"Error": doctorResult.Error}))
 		}
 	}
 
