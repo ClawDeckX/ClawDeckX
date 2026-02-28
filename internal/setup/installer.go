@@ -1076,32 +1076,32 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 	if nodeInfo.Installed {
 		summary = append(summary, InstallSummaryItem{Label: "Node.js", Status: "ok", Detail: nodeInfo.Version, Category: "deps"})
 	} else if needsRestart {
-		summary = append(summary, InstallSummaryItem{Label: "Node.js", Status: "warn", Detail: "已安装，重启后生效", Category: "deps"})
+		summary = append(summary, InstallSummaryItem{Label: "Node.js", Status: "warn", Detail: i18n.T(i18n.MsgInstallerSummaryInstalledRestart), Category: "deps"})
 	} else {
-		summary = append(summary, InstallSummaryItem{Label: "Node.js", Status: "fail", Detail: "未安装", Category: "deps"})
+		summary = append(summary, InstallSummaryItem{Label: "Node.js", Status: "fail", Detail: i18n.T(i18n.MsgInstallerSummaryNotInstalled), Category: "deps"})
 	}
 
 	npmInfo := detectTool("npm", "--version")
 	if npmInfo.Installed {
 		summary = append(summary, InstallSummaryItem{Label: "npm", Status: "ok", Detail: npmInfo.Version, Category: "deps"})
 	} else {
-		summary = append(summary, InstallSummaryItem{Label: "npm", Status: "warn", Detail: "未检测到", Category: "deps"})
+		summary = append(summary, InstallSummaryItem{Label: "npm", Status: "warn", Detail: i18n.T(i18n.MsgInstallerSummaryNotDetected), Category: "deps"})
 	}
 
 	ocInfo := detectTool("openclaw", "--version")
 	if ocInfo.Installed {
 		summary = append(summary, InstallSummaryItem{Label: "OpenClaw", Status: "ok", Detail: ocInfo.Version, Category: "deps"})
 	} else if needsRestart {
-		summary = append(summary, InstallSummaryItem{Label: "OpenClaw", Status: "warn", Detail: "已安装，重启后生效", Category: "deps"})
+		summary = append(summary, InstallSummaryItem{Label: "OpenClaw", Status: "warn", Detail: i18n.T(i18n.MsgInstallerSummaryInstalledRestart), Category: "deps"})
 	} else {
-		summary = append(summary, InstallSummaryItem{Label: "OpenClaw", Status: "fail", Detail: "未安装", Category: "deps"})
+		summary = append(summary, InstallSummaryItem{Label: "OpenClaw", Status: "fail", Detail: i18n.T(i18n.MsgInstallerSummaryNotInstalled), Category: "deps"})
 	}
 
 	chInfo := detectTool("clawhub", "--version")
 	if chInfo.Installed {
 		summary = append(summary, InstallSummaryItem{Label: "ClawHub CLI", Status: "ok", Detail: chInfo.Version, Category: "deps"})
 	} else {
-		summary = append(summary, InstallSummaryItem{Label: "ClawHub CLI", Status: "warn", Detail: "未安装（可选）", Category: "deps"})
+		summary = append(summary, InstallSummaryItem{Label: "ClawHub CLI", Status: "warn", Detail: i18n.T(i18n.MsgInstallerSummaryOptional), Category: "deps"})
 	}
 
 	if config.InstallZeroTier {
@@ -1109,11 +1109,11 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		if ztInfo.Installed {
 			detail := ztInfo.Version
 			if config.ZerotierNetworkId != "" {
-				detail += "  网络: " + config.ZerotierNetworkId
+				detail += "  " + i18n.T(i18n.MsgInstallerSummaryNetwork, map[string]interface{}{"NetworkId": config.ZerotierNetworkId})
 			}
 			summary = append(summary, InstallSummaryItem{Label: "ZeroTier", Status: "ok", Detail: detail, Category: "optional"})
 		} else {
-			summary = append(summary, InstallSummaryItem{Label: "ZeroTier", Status: "fail", Detail: "安装失败", Category: "optional"})
+			summary = append(summary, InstallSummaryItem{Label: "ZeroTier", Status: "fail", Detail: i18n.T(i18n.MsgInstallerSummaryInstallFailed), Category: "optional"})
 		}
 	}
 	if config.InstallTailscale {
@@ -1121,7 +1121,7 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		if tsInfo.Installed {
 			summary = append(summary, InstallSummaryItem{Label: "Tailscale", Status: "ok", Detail: tsInfo.Version, Category: "optional"})
 		} else {
-			summary = append(summary, InstallSummaryItem{Label: "Tailscale", Status: "fail", Detail: "安装失败", Category: "optional"})
+			summary = append(summary, InstallSummaryItem{Label: "Tailscale", Status: "fail", Detail: i18n.T(i18n.MsgInstallerSummaryInstallFailed), Category: "optional"})
 		}
 	}
 
@@ -1134,7 +1134,7 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 		}
 	}
 
-	summary = append(summary, InstallSummaryItem{Label: "配置文件", Status: func() string {
+	summary = append(summary, InstallSummaryItem{Label: i18n.T(i18n.MsgInstallerSummaryConfigFile), Status: func() string {
 		if cfgValid {
 			return "ok"
 		}
@@ -1142,9 +1142,9 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 	}(), Detail: result.ConfigPath, Category: "config"})
 
 	if cfgConfigured {
-		summary = append(summary, InstallSummaryItem{Label: "模型服务商", Status: "ok", Detail: "已配置", Category: "config"})
+		summary = append(summary, InstallSummaryItem{Label: i18n.T(i18n.MsgInstallerSummaryModelProvider), Status: "ok", Detail: i18n.T(i18n.MsgInstallerSummaryConfigured), Category: "config"})
 	} else {
-		summary = append(summary, InstallSummaryItem{Label: "模型服务商", Status: "warn", Detail: "未配置", Category: "config"})
+		summary = append(summary, InstallSummaryItem{Label: i18n.T(i18n.MsgInstallerSummaryModelProvider), Status: "warn", Detail: i18n.T(i18n.MsgInstallerSummaryNotConfigured), Category: "config"})
 	}
 
 	gwMode := "local"
