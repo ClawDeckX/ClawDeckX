@@ -3,6 +3,7 @@
 package tray
 
 import (
+	"ClawDeckX/internal/i18n"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -38,19 +39,19 @@ func Run(addr string, onQuit func()) {
 			menu.ShowMenu()
 		})
 
-		mOpen := systray.AddMenuItem("打开管理后台", "Open Web UI")
+		mOpen := systray.AddMenuItem(i18n.T(i18n.MsgTrayOpenWebUI), "Open Web UI")
 		mOpen.Click(func() {
 			openBrowser(url)
 		})
 
 		systray.AddSeparator()
 
-		mAddr := systray.AddMenuItem(fmt.Sprintf("地址: %s", url), "")
+		mAddr := systray.AddMenuItem(i18n.T(i18n.MsgTrayAddress, map[string]interface{}{"Url": url}), "")
 		mAddr.Disable()
 
 		systray.AddSeparator()
 
-		mQuit := systray.AddMenuItem("退出", "Quit")
+		mQuit := systray.AddMenuItem(i18n.T(i18n.MsgTrayQuit), "Quit")
 		mQuit.Click(func() {
 			if onQuit != nil {
 				onQuit()
