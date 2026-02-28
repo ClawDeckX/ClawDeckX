@@ -547,6 +547,9 @@ const (
 
 	// Notify messages
 	MsgNotifyTestMessage = "notify.test_message"
+
+	// Helpers messages
+	MsgHelpersEnvHeader = "helpers.env_header"
 )
 
 // CLI messages (openclaw cli wrapper)
