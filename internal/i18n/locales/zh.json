@@ -216,7 +216,11 @@
   "settings.invalid_mode": "错误: mode 仅支持 production 或 debug",
   "settings.config_read_failed": "错误: 读取配置失败: {{.Error}}",
   "settings.config_save_failed": "错误: 保存配置失败: {{.Error}}",
-  "settings.mode_set": "已设置模式: {{.Mode}}",
+  "settings.mode_set": "模式已设置为: {{.Mode}}",
+  "settings.usage": "用法:\n  ClawDeckX settings <子命令> [参数]",
+  "settings.subcommands": "子命令:",
+  "settings.cmd_show": "  show      显示当前 ClawDeckX 配置",
+  "settings.cmd_set_mode": "  set-mode  设置模式（production/debug）",
 
   "gateway.heartbeat_restart_failed": "🚨 OpenClaw Gateway 心跳检测失败，自动重启也失败: {{.Error}}",
   "gateway.heartbeat_restart_success": "⚠️ OpenClaw Gateway 心跳检测失败，已自动重启成功",

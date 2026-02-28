@@ -36,7 +36,7 @@ func RunServe(args []string) int {
 	// Load config
 	cfg, err := webconfig.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "配置加载失败: %v\n", err)
+		fmt.Fprintf(os.Stderr, i18n.T(i18n.MsgServeConfigLoadFailed, map[string]interface{}{"Error": err.Error()})+"\n")
 		return 1
 	}
 
@@ -76,9 +76,9 @@ func RunServe(args []string) int {
 	// 如果用户通过 --port 指定了端口，保存到配置文件
 	if portOverride {
 		if err := webconfig.Save(cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  保存配置文件失败: %v\n", err)
+			fmt.Fprintf(os.Stderr, i18n.T(i18n.MsgServeConfigSaveFailed, map[string]interface{}{"Error": err.Error()})+"\n")
 		} else {
-			fmt.Printf("✓ 端口 %d 已保存到配置文件，下次启动将自动使用\n", cfg.Server.Port)
+			fmt.Println(i18n.T(i18n.MsgServePortSaved, map[string]interface{}{"Port": cfg.Server.Port}))
 		}
 	}
 
@@ -99,12 +99,12 @@ func RunServe(args []string) int {
 		count, _ := userRepo.Count()
 		if count == 0 {
 			if len(initPass) < 6 {
-				fmt.Fprintf(os.Stderr, "⚠️  密码至少 6 位\n")
+				fmt.Fprintln(os.Stderr, i18n.T(i18n.MsgServePasswordTooShort))
 				return 1
 			}
 			hash, err := bcrypt.GenerateFromPassword([]byte(initPass), bcrypt.DefaultCost)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "⚠️  密码加密失败: %v\n", err)
+				fmt.Fprintf(os.Stderr, i18n.T(i18n.MsgServePasswordEncryptFailed, map[string]interface{}{"Error": err.Error()})+"\n")
 				return 1
 			}
 			if err := userRepo.Create(&database.User{
@@ -112,12 +112,12 @@ func RunServe(args []string) int {
 				PasswordHash: string(hash),
 				Role:         constants.RoleAdmin,
 			}); err != nil {
-				fmt.Fprintf(os.Stderr, "⚠️  创建初始用户失败: %v\n", err)
+				fmt.Fprintf(os.Stderr, i18n.T(i18n.MsgServeUserCreateFailed, map[string]interface{}{"Error": err.Error()})+"\n")
 				return 1
 			}
-			fmt.Printf("✓ 初始管理员用户 '%s' 已创建\n", initUser)
+			fmt.Println(i18n.T(i18n.MsgServeUserCreated, map[string]interface{}{"Username": initUser}))
 		} else {
-			fmt.Printf("ℹ️  已存在 %d 个用户，跳过初始用户创建\n", count)
+			fmt.Println(i18n.T(i18n.MsgServeUserExists, map[string]interface{}{"Count": count}))
 		}
 	}
 
@@ -536,11 +536,8 @@ func RunServe(args []string) int {
 	testAddr := fmt.Sprintf("%s:%d", cfg.Server.Bind, cfg.Server.Port)
 	ln, err := net.Listen("tcp", testAddr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\n❌ 端口 %d 已被占用，无法启动服务\n\n", cfg.Server.Port)
-		fmt.Fprintf(os.Stderr, "解决方案：\n")
-		fmt.Fprintf(os.Stderr, "  1. 关闭占用该端口的程序\n")
-		fmt.Fprintf(os.Stderr, "  2. 使用 --port 参数指定其他端口：./ClawDeckX serve --port 18792\n")
-		fmt.Fprintf(os.Stderr, "     (端口号会自动保存到配置文件，下次启动无需再次指定)\n\n")
+		fmt.Fprintf(os.Stderr, "\n"+i18n.T(i18n.MsgServePortInUse, map[string]interface{}{"Port": cfg.Server.Port})+"\n\n")
+		fmt.Fprintln(os.Stderr, i18n.T(i18n.MsgServePortInUseSolutions))
 		logger.Log.Error().Int("port", cfg.Server.Port).Err(err).Msg(i18n.T(i18n.MsgLogPortInUse))
 		return 1
 	}
@@ -552,8 +549,7 @@ func RunServe(args []string) int {
 	// 启动后快速自检：检测 127.0.0.1 是否被其他进程占用并劫持到非 ClawDeckX 服务
 	if conflict, detail := detectLoopbackRouteConflict(cfg.Server.Port); conflict {
 		logger.Log.Warn().Str("detail", detail).Msg(i18n.T(i18n.MsgLogLoopbackConflict))
-		fmt.Printf("\n⚠️  检测到回环地址冲突: %s\n", detail)
-		fmt.Printf("   建议使用: http://localhost:%d/\n", cfg.Server.Port)
+		fmt.Println("\n" + i18n.T(i18n.MsgServeLoopbackConflict, map[string]interface{}{"Detail": detail, "Port": cfg.Server.Port}))
 	}
 
 	// 显示所有可访问的 URL

@@ -251,6 +251,14 @@ const (
 	MsgDoctorNotifyReconfigure        = "doctor.notify_reconfigure"
 )
 
+// Settings messages
+const (
+	MsgSettingsUsage       = "settings.usage"
+	MsgSettingsSubcommands = "settings.subcommands"
+	MsgSettingsCmdShow     = "settings.cmd_show"
+	MsgSettingsCmdSetMode  = "settings.cmd_set_mode"
+)
+
 // Reset password messages
 const (
 	MsgResetPasswordUsage            = "reset_password.usage"

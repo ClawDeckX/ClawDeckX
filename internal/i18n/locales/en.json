@@ -217,6 +217,10 @@
   "settings.config_read_failed": "Error: Failed to read config: {{.Error}}",
   "settings.config_save_failed": "Error: Failed to save config: {{.Error}}",
   "settings.mode_set": "Mode set to: {{.Mode}}",
+  "settings.usage": "Usage:\n  ClawDeckX settings <subcommand> [args]",
+  "settings.subcommands": "Subcommands:",
+  "settings.cmd_show": "  show      Show current ClawDeckX configuration",
+  "settings.cmd_set_mode": "  set-mode  Set mode (production/debug)",
 
   "gateway.heartbeat_restart_failed": "🚨 OpenClaw Gateway heartbeat check failed, auto-restart also failed: {{.Error}}",
   "gateway.heartbeat_restart_success": "⚠️ OpenClaw Gateway heartbeat check failed, auto-restart succeeded",
