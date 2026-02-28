@@ -515,6 +515,14 @@ const (
 	MsgVerifierErrGatewayNotRunning     = "verifier.err_gateway_not_running"
 	MsgVerifierErrHealthCheckFailed     = "verifier.err_health_check_failed"
 	MsgVerifierErrDoctorFailed          = "verifier.err_doctor_failed"
+
+	// Prompt messages
+	MsgPromptDefaultNo              = "prompt.default_no"
+	MsgPromptDefaultYes             = "prompt.default_yes"
+	MsgPromptDefaultLabel           = "prompt.default_label"
+	MsgPromptDefaultMarker          = "prompt.default_marker"
+	MsgPromptEnterNumberWithDefault = "prompt.enter_number_with_default"
+	MsgPromptEnterNumber            = "prompt.enter_number"
 )
 
 // CLI messages (openclaw cli wrapper)
