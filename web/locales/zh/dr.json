@@ -112,6 +112,10 @@
   "frequencyLabel": "触发频率",
   "collapse": "收起",
   "expand": "展开",
+  "firstRunTitle": "尚未体检",
+  "firstRunMessage": "健康维护需要先运行一次诊断体检，是否立即执行？",
+  "firstRunConfirm": "立即体检",
+  "firstRunSkip": "稍后再说",
   "checkCatalog": {
     "openclaw_install": { "name": "OpenClaw 安装" },
     "config_file": { "name": "配置文件" },

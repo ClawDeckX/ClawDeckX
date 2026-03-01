@@ -105,6 +105,7 @@ type SummaryRiskFilter = 'all' | 'critical' | 'high' | 'medium';
 const SUMMARY_SOURCE_STORAGE_KEY = 'doctor.summarySourceFilter';
 const SUMMARY_RISK_STORAGE_KEY = 'doctor.summaryRiskFilter';
 const TIME_RANGE_STORAGE_KEY = 'doctor.timeRange';
+const DOCTOR_HAS_RUN_KEY = 'doctor.hasRun';
 
 function statusClass(status: 'ok' | 'warn' | 'error') {
   if (status === 'ok') return 'text-emerald-500 bg-emerald-500/10';
@@ -134,6 +135,34 @@ function relativeTime(ts: string, text: any): string {
   }
   const h = Math.floor(diff / 3_600_000);
   return (text.timelineHourAgo || '{n}h ago').replace('{n}', String(h));
+}
+
+function formatIssueDetail(raw?: string): string {
+  if (!raw) return '';
+  const s = raw.trim();
+  if (!s.startsWith('{') && !s.startsWith('[')) return s;
+  try {
+    const obj = JSON.parse(s);
+    if (typeof obj !== 'object' || obj === null) return s;
+    const picks: string[] = [];
+    const errMsg = obj.errorMessage || obj.error_message || obj.error || obj.message;
+    if (errMsg) picks.push(String(errMsg));
+    const state = obj.state || obj.status;
+    if (state) picks.push(`state: ${state}`);
+    const key = obj.sessionKey || obj.session_key;
+    if (key) picks.push(`session: ${String(key).slice(0, 32)}`);
+    const code = obj.statusCode ?? obj.status_code ?? obj.code;
+    if (code !== undefined && code !== null) picks.push(`code: ${code}`);
+    const runId = obj.runId || obj.run_id;
+    if (runId) picks.push(`run: ${String(runId).slice(0, 12)}`);
+    if (picks.length === 0) {
+      const keys = Object.keys(obj).slice(0, 3);
+      keys.forEach(k => { if (obj[k] !== null && obj[k] !== undefined) picks.push(`${k}: ${String(obj[k]).slice(0, 60)}`); });
+    }
+    return picks.join(' · ') || s;
+  } catch {
+    return s;
+  }
 }
 
 function filterTrendByRange(trend: OverviewPoint[], range: TimeRange): OverviewPoint[] {
@@ -187,6 +216,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
   const [onlyFixable, setOnlyFixable] = useState(false);
   const [fixingOne, setFixingOne] = useState<string>('');
   const [wsConnected, setWsConnected] = useState(true);
+  const [showFirstRunPrompt, setShowFirstRunPrompt] = useState(false);
   const [summarySourceFilter, setSummarySourceFilter] = useState<SummarySourceKey>(() => {
     if (typeof window === 'undefined') return 'all';
     const saved = window.localStorage.getItem(SUMMARY_SOURCE_STORAGE_KEY);
@@ -302,6 +332,8 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     setLoadError('');
     try {
       await Promise.all([runDoctor(force), loadOverview(force)]);
+      if (typeof window !== 'undefined') window.localStorage.setItem(DOCTOR_HAS_RUN_KEY, '1');
+      setShowFirstRunPrompt(false);
     } catch (err: any) {
       const msg = err?.message || '';
       const hint = msg ? `: ${msg}` : '';
@@ -597,6 +629,16 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
       }
     };
   }, [activeTab, applyBucketCountsToSummary, language, loadSummary, scheduleSummaryRefresh, text.actionReviewAlerts, text.issuesTitle, text.summaryGatewayShutdown, text.summaryKillSwitch]);
+
+  // First-run prompt: show dialog if no prior diagnostics cached.
+  useEffect(() => {
+    if (activeTab !== 'diagnose') return;
+    const hasRun = typeof window !== 'undefined' && window.localStorage.getItem(DOCTOR_HAS_RUN_KEY) === '1';
+    if (!hasRun && !result && !loading) {
+      const timer = setTimeout(() => setShowFirstRunPrompt(true), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, result, loading]);
 
   // Full diagnostics stay manual.
 
@@ -1101,6 +1143,26 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
               <div className="rounded-lg border border-red-300/50 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-300">{loadError}</div>
             )}
 
+            {/* First-run prompt */}
+            {showFirstRunPrompt && !result && (
+              <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-white dark:from-primary/10 dark:via-white/[0.03] dark:to-transparent p-6 flex flex-col items-center text-center gap-3 shadow-sm">
+                <span className="material-symbols-outlined text-[36px] text-primary/70">health_and_safety</span>
+                <p className="text-[14px] font-bold text-slate-700 dark:text-white/85">{text.firstRunTitle}</p>
+                <p className="text-[12px] text-slate-500 dark:text-white/50 max-w-sm">{text.firstRunMessage}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <button onClick={() => { setShowFirstRunPrompt(false); fetchAll(true); }} disabled={loading}
+                    className="h-9 px-4 rounded-lg text-[12px] font-bold bg-primary text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5">
+                    <span className={`material-symbols-outlined text-[16px] ${loading ? 'animate-spin' : ''}`}>{loading ? 'progress_activity' : 'troubleshoot'}</span>
+                    {text.firstRunConfirm}
+                  </button>
+                  <button onClick={() => setShowFirstRunPrompt(false)}
+                    className="h-9 px-4 rounded-lg text-[12px] font-bold border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+                    {text.firstRunSkip}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* === ROW 1: Gauge + Summary + Time Range === */}
             {summaryView && (
               <div className={`rounded-2xl border p-3 md:p-4 shadow-sm ${summaryTone}`}>
@@ -1122,7 +1184,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                       <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 dark:text-white/40">{text.healthSnapshot}</p>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${statusClass(summaryView.status)}`}>{statusLabel}</span>
                       {summarySourceFilter !== 'all' && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-primary/15 text-primary">
                           {summarySourceOptions.find((opt) => opt.key === summarySourceFilter)?.label || summarySourceFilter}
                         </span>
                       )}
@@ -1193,7 +1255,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                   </button>
                 </div>
 
-                {/* #8 Score Deduction Panel */}
+                {/* #8 Score Deduction Panel — compact arc chips */}
                 {deductions.length > 0 && (
                   <div className="mt-3 rounded-xl bg-white/75 dark:bg-white/[0.02] border border-slate-200/70 dark:border-white/10 p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -1203,16 +1265,24 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                       </p>
                       <p className="text-[9px] text-slate-400 dark:text-white/30">{text.deductionHint}</p>
                     </div>
-                    <div className="space-y-1.5">
-                      {deductions.map(d => (
-                        <div key={d.key} className="flex items-center gap-2">
-                          <span className="text-[11px] text-slate-600 dark:text-white/60 w-24 sm:w-32 truncate">{d.label}</span>
-                          <div className="flex-1 h-3 bg-slate-100 dark:bg-white/[0.04] rounded overflow-hidden">
-                            <div className="h-full rounded transition-all duration-500" style={{ width: `${(d.points / d.maxPoints) * 100}%`, background: d.color }} />
+                    <div className="flex flex-wrap gap-3">
+                      {deductions.map(d => {
+                        const pct = Math.min(1, d.points / d.maxPoints);
+                        const r = 18; const circ = Math.PI * r;
+                        return (
+                          <div key={d.key} className="flex items-center gap-2 min-w-[120px]">
+                            <svg viewBox="0 0 44 26" className="w-10 h-6 shrink-0">
+                              <path d="M 4 24 A 18 18 0 0 1 40 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-200 dark:text-white/10" strokeLinecap="round" />
+                              <path d="M 4 24 A 18 18 0 0 1 40 24" fill="none" stroke={d.color} strokeWidth="4" strokeLinecap="round"
+                                strokeDasharray={circ} strokeDashoffset={circ - pct * circ} className="transition-all duration-500" />
+                            </svg>
+                            <div className="min-w-0">
+                              <p className="text-[10px] text-slate-600 dark:text-white/55 truncate leading-tight">{d.label}</p>
+                              <p className="text-[12px] font-black leading-tight" style={{ color: d.color }}>-{d.points}</p>
+                            </div>
                           </div>
-                          <span className="text-[11px] font-bold w-8 text-right" style={{ color: d.color }}>-{d.points}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1305,7 +1375,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                       <div className="w-full space-y-1">
                         {sourceDistribution.map(s => (
                           <button key={s.key} onClick={() => setSummarySourceFilter(s.key as SummarySourceKey)}
-                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg text-[10px] transition-all ${summarySourceFilter === s.key ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]'}`}>
+                            className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg text-[10px] transition-all ${summarySourceFilter === s.key ? 'bg-primary/15 text-primary ring-1 ring-primary/30' : 'hover:bg-slate-50 dark:hover:bg-white/[0.03] text-slate-600 dark:text-white/55'}`}>
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
                             <span className="flex-1 text-left truncate">{s.label}</span>
                             <span className="font-bold">{s.count}</span>
@@ -1369,7 +1439,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {summarySourceOptions.map((opt) => (
                         <button key={opt.key} onClick={() => setSummarySourceFilter(opt.key)}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${summarySourceFilter === opt.key ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : `${opt.chip} hover:opacity-80`}`}>
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${summarySourceFilter === opt.key ? 'bg-primary/15 text-primary ring-1 ring-primary/30' : `${opt.chip} hover:opacity-80`}`}>
                           <span className="material-symbols-outlined text-[12px]">{opt.icon}</span>
                           <span className="truncate max-w-[88px]">{opt.label}</span>
                         </button>
@@ -1384,7 +1454,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                       { key: 'medium' as const, label: riskText('medium'), tone: 'bg-amber-500/10 text-amber-600 dark:text-amber-300', count: summaryRiskCounts.medium },
                     ]).map((opt) => (
                       <button key={opt.key} onClick={() => setSummaryRiskFilter(opt.key)}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${summaryRiskFilter === opt.key ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : `${opt.tone} hover:opacity-80`}`}>
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${summaryRiskFilter === opt.key ? 'bg-primary/15 text-primary ring-1 ring-primary/30' : `${opt.tone} hover:opacity-80`}`}>
                         <span>{opt.label}</span><span className="opacity-70">{opt.count}</span>
                       </button>
                     ))}
@@ -1409,7 +1479,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                                   <p className="text-[12px] font-bold text-slate-700 dark:text-white/75 truncate">{i.title}</p>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
-                                  {count > 1 && <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900">x{count}</span>}
+                                  {count > 1 && <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-primary/15 text-primary">x{count}</span>}
                                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${i.risk === 'critical' ? 'bg-red-500/10 text-red-500' : i.risk === 'high' ? 'bg-orange-500/10 text-orange-500' : 'bg-amber-500/10 text-amber-500'}`}>{riskText(i.risk)}</span>
                                 </div>
                               </div>
@@ -1424,7 +1494,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                                   </div>
                                 )}
                               </div>
-                              {i.detail && <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1 break-all">{i.detail}</p>}
+                              {i.detail && <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1 break-all">{formatIssueDetail(i.detail)}</p>}
                               {count > 1 && (
                                 <div className="mt-1.5">
                                   <button onClick={() => setExpandedSummaryGroups((prev) => prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key])}

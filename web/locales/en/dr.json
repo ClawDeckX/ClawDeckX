@@ -112,6 +112,10 @@
   "frequencyLabel": "Frequency",
   "collapse": "Collapse",
   "expand": "Expand",
+  "firstRunTitle": "No Diagnostics Yet",
+  "firstRunMessage": "Health maintenance requires an initial diagnostic scan. Run it now?",
+  "firstRunConfirm": "Run Now",
+  "firstRunSkip": "Later",
   "checkCatalog": {
     "openclaw_install": { "name": "OpenClaw Install" },
     "config_file": { "name": "Config File" },
