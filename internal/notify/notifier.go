@@ -23,9 +23,10 @@ import (
 
 // Manager wraps nikoksr/notify.Notify and manages channel lifecycle.
 type Manager struct {
-	mu           sync.RWMutex
-	notifier     *nfy.Notify
-	channelNames []string
+	mu               sync.RWMutex
+	notifier         *nfy.Notify
+	channelNames     []string
+	channelNotifiers map[string]*nfy.Notify
 }
 
 // NewManager creates an empty notification manager.
@@ -43,6 +44,7 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 
 	// Create a fresh notifier instance (drops old services)
 	n := nfy.New()
+	perChannel := make(map[string]*nfy.Notify)
 	var names []string
 
 	// ── Telegram (via nikoksr/notify/service/telegram) ──
@@ -64,6 +66,9 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 			if id, err := strconv.ParseInt(strings.TrimSpace(tgChatID), 10, 64); err == nil {
 				tgSvc.AddReceivers(id)
 				n.UseServices(tgSvc)
+				pc := nfy.New()
+				pc.UseServices(tgSvc)
+				perChannel["telegram"] = pc
 				names = append(names, "telegram")
 			} else {
 				logger.Log.Warn().Str("chat_id", tgChatID).Msg(i18n.T(i18n.MsgLogTelegramChatIdInvalid))
@@ -79,6 +84,9 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 	if ddToken != "" {
 		ddSvc := nfydd.New(&nfydd.Config{Token: ddToken, Secret: ddSecret})
 		n.UseServices(ddSvc)
+		pc := nfy.New()
+		pc.UseServices(ddSvc)
+		perChannel["dingtalk"] = pc
 		names = append(names, "dingtalk")
 	}
 
@@ -86,6 +94,9 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 	if larkURL != "" {
 		larkSvc := nfylark.NewWebhookService(larkURL)
 		n.UseServices(larkSvc)
+		pc := nfy.New()
+		pc.UseServices(larkSvc)
+		perChannel["lark"] = pc
 		names = append(names, "lark")
 	}
 
@@ -106,6 +117,9 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 		if err := dcSvc.AuthenticateWithBotToken(dcToken); err == nil {
 			dcSvc.AddReceivers(strings.TrimSpace(dcChannelID))
 			n.UseServices(dcSvc)
+			pc := nfy.New()
+			pc.UseServices(dcSvc)
+			perChannel["discord"] = pc
 			names = append(names, "discord")
 		} else {
 			logger.Log.Warn().Err(err).Msg(i18n.T(i18n.MsgLogDiscordInitFailed))
@@ -128,6 +142,9 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 		slackSvc := nfyslack.New(slackToken)
 		slackSvc.AddReceivers(strings.TrimSpace(slackChannelID))
 		n.UseServices(slackSvc)
+		pc := nfy.New()
+		pc.UseServices(slackSvc)
+		perChannel["slack"] = pc
 		names = append(names, "slack")
 	}
 
@@ -146,6 +163,9 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 			},
 		})
 		n.UseServices(wecomSvc)
+		pc := nfy.New()
+		pc.UseServices(wecomSvc)
+		perChannel["wecom"] = pc
 		names = append(names, "wecom")
 	}
 
@@ -200,11 +220,15 @@ func (m *Manager) Reload(settingRepo *database.SettingRepo, gwChannels map[strin
 		})
 
 		n.UseServices(httpSvc)
+		pc := nfy.New()
+		pc.UseServices(httpSvc)
+		perChannel["webhook"] = pc
 		names = append(names, "webhook")
 	}
 
 	m.notifier = n
 	m.channelNames = names
+	m.channelNotifiers = perChannel
 
 	logger.Log.Info().Int("channels", len(names)).Strs("names", names).Msg(i18n.T(i18n.MsgLogNotifyChannelsReloaded))
 }
@@ -241,6 +265,22 @@ func (m *Manager) SendAlert(risk, message, detail string) {
 		text += "\n" + detail
 	}
 	m.Send(text)
+}
+
+// SendToChannel dispatches a message to a specific channel by name.
+func (m *Manager) SendToChannel(channel, text string) error {
+	m.mu.RLock()
+	pc := m.channelNotifiers[channel]
+	m.mu.RUnlock()
+
+	if pc == nil {
+		return fmt.Errorf("channel %q not configured", channel)
+	}
+	if err := pc.Send(context.Background(), "ClawDeckX", text); err != nil {
+		logger.Log.Warn().Err(err).Str("channel", channel).Msg("notify: send to channel failed")
+		return err
+	}
+	return nil
 }
 
 // HasChannels returns true if at least one channel is configured.

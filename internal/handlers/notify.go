@@ -121,10 +121,11 @@ func (h *NotifyHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// TestSend sends a test notification to all configured channels.
+// TestSend sends a test notification. If "channel" is specified, only that channel is tested.
 func (h *NotifyHandler) TestSend(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Message string `json:"message"`
+		Channel string `json:"channel"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		web.FailErr(w, r, web.ErrInvalidBody)
@@ -139,7 +140,14 @@ func (h *NotifyHandler) TestSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.manager.Send(req.Message)
+	if req.Channel != "" {
+		if err := h.manager.SendToChannel(req.Channel, req.Message); err != nil {
+			web.Fail(w, r, "CHANNEL_SEND_FAIL", err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		h.manager.Send(req.Message)
+	}
 	web.OK(w, r, map[string]string{"message": "ok"})
 }
 

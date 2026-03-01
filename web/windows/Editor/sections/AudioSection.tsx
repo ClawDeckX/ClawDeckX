@@ -282,8 +282,10 @@ export const AudioSection: React.FC<SectionProps> = ({ setField, getField, langu
 
       {/* Voice Config (static) */}
       <ConfigSection title={es.audioConfig} icon="mic" iconColor="text-fuchsia-500" defaultOpen={false}>
+        <TextField label={es.talkProvider} tooltip={tip('talk.provider')} value={getField(['talk', 'provider']) || ''} onChange={v => setField(['talk', 'provider'], v)} placeholder="elevenlabs" />
         <TextField label={es.voiceId} tooltip={tip('talk.voiceId')} value={getField(['talk', 'voiceId']) || ''} onChange={v => setField(['talk', 'voiceId'], v)} placeholder={es.phVoiceId} />
         <TextField label={es.audioModelId} tooltip={tip('talk.modelId')} value={getField(['talk', 'modelId']) || ''} onChange={v => setField(['talk', 'modelId'], v)} placeholder={es.phModelId} />
+        <TextField label={es.talkOutputFormat} tooltip={tip('talk.outputFormat')} value={getField(['talk', 'outputFormat']) || ''} onChange={v => setField(['talk', 'outputFormat'], v)} placeholder="mp3" />
         <PasswordField label={es.audioApiKey} tooltip={tip('talk.apiKey')} value={getField(['talk', 'apiKey']) || ''} onChange={v => setField(['talk', 'apiKey'], v)} />
         <SwitchField label={es.audioInterrupt} tooltip={tip('talk.interruptOnSpeech')} value={getField(['talk', 'interruptOnSpeech']) === true} onChange={v => setField(['talk', 'interruptOnSpeech'], v)} />
       </ConfigSection>

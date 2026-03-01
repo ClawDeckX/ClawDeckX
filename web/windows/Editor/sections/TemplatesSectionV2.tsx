@@ -6,6 +6,7 @@ import { templateSystem, WorkspaceTemplate } from '../../../services/template-sy
 import { useToast } from '../../../components/Toast';
 import { useConfirm } from '../../../components/ConfirmDialog';
 import { FileApplyConfirm, FileApplyRequest } from '../../../components/FileApplyConfirm';
+import CustomSelect from '../../../components/CustomSelect';
 
 interface TemplatesSectionV2Props {
   language: Language;
@@ -244,17 +245,12 @@ export const TemplatesSectionV2: React.FC<TemplatesSectionV2Props> = ({ language
           </div>
 
           {/* Target file filter */}
-          <select
+          <CustomSelect
             value={targetFilter}
-            onChange={e => setTargetFilter(e.target.value)}
+            onChange={v => setTargetFilter(v)}
+            options={[{ value: 'all', label: ts.allFiles || 'All Files' }, ...TARGET_FILES.map(f => ({ value: f, label: f }))]}
             className="h-7 px-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e2028] text-[10px] text-slate-600 dark:text-white/60"
-            style={{ colorScheme: 'dark' }}
-          >
-            <option value="all">{ts.allFiles || 'All Files'}</option>
-            {TARGET_FILES.map(f => (
-              <option key={f} value={f}>{f}</option>
-            ))}
-          </select>
+          />
 
           {/* Search */}
           <div className="relative flex-1 min-w-[150px]">

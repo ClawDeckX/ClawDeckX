@@ -427,7 +427,7 @@ const App: React.FC = () => {
                   {w.id === 'dashboard' && <Dashboard language={language} />}
                   {w.id === 'gateway' && <Gateway language={language} />}
                   {w.id === 'sessions' && <Sessions language={language} pendingSessionKey={pendingSessionKey} onSessionKeyConsumed={() => setPendingSessionKey(null)} />}
-                  {w.id === 'activity' && <Activity language={language} />}
+                  {w.id === 'activity' && <Activity language={language} onNavigateToSession={navigateToSession} />}
                   {w.id === 'alerts' && <Alerts language={language} />}
                   {w.id === 'config_mgmt' && <Usage language={language} onNavigateToSession={navigateToSession} />}
                   {w.id === 'editor' && <Editor language={language} />}

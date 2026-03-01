@@ -17,6 +17,8 @@ export interface UseConfigEditorReturn {
   mode: ConfigMode;
   setMode: (m: ConfigMode) => void;
   errors: ValidationError[];
+  /** Flat map of dotted-path → error message for field-level display */
+  fieldErrors: Record<string, string>;
   configPath: string;
 
   load: () => Promise<void>;
@@ -43,7 +45,7 @@ export interface UseConfigEditorReturn {
 }
 
 function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj));
+  return structuredClone(obj);
 }
 
 function getNestedValue(obj: any, path: string[]): any {
@@ -88,6 +90,44 @@ function deleteNestedValue(obj: any, path: string[]): any {
 
 const MAX_HISTORY = 50;
 
+type JsonPatch = { path: string[]; prev: any; next: any }[];
+
+function computePatch(prev: any, next: any, path: string[] = []): JsonPatch {
+  const ops: JsonPatch = [];
+  if (prev === next) return ops;
+  if (prev == null || next == null || typeof prev !== 'object' || typeof next !== 'object' || Array.isArray(prev) !== Array.isArray(next)) {
+    ops.push({ path, prev: structuredClone(prev), next: structuredClone(next) });
+    return ops;
+  }
+  if (Array.isArray(prev) && Array.isArray(next)) {
+    if (JSON.stringify(prev) !== JSON.stringify(next)) {
+      ops.push({ path, prev: structuredClone(prev), next: structuredClone(next) });
+    }
+    return ops;
+  }
+  const allKeys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  for (const key of allKeys) {
+    ops.push(...computePatch(prev[key], next[key], [...path, key]));
+  }
+  return ops;
+}
+
+function applyPatch(base: Record<string, any>, patch: JsonPatch, direction: 'forward' | 'backward'): Record<string, any> {
+  let result = structuredClone(base);
+  for (const op of patch) {
+    const value = direction === 'forward' ? op.next : op.prev;
+    if (op.path.length === 0) {
+      result = structuredClone(value);
+    } else {
+      result = setNestedValue(result, op.path, value === undefined ? undefined : structuredClone(value));
+      if (value === undefined) {
+        result = deleteNestedValue(result, op.path);
+      }
+    }
+  }
+  return result;
+}
+
 export function useConfigEditor(): UseConfigEditorReturn {
   const [config, setConfig] = useState<Record<string, any> | null>(null);
   const [schema, setSchema] = useState<Record<string, any> | null>(null);
@@ -96,29 +136,38 @@ export function useConfigEditor(): UseConfigEditorReturn {
   const [dirty, setDirty] = useState(false);
   const [mode, setModeState] = useState<ConfigMode>('remote');
   const [errors, setErrors] = useState<ValidationError[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [configPath, setConfigPath] = useState('');
   const [saveError, setSaveError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [loadErrorCode, setLoadErrorCode] = useState('');
   const baseHashRef = useRef<string | null>(null);
 
-  // undo/redo history
-  const historyRef = useRef<string[]>([]);
+  // undo/redo history — stores patches (diffs) instead of full snapshots
+  const patchHistoryRef = useRef<JsonPatch[]>([]);
   const historyIndexRef = useRef(-1);
+  const prevConfigRef = useRef<Record<string, any> | null>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
   const pushHistory = useCallback((cfg: Record<string, any>) => {
-    const json = JSON.stringify(cfg);
+    const prev = prevConfigRef.current;
+    if (!prev) {
+      prevConfigRef.current = structuredClone(cfg);
+      return;
+    }
+    const patch = computePatch(prev, cfg);
+    if (patch.length === 0) return;
     const idx = historyIndexRef.current;
     // truncate forward history
-    historyRef.current = historyRef.current.slice(0, idx + 1);
-    historyRef.current.push(json);
-    if (historyRef.current.length > MAX_HISTORY) {
-      historyRef.current.shift();
+    patchHistoryRef.current = patchHistoryRef.current.slice(0, idx + 1);
+    patchHistoryRef.current.push(patch);
+    if (patchHistoryRef.current.length > MAX_HISTORY) {
+      patchHistoryRef.current.shift();
     }
-    historyIndexRef.current = historyRef.current.length - 1;
-    setCanUndo(historyIndexRef.current > 0);
+    historyIndexRef.current = patchHistoryRef.current.length - 1;
+    prevConfigRef.current = structuredClone(cfg);
+    setCanUndo(historyIndexRef.current >= 0);
     setCanRedo(false);
   }, []);
 
@@ -129,8 +178,9 @@ export function useConfigEditor(): UseConfigEditorReturn {
     setErrors([]);
     setSaveError('');
     setLoadError('');
-    historyRef.current = [];
+    patchHistoryRef.current = [];
     historyIndexRef.current = -1;
+    prevConfigRef.current = null;
     setCanUndo(false);
     setCanRedo(false);
   }, []);
@@ -173,8 +223,9 @@ export function useConfigEditor(): UseConfigEditorReturn {
         setConfig(cfg);
         setDirty(false);
         setErrors([]);
-        historyRef.current = [JSON.stringify(cfg)];
-        historyIndexRef.current = 0;
+        patchHistoryRef.current = [];
+        historyIndexRef.current = -1;
+        prevConfigRef.current = structuredClone(cfg);
         setCanUndo(false);
         setCanRedo(false);
       } else {
@@ -222,7 +273,22 @@ export function useConfigEditor(): UseConfigEditorReturn {
       setDirty(false);
       return true;
     } catch (e: any) {
-      setSaveError(e?.message || 'Failed to save config');
+      const msg = e?.message || 'Failed to save config';
+      setSaveError(msg);
+      // Parse field-level validation issues from backend error response
+      const issues: any[] = e?.details?.issues || e?.issues || [];
+      if (issues.length > 0) {
+        const errs: ValidationError[] = issues.map((i: any) => ({
+          path: typeof i.path === 'string' ? i.path.split('.') : (i.path || []),
+          message: i.message || 'Invalid value',
+        }));
+        setErrors(errs);
+        const fe: Record<string, string> = {};
+        for (const err of errs) {
+          fe[err.path.join('.')] = err.message;
+        }
+        setFieldErrors(fe);
+      }
       return false;
     } finally {
       setSaving(false);
@@ -239,6 +305,8 @@ export function useConfigEditor(): UseConfigEditorReturn {
       const next = updater(deepClone(prev));
       setDirty(true);
       pushHistory(next);
+      setFieldErrors({});
+      setErrors([]);
       return next;
     });
   }, [pushHistory]);
@@ -293,24 +361,35 @@ export function useConfigEditor(): UseConfigEditorReturn {
 
   const undo = useCallback(() => {
     const idx = historyIndexRef.current;
-    if (idx <= 0) return;
+    if (idx < 0) return;
+    setConfig(prev => {
+      if (!prev) return prev;
+      const patch = patchHistoryRef.current[idx];
+      const cfg = applyPatch(prev, patch, 'backward');
+      prevConfigRef.current = structuredClone(cfg);
+      return cfg;
+    });
     historyIndexRef.current = idx - 1;
-    const cfg = JSON.parse(historyRef.current[idx - 1]);
-    setConfig(cfg);
     setDirty(true);
-    setCanUndo(idx - 1 > 0);
+    setCanUndo(idx - 1 >= 0);
     setCanRedo(true);
   }, []);
 
   const redo = useCallback(() => {
     const idx = historyIndexRef.current;
-    if (idx >= historyRef.current.length - 1) return;
-    historyIndexRef.current = idx + 1;
-    const cfg = JSON.parse(historyRef.current[idx + 1]);
-    setConfig(cfg);
+    if (idx >= patchHistoryRef.current.length - 1) return;
+    const nextIdx = idx + 1;
+    setConfig(prev => {
+      if (!prev) return prev;
+      const patch = patchHistoryRef.current[nextIdx];
+      const cfg = applyPatch(prev, patch, 'forward');
+      prevConfigRef.current = structuredClone(cfg);
+      return cfg;
+    });
+    historyIndexRef.current = nextIdx;
     setDirty(true);
     setCanUndo(true);
-    setCanRedo(idx + 1 < historyRef.current.length - 1);
+    setCanRedo(nextIdx < patchHistoryRef.current.length - 1);
   }, []);
 
   // initial load
@@ -319,7 +398,7 @@ export function useConfigEditor(): UseConfigEditorReturn {
   }, [mode]);
 
   return {
-    config, schema, loading, saving, dirty, mode, setMode, errors, configPath,
+    config, schema, loading, saving, dirty, mode, setMode, errors, fieldErrors, configPath,
     load, save, reload,
     getField, setField, deleteField, appendToArray, removeFromArray,
     toJSON, fromJSON,

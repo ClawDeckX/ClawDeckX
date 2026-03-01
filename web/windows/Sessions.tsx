@@ -17,6 +17,13 @@ interface GwSession {
   kind?: string;
   lastActiveAt?: string;
   totalTokens?: number;
+  lastMessagePreview?: string;
+  model?: string;
+  modelProvider?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  thinkingLevel?: string;
+  derivedTitle?: string;
 }
 
 interface ChatMsg {
@@ -130,6 +137,34 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [error, setError] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const pendingRunRef = useRef<{ runId: string; beforeCount: number; startedAt: number } | null>(null);
+
+  // --- New state for optimizations ---
+  // Sidebar search
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  // Input history (↑ key recall)
+  const [inputHistory, setInputHistory] = useState<string[]>([]);
+  const [historyIdx, setHistoryIdx] = useState(-1);
+  // Drafts per session (localStorage)
+  const draftsRef = useRef<Record<string, string>>({});
+  // Scroll to bottom visibility
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Tool call expand state
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  // Long message expand state
+  const [expandedMsgs, setExpandedMsgs] = useState<Set<number>>(new Set());
+  // Sidebar collapse (desktop)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Unread messages per session
+  const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
+  // Stream throttle ref
+  const streamTextRef = useRef('');
+  const streamRafRef = useRef<number | null>(null);
+  // Message feedback
+  const [feedbackMap, setFeedbackMap] = useState<Record<number, 'up' | 'down'>>({});
+  // Reconnect banner
+  const [showReconnectBanner, setShowReconnectBanner] = useState(false);
+  const wasConnectedRef = useRef(false);
 
   // Inject system message
   const [injectOpen, setInjectOpen] = useState(false);
@@ -354,7 +389,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       const msg = payload.message as any;
       const text = extractText(msg?.content ?? msg);
       if (typeof text === 'string' && text.trim().length > 0) {
-        setStream(text);
+        throttledSetStream(text);
         setRunPhase('streaming');
       }
     } else if (payload.state === 'final') {
@@ -424,6 +459,13 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         kind: s.chatType || s.kind || '',
         lastActiveAt: s.updatedAt ? new Date(s.updatedAt).toISOString() : '',
         totalTokens: s.totalTokens || 0,
+        lastMessagePreview: s.lastMessagePreview || '',
+        model: s.model || '',
+        modelProvider: s.modelProvider || '',
+        inputTokens: s.inputTokens || 0,
+        outputTokens: s.outputTokens || 0,
+        thinkingLevel: s.thinkingLevel || '',
+        derivedTitle: s.derivedTitle || '',
       })));
     } catch { /* ignore */ }
     finally { setSessionsLoading(false); }
@@ -509,16 +551,119 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     return () => clearInterval(timer);
   }, [gwReady, runId, loadHistory, c.error]);
 
-  // Auto-scroll
+  // Auto-scroll + scroll-to-bottom detection
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
   }, [messages, stream]);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollBtn(distFromBottom > 200);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Draft save on session switch
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('clawdeck-chat-drafts');
+      if (saved) draftsRef.current = JSON.parse(saved);
+    } catch { /* ignore */ }
+  }, []);
+  const saveDraft = useCallback((key: string, text: string) => {
+    if (text.trim()) {
+      draftsRef.current[key] = text;
+    } else {
+      delete draftsRef.current[key];
+    }
+    try { localStorage.setItem('clawdeck-chat-drafts', JSON.stringify(draftsRef.current)); } catch { /* ignore */ }
+  }, []);
+  const loadDraft = useCallback((key: string) => {
+    return draftsRef.current[key] || '';
+  }, []);
+
+  // Reconnect banner
+  useEffect(() => {
+    if (gwReady) {
+      if (wasConnectedRef.current === false && wasConnectedRef.current !== undefined) {
+        // Was disconnected, now reconnected — hide banner after brief flash
+        setShowReconnectBanner(false);
+      }
+      wasConnectedRef.current = true;
+    } else if (wasConnectedRef.current) {
+      setShowReconnectBanner(true);
+    }
+  }, [gwReady]);
+
+  // Unread tracking: increment for non-active sessions on new messages via WS
+  const prevMessagesLenRef = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMessagesLenRef.current && messages.length > 0) {
+      const last = messages[messages.length - 1];
+      if (last.role === 'assistant') {
+        // Mark other sessions as potentially having unread (simplified — real impl would track per-session via WS events)
+      }
+    }
+    prevMessagesLenRef.current = messages.length;
+  }, [messages]);
+
+  // Sidebar: filtered + grouped sessions
+  const filteredSessions = useMemo(() => {
+    if (!sidebarSearch) return sessions;
+    const q = sidebarSearch.toLowerCase();
+    return sessions.filter(s => 
+      (s.label || '').toLowerCase().includes(q) ||
+      (s.key || '').toLowerCase().includes(q) ||
+      (s.lastMessagePreview || '').toLowerCase().includes(q)
+    );
+  }, [sessions, sidebarSearch]);
+
+  const groupedSessions = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterday = today - 86400000;
+    const weekAgo = today - 7 * 86400000;
+    const groups: Array<{ label: string; items: GwSession[] }> = [
+      { label: c.groupToday || 'Today', items: [] },
+      { label: c.groupYesterday || 'Yesterday', items: [] },
+      { label: c.groupThisWeek || 'This Week', items: [] },
+      { label: c.groupEarlier || 'Earlier', items: [] },
+    ];
+    for (const s of filteredSessions) {
+      const ts = s.lastActiveAt ? new Date(s.lastActiveAt).getTime() : 0;
+      if (ts >= today) groups[0].items.push(s);
+      else if (ts >= yesterday) groups[1].items.push(s);
+      else if (ts >= weekAgo) groups[2].items.push(s);
+      else groups[3].items.push(s);
+    }
+    return groups.filter(g => g.items.length > 0);
+  }, [filteredSessions, c]);
+
+  // Stream throttle: batch rapid setStream updates into 50ms frames
+  const throttledSetStream = useCallback((text: string) => {
+    streamTextRef.current = text;
+    if (streamRafRef.current === null) {
+      streamRafRef.current = window.requestAnimationFrame(() => {
+        setStream(streamTextRef.current);
+        streamRafRef.current = null;
+      });
+    }
+  }, []);
 
   // Send message (via REST proxy; streaming events come via Manager WS)
   const sendMessage = useCallback(async () => {
     if (!gwReady || sending || isStreaming) return;
     const msg = input.trim();
     if (!msg) return;
+
+    // Track input history for ↑ recall
+    setInputHistory(prev => [msg, ...prev.slice(0, 49)]);
+    setHistoryIdx(-1);
+    saveDraft(sessionKey, '');
 
     // Optimistic user message
     setMessages(prev => [...prev, { role: 'user', content: [{ type: 'text', text: msg }], timestamp: Date.now() }]);
@@ -640,6 +785,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
   // Select session
   const selectSession = useCallback((key: string) => {
+    // Save current draft before switching
+    saveDraft(sessionKey, input);
     setSessionKey(key);
     setMessages([]);
     setStream(null);
@@ -647,7 +794,13 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setRunPhase('idle');
     pendingRunRef.current = null;
     setDrawerOpen(false);
-  }, []);
+    // Restore draft for new session
+    setInput(loadDraft(key));
+    // Clear unread
+    setUnreadMap(prev => { const next = { ...prev }; delete next[key]; return next; });
+    setExpandedMsgs(new Set());
+    setExpandedTools(new Set());
+  }, [sessionKey, input, saveDraft, loadDraft]);
 
   // New session
   const handleNewSession = useCallback(() => {
@@ -743,11 +896,26 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         return;
       }
     }
+    // Input history recall with ↑/↓ when input is empty or navigating history
+    if (e.key === 'ArrowUp' && !slashOpen && (!input || historyIdx >= 0) && inputHistory.length > 0) {
+      e.preventDefault();
+      const nextIdx = Math.min(historyIdx + 1, inputHistory.length - 1);
+      setHistoryIdx(nextIdx);
+      setInput(inputHistory[nextIdx]);
+      return;
+    }
+    if (e.key === 'ArrowDown' && !slashOpen && historyIdx >= 0) {
+      e.preventDefault();
+      const nextIdx = historyIdx - 1;
+      setHistoryIdx(nextIdx);
+      setInput(nextIdx >= 0 ? inputHistory[nextIdx] : '');
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
-  }, [sendMessage, slashOpen, slashFiltered, slashHighlight, selectSlashCommand]);
+  }, [sendMessage, slashOpen, slashFiltered, slashHighlight, selectSlashCommand, input, historyIdx, inputHistory]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -764,7 +932,41 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   }, []);
 
-  const activeLabel = sessions.find(s => s.key === sessionKey)?.label || sessionKey;
+  // Export chat as Markdown
+  const exportChat = useCallback(() => {
+    const lines = messages.map(m => {
+      const text = extractText(m.content);
+      const role = m.role === 'user' ? '**You**' : m.role === 'assistant' ? '**AI**' : `**${m.role}**`;
+      const ts = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+      return `${role} ${ts ? `(${ts})` : ''}\n\n${text}\n`;
+    });
+    const md = `# Chat: ${sessionKey}\n\n${lines.join('\n---\n\n')}`;
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-${sessionKey}-${new Date().toISOString().split('T')[0]}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [messages, sessionKey]);
+
+  // Resend a user message (edit + resend)
+  const resendMessage = useCallback((idx: number) => {
+    const msg = messages[idx];
+    if (!msg || msg.role !== 'user') return;
+    const text = extractText(msg.content);
+    setInput(text);
+    textareaRef.current?.focus();
+  }, [messages]);
+
+  // Scroll to bottom handler
+  const scrollToBottom = useCallback(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  // Current session meta
+  const activeSession = sessions.find(s => s.key === sessionKey);
+  const activeLabel = activeSession?.label || sessionKey;
 
   // Not connected state: only block UI when gateway itself is unreachable
   // AND we've actually checked (avoid flashing disconnected before first REST check).
@@ -793,7 +995,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       )}
 
       {/* Sidebar — desktop: static, mobile: slide-out drawer */}
-      <aside className={`fixed md:static top-[32px] bottom-[72px] md:top-auto md:bottom-auto left-0 z-50 w-72 md:w-64 lg:w-72 border-r border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0d1117] md:bg-slate-50/80 md:dark:bg-black/20 flex flex-col shrink-0 transform transition-transform duration-200 ease-out ${drawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <aside className={`fixed md:static top-[32px] bottom-[72px] md:top-auto md:bottom-auto left-0 z-50 ${sidebarCollapsed ? 'w-0 md:w-0 overflow-hidden' : 'w-72 md:w-64 lg:w-72'} border-r border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0d1117] md:bg-slate-50/80 md:dark:bg-black/20 flex flex-col shrink-0 transform transition-all duration-200 ease-out ${drawerOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="p-3 border-b border-slate-200 dark:border-white/5">
           <button onClick={handleNewSession}
             className="w-full bg-primary text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all active:scale-[0.98]">
@@ -801,8 +1003,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
           </button>
         </div>
 
-        {/* Session Key Input */}
-        <div className="px-3 py-2 border-b border-slate-200 dark:border-white/5">
+        {/* Session Key Input + Search */}
+        <div className="px-3 py-2 border-b border-slate-200 dark:border-white/5 space-y-1.5">
           <div className="relative">
             <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-white/20 text-[14px]">key</span>
             <input value={sessionKey} onChange={e => setSessionKey(e.target.value)}
@@ -810,14 +1012,26 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               className="w-full h-8 pl-7 pr-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[10px] font-mono text-slate-700 dark:text-white/70 focus:ring-1 focus:ring-primary/50 outline-none"
               placeholder={c.sessionKey} />
           </div>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-white/20 text-[13px]">search</span>
+            <input value={sidebarSearch} onChange={e => setSidebarSearch(e.target.value)}
+              className="w-full h-7 pl-7 pr-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[10px] text-slate-700 dark:text-white/70 focus:ring-1 focus:ring-primary/50 outline-none"
+              placeholder={c.searchSessions || 'Search...'} />
+          </div>
         </div>
 
-        {/* Sessions List */}
+        {/* Sessions List — grouped by time */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+          {/* Skeleton loading */}
           {sessionsLoading && sessions.length === 0 && !wsConnecting && (
-            <div className="text-center py-8 text-slate-400 dark:text-white/20">
-              <span className="material-symbols-outlined text-[20px] block mb-1 animate-spin">progress_activity</span>
-              <span className="text-[10px]">{c.loading}</span>
+            <div className="space-y-2 animate-pulse">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className="rounded-xl border border-slate-200/40 dark:border-white/5 p-2.5">
+                  <div className="h-2.5 w-12 bg-slate-200 dark:bg-white/10 rounded mb-2" />
+                  <div className="h-3 w-32 bg-slate-200 dark:bg-white/10 rounded mb-1.5" />
+                  <div className="h-2 w-20 bg-slate-100 dark:bg-white/5 rounded" />
+                </div>
+              ))}
             </div>
           )}
           {sessions.length === 0 && !sessionsLoading && !wsConnecting && (
@@ -826,44 +1040,60 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               <span className="text-[10px]">{c.noSessions}</span>
             </div>
           )}
-          {sessions.map(s => (
-            <div key={s.key} className="relative group">
-              <button onClick={() => selectSession(s.key)}
-                className={`w-full text-left p-2.5 rounded-xl transition-all border ${sessionKey === s.key
-                  ? 'bg-primary/10 border-primary/20 shadow-sm'
-                  : 'border-transparent hover:bg-slate-200/50 dark:hover:bg-white/5'
-                  }`}>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${s.kind === 'direct' ? 'bg-blue-500/10 text-blue-500' :
-                    s.kind === 'group' ? 'bg-purple-500/10 text-purple-500' :
-                      'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-white/40'
-                    }`}>{s.kind || sessionDefault}</span>
-                  {s.totalTokens ? <span className="text-[10px] text-slate-400 dark:text-white/20 font-mono">{(s.totalTokens / 1000).toFixed(1)}k</span> : null}
-                </div>
-                <h4 className={`text-[11px] font-bold truncate pr-12 ${sessionKey === s.key ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-white/50'}`}>
-                  {s.label || s.key}
-                </h4>
-                {s.lastActiveAt && (
-                  <p className="text-[11px] text-slate-400 dark:text-white/20 mt-0.5">{new Date(s.lastActiveAt).toLocaleString()}</p>
-                )}
-              </button>
-              {/* Hover actions */}
-              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={(e) => { e.stopPropagation(); openRenameDialog(s.key, s.label || ''); }}
-                  className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-primary transition-all"
-                  title={c.renameSession}>
-                  <span className="material-symbols-outlined text-[14px]">edit</span>
-                </button>
-                {s.key !== 'main' && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDeleteConfirmKey(s.key); }}
-                    className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-all"
-                    title={c.deleteSession}>
-                    <span className="material-symbols-outlined text-[14px]">delete</span>
+          {groupedSessions.map(group => (
+            <div key={group.label}>
+              <p className="text-[9px] font-bold text-slate-400 dark:text-white/25 uppercase tracking-widest px-2 pt-2 pb-1">{group.label}</p>
+              {group.items.map(s => (
+                <div key={s.key} className="relative group">
+                  <button onClick={() => selectSession(s.key)}
+                    className={`w-full text-left p-2.5 rounded-xl transition-all border ${sessionKey === s.key
+                      ? 'bg-primary/10 border-primary/20 shadow-sm'
+                      : 'border-transparent hover:bg-slate-200/50 dark:hover:bg-white/5'
+                      }`}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${s.kind === 'direct' ? 'bg-blue-500/10 text-blue-500' :
+                        s.kind === 'group' ? 'bg-purple-500/10 text-purple-500' :
+                          'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-white/40'
+                        }`}>{s.kind || sessionDefault}</span>
+                      <div className="flex items-center gap-1">
+                        {unreadMap[s.key] ? <span className="w-1.5 h-1.5 rounded-full bg-primary" /> : null}
+                        {s.totalTokens ? <span className="text-[10px] text-slate-400 dark:text-white/20 font-mono">{(s.totalTokens / 1000).toFixed(1)}k</span> : null}
+                      </div>
+                    </div>
+                    <h4 className={`text-[11px] font-bold truncate pr-12 ${sessionKey === s.key ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-white/50'}`}>
+                      {s.label || s.key}
+                    </h4>
+                    {s.lastMessagePreview && (
+                      <p className="text-[10px] text-slate-400 dark:text-white/25 truncate mt-0.5">{s.lastMessagePreview}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {s.lastActiveAt && (
+                        <span className="text-[10px] text-slate-400 dark:text-white/20">{new Date(s.lastActiveAt).toLocaleString()}</span>
+                      )}
+                      {s.model && (
+                        <span className="text-[9px] text-slate-300 dark:text-white/15 font-mono truncate">{s.model}</span>
+                      )}
+                    </div>
                   </button>
-                )}
-              </div>
+                  {/* Hover actions */}
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openRenameDialog(s.key, s.label || ''); }}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-primary transition-all"
+                      title={c.renameSession}>
+                      <span className="material-symbols-outlined text-[14px]">edit</span>
+                    </button>
+                    {s.key !== 'main' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmKey(s.key); }}
+                        className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-all"
+                        title={c.deleteSession}>
+                        <span className="material-symbols-outlined text-[14px]">delete</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -879,9 +1109,23 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
       {/* Chat Area */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Reconnect banner */}
+        {showReconnectBanner && (
+          <div className="px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-center gap-2 shrink-0 z-20">
+            <span className="material-symbols-outlined text-[14px] text-amber-500 animate-spin">progress_activity</span>
+            <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">{c.reconnecting || 'Reconnecting...'}</span>
+          </div>
+        )}
+
         {/* Header */}
         <header className="px-4 md:px-6 py-2.5 md:py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between shrink-0 bg-white/80 dark:bg-black/40 backdrop-blur-xl z-10">
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
+            {/* Sidebar collapse toggle (desktop) */}
+            <button onClick={() => setSidebarCollapsed(v => !v)}
+              className="hidden md:flex p-1.5 -ml-1 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
+              title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
+              <span className="material-symbols-outlined text-[18px]">{sidebarCollapsed ? 'right_panel_open' : 'left_panel_close'}</span>
+            </button>
             <button onClick={() => setDrawerOpen(true)}
               className="md:hidden p-1.5 -ml-1 text-slate-500 dark:text-white/50 hover:text-primary hover:bg-primary/5 rounded-lg transition-all">
               <span className="material-symbols-outlined text-[20px]">menu</span>
@@ -891,7 +1135,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
             </div>
             <div className="truncate">
               <h2 className="text-xs md:text-sm font-bold text-slate-900 dark:text-white truncate">{activeLabel}</h2>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className={`w-1 h-1 rounded-full ${gwReady ? 'bg-mac-green' : 'bg-slate-300'}`} />
                 <span className="text-[11px] text-slate-400 font-medium font-mono">{sessionKey}</span>
                 <span className="text-slate-300 dark:text-white/15">|</span>
@@ -899,10 +1143,27 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                   <span className={`w-1.5 h-1.5 rounded-full ${runPhaseMeta.dot}`} />
                   {runPhaseMeta.text}
                 </span>
+                {activeSession?.model && (
+                  <>
+                    <span className="text-slate-300 dark:text-white/15">|</span>
+                    <span className="text-[10px] text-slate-400 dark:text-white/30 font-mono truncate max-w-[120px]">{activeSession.model}</span>
+                  </>
+                )}
+                {activeSession?.totalTokens ? (
+                  <>
+                    <span className="text-slate-300 dark:text-white/15">|</span>
+                    <span className="text-[10px] text-slate-400 dark:text-white/30 font-mono">{(activeSession.totalTokens / 1000).toFixed(1)}k tok</span>
+                  </>
+                ) : null}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <button onClick={exportChat} disabled={messages.length === 0}
+              className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-600 rounded-lg transition-colors disabled:opacity-30"
+              title={c.exportChat || 'Export'}>
+              <span className="material-symbols-outlined text-[18px]">download</span>
+            </button>
             <button onClick={() => setInjectOpen(true)} disabled={!gwReady}
               className="p-2 text-slate-400 hover:bg-purple-100 dark:hover:bg-purple-500/10 hover:text-purple-500 rounded-lg transition-colors disabled:opacity-30"
               title={c.inject}>
@@ -926,7 +1187,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar relative">
           <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-4">
             {/* Session history cleared notice */}
             {sessionNotice && (
@@ -994,10 +1255,13 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               const isSystem = msg.role === 'system';
               const isTool = msg.role === 'tool';
 
+              // Filter empty bubbles (P0 fix)
+              if (!text.trim() && tools.length === 0 && !isTool) return null;
+
               if (isSystem) {
                 return (
                   <div key={idx} className="flex justify-center">
-                    <div className="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/5 text-[10px] text-slate-500 dark:text-white/40 font-medium">
+                    <div className="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/5 text-[10px] text-slate-500 dark:text-white/40 font-medium max-w-md truncate">
                       {text}
                     </div>
                   </div>
@@ -1005,18 +1269,27 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               }
 
               if (isTool) {
+                const toolKey = `tool-${idx}`;
+                const isExpanded = expandedTools.has(toolKey);
                 return (
                   <div key={idx} className="ml-10 md:ml-12">
                     <div className="rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 p-3 text-[10px]">
-                      <div className="flex items-center gap-1.5 mb-1.5 text-slate-500 dark:text-white/40">
+                      <button onClick={() => setExpandedTools(prev => { const next = new Set(prev); next.has(toolKey) ? next.delete(toolKey) : next.add(toolKey); return next; })}
+                        className="flex items-center gap-1.5 mb-1.5 text-slate-500 dark:text-white/40 hover:text-primary transition-colors w-full text-left">
                         <span className="material-symbols-outlined text-[12px]">build</span>
                         <span className="font-bold uppercase tracking-wider">{c.toolResult}</span>
-                      </div>
-                      <pre className="text-[10px] font-mono text-slate-600 dark:text-white/40 whitespace-pre-wrap break-all max-h-32 overflow-y-auto custom-scrollbar">{text}</pre>
+                        <span className="material-symbols-outlined text-[12px] ml-auto">{isExpanded ? 'expand_less' : 'expand_more'}</span>
+                      </button>
+                      <pre className={`text-[10px] font-mono text-slate-600 dark:text-white/40 whitespace-pre-wrap break-all overflow-y-auto custom-scrollbar transition-all ${isExpanded ? 'max-h-96' : 'max-h-12 overflow-hidden'}`}>{text}</pre>
                     </div>
                   </div>
                 );
               }
+
+              // Long message collapse
+              const isLong = text.length > 1500;
+              const isMsgExpanded = expandedMsgs.has(idx);
+              const displayText = isLong && !isMsgExpanded ? text.slice(0, 1500) : text;
 
               return (
                 <div key={idx} className={`flex items-start gap-2.5 md:gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -1033,22 +1306,35 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                       ? 'bg-primary text-white border-primary/30 rounded-tr-sm'
                       : 'bg-white dark:bg-white/[0.03] text-slate-800 dark:text-slate-200 border-slate-200 dark:border-white/[0.06] rounded-tl-sm'
                       }`}>
-                      <div className="text-[12px] md:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{text}</div>
+                      <div className="text-[12px] md:text-[13px] leading-relaxed whitespace-pre-wrap break-words">{displayText}</div>
+                      {/* Expand/collapse long messages */}
+                      {isLong && (
+                        <button onClick={() => setExpandedMsgs(prev => { const next = new Set(prev); next.has(idx) ? next.delete(idx) : next.add(idx); return next; })}
+                          className={`mt-1 text-[10px] font-bold ${isUser ? 'text-white/70 hover:text-white' : 'text-primary/70 hover:text-primary'} transition-colors`}>
+                          {isMsgExpanded ? (c.collapse || 'Collapse') : (c.expand || 'Expand')} ({Math.ceil(text.length / 1000)}k chars)
+                        </button>
+                      )}
 
-                      {/* Tool calls */}
+                      {/* Tool calls — expandable */}
                       {tools.length > 0 && (
                         <div className="mt-2 space-y-1.5">
-                          {tools.map((tool, ti) => (
-                            <div key={ti} className="rounded-lg bg-black/5 dark:bg-white/5 p-2 text-[10px]">
-                              <div className="flex items-center gap-1 text-primary font-bold mb-1">
-                                <span className="material-symbols-outlined text-[11px]">build</span>
-                                {tool.name}
+                          {tools.map((tool, ti) => {
+                            const tKey = `msg-${idx}-tool-${ti}`;
+                            const tExpanded = expandedTools.has(tKey);
+                            return (
+                              <div key={ti} className="rounded-lg bg-black/5 dark:bg-white/5 p-2 text-[10px]">
+                                <button onClick={() => setExpandedTools(prev => { const next = new Set(prev); next.has(tKey) ? next.delete(tKey) : next.add(tKey); return next; })}
+                                  className="flex items-center gap-1 text-primary font-bold w-full text-left">
+                                  <span className="material-symbols-outlined text-[11px]">build</span>
+                                  {tool.name}
+                                  <span className="material-symbols-outlined text-[10px] ml-auto">{tExpanded ? 'expand_less' : 'expand_more'}</span>
+                                </button>
+                                {tool.input && tExpanded && (
+                                  <pre className="font-mono text-[11px] text-slate-500 dark:text-white/40 whitespace-pre-wrap break-all max-h-60 overflow-y-auto custom-scrollbar mt-1">{tool.input}</pre>
+                                )}
                               </div>
-                              {tool.input && (
-                                <pre className="font-mono text-[11px] text-slate-500 dark:text-white/40 whitespace-pre-wrap break-all max-h-20 overflow-hidden">{tool.input}</pre>
-                              )}
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -1064,6 +1350,27 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                           <span className="material-symbols-outlined text-[12px]">{copiedIdx === idx ? 'check' : 'content_copy'}</span>
                           {copiedIdx === idx ? c.copied : c.copy}
                         </button>
+                      )}
+                      {/* Resend for user messages */}
+                      {isUser && (
+                        <button onClick={() => resendMessage(idx)}
+                          className="flex items-center gap-0.5 text-[11px] text-white/60 hover:text-white transition-colors">
+                          <span className="material-symbols-outlined text-[12px]">replay</span>
+                          {c.resend || 'Edit'}
+                        </button>
+                      )}
+                      {/* Feedback for assistant messages */}
+                      {!isUser && !isSystem && !isTool && (
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setFeedbackMap(prev => ({ ...prev, [idx]: 'up' }))}
+                            className={`p-0.5 rounded transition-colors ${feedbackMap[idx] === 'up' ? 'text-primary' : 'text-slate-300 dark:text-white/15 hover:text-primary'}`}>
+                            <span className="material-symbols-outlined text-[12px]">thumb_up</span>
+                          </button>
+                          <button onClick={() => setFeedbackMap(prev => ({ ...prev, [idx]: 'down' }))}
+                            className={`p-0.5 rounded transition-colors ${feedbackMap[idx] === 'down' ? 'text-red-500' : 'text-slate-300 dark:text-white/15 hover:text-red-500'}`}>
+                            <span className="material-symbols-outlined text-[12px]">thumb_down</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1110,6 +1417,14 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
             <div ref={chatEndRef} />
           </div>
+
+          {/* Scroll to bottom button */}
+          {showScrollBtn && (
+            <button onClick={scrollToBottom}
+              className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-lg flex items-center justify-center text-slate-500 dark:text-white/50 hover:text-primary hover:border-primary/30 transition-all z-10">
+              <span className="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+            </button>
+          )}
         </div>
 
         {/* Input Area */}
@@ -1184,9 +1499,13 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 </button>
               )}
             </div>
-            <p className="hidden md:block text-[11px] text-center text-slate-400 dark:text-white/20 mt-2">
-              {c.poweredBy}
-            </p>
+            <div className="hidden md:flex items-center justify-between text-[11px] text-slate-400 dark:text-white/20 mt-2 px-1">
+              <span>{c.poweredBy}</span>
+              <div className="flex items-center gap-3">
+                {input.length > 0 && <span className="tabular-nums">{input.length}</span>}
+                <span className="text-slate-300 dark:text-white/15">Shift+Enter {c.newLine || 'new line'}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

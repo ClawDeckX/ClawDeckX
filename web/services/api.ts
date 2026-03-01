@@ -174,10 +174,20 @@ export const pairingApi = {
 };
 
 // ==================== 通知配置 ====================
+export interface NotifyConfigResponse {
+  config: Record<string, string>;
+  active_channels: string[];
+  available_channels: Array<{ type: string; has_token: boolean }>;
+}
+export interface NotifyUpdateResponse {
+  message: string;
+  active_channels: string[];
+}
 export const notifyApi = {
-  getConfig: () => get<any>('/api/v1/notify/config'),
-  updateConfig: (data: Record<string, string>) => put('/api/v1/notify/config', data),
-  testSend: (message?: string) => post('/api/v1/notify/test', { message: message || '' }),
+  getConfig: () => get<NotifyConfigResponse>('/api/v1/notify/config'),
+  getConfigCached: (ttlMs = 15000, force = false) => getCached<NotifyConfigResponse>('/api/v1/notify/config', ttlMs, force),
+  updateConfig: (data: Record<string, string>) => put<NotifyUpdateResponse>('/api/v1/notify/config', data),
+  testSend: (message?: string, channel?: string) => post('/api/v1/notify/test', { message: message || '', ...(channel ? { channel } : {}) }),
 };
 
 // ==================== 告警 ====================
@@ -219,6 +229,7 @@ export const configApi = {
 // ==================== 备份管理 ====================
 export const backupApi = {
   list: () => get<any[]>('/api/v1/backups'),
+  listCached: (ttlMs = 10000, force = false) => getCached<any[]>('/api/v1/backups', ttlMs, force),
   create: () => post('/api/v1/backups'),
   restore: (id: string) => post(`/api/v1/backups/${id}`),
   remove: (id: string) => del(`/api/v1/backups/${id}`),
@@ -430,16 +441,28 @@ export const gwApi = {
     rpc('skills.status', { agentId }),
   // Cron
   cron: () => rpc<any[]>('cron.list', { includeDisabled: true }),
+  cronList: (opts?: {
+    includeDisabled?: boolean; limit?: number; offset?: number;
+    query?: string; enabled?: 'all' | 'enabled' | 'disabled';
+    sortBy?: 'nextRunAtMs' | 'updatedAtMs' | 'name'; sortDir?: 'asc' | 'desc';
+  }) => rpc('cron.list', { includeDisabled: true, ...opts }),
   cronStatus: () => rpc('cron.status'),
   cronAdd: (job: any) => rpc('cron.add', job),
   cronUpdate: (id: string, patch: any) =>
     rpc('cron.update', { id, patch }),
-  cronRun: (id: string) =>
-    rpc('cron.run', { id, mode: 'force' }),
+  cronRun: (id: string, mode: 'force' | 'due' = 'force') =>
+    rpc('cron.run', { id, mode }),
   cronRemove: (id: string) =>
     rpc('cron.remove', { id }),
-  cronRuns: (id: string, limit = 50) =>
-    rpc('cron.runs', { id, limit }),
+  cronRuns: (id: string, limit = 50, opts?: {
+    offset?: number; status?: string; statuses?: string[];
+    deliveryStatus?: string; deliveryStatuses?: string[];
+    query?: string; sortDir?: 'asc' | 'desc';
+  }) => rpc('cron.runs', { id, limit, ...opts }),
+  cronRunsAll: (opts?: {
+    limit?: number; offset?: number; status?: string; statuses?: string[];
+    deliveryStatus?: string; query?: string; sortDir?: 'asc' | 'desc';
+  }) => rpc('cron.runs', { scope: 'all', ...opts }),
   // Exec Approvals
   execApprovalsGet: (target?: { kind: string; nodeId?: string }) => {
     const method = target?.kind === 'node' ? 'exec.approvals.node.get' : 'exec.approvals.get';

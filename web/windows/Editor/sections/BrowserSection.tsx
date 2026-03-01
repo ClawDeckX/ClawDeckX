@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { SectionProps } from '../sectionTypes';
-import { ConfigSection, TextField, SwitchField } from '../fields';
+import { ConfigSection, TextField, SwitchField, NumberField, ArrayField } from '../fields';
 import { getTranslation } from '../../../locales';
 import { getTooltip } from '../../../locales/tooltips';
 import { gwApi } from '../../../services/api';
@@ -34,9 +34,21 @@ export const BrowserSection: React.FC<SectionProps> = ({ setField, getField, lan
     <div className="space-y-4">
       <ConfigSection title={es.browserConfig} icon="language" iconColor="text-emerald-500">
         <SwitchField label={es.enabled} tooltip={tip('browser.enabled')} value={g(['enabled']) === true} onChange={v => s(['enabled'], v)} />
+        <SwitchField label={es.brEvaluateEnabled} tooltip={tip('browser.evaluateEnabled')} value={g(['evaluateEnabled']) === true} onChange={v => s(['evaluateEnabled'], v)} />
         <TextField label={es.cdpUrl} tooltip={tip('browser.cdpUrl')} value={g(['cdpUrl']) || ''} onChange={v => s(['cdpUrl'], v)} placeholder={es.phBrowserCdpUrl} />
+        <NumberField label={es.brRemoteCdpTimeout} tooltip={tip('browser.remoteCdpTimeoutMs')} value={g(['remoteCdpTimeoutMs'])} onChange={v => s(['remoteCdpTimeoutMs'], v)} min={0} step={1000} />
+        <NumberField label={es.brRemoteCdpHandshakeTimeout} tooltip={tip('browser.remoteCdpHandshakeTimeoutMs')} value={g(['remoteCdpHandshakeTimeoutMs'])} onChange={v => s(['remoteCdpHandshakeTimeoutMs'], v)} min={0} step={1000} />
         <TextField label={es.executablePath} tooltip={tip('browser.executablePath')} value={g(['executablePath']) || ''} onChange={v => s(['executablePath'], v)} placeholder={es.phBrowserExecPath} />
+        <TextField label={es.brColor} tooltip={tip('browser.color')} value={g(['color']) || ''} onChange={v => s(['color'], v)} placeholder="#4285f4" />
         <SwitchField label={es.headless} tooltip={tip('browser.headless')} value={g(['headless']) !== false} onChange={v => s(['headless'], v)} />
+        <SwitchField label={es.brNoSandbox} tooltip={tip('browser.noSandbox')} value={g(['noSandbox']) === true} onChange={v => s(['noSandbox'], v)} />
+        <SwitchField label={es.brAttachOnly} tooltip={tip('browser.attachOnly')} value={g(['attachOnly']) === true} onChange={v => s(['attachOnly'], v)} />
+        <TextField label={es.brDefaultProfile} tooltip={tip('browser.defaultProfile')} value={g(['defaultProfile']) || ''} onChange={v => s(['defaultProfile'], v)} />
+      </ConfigSection>
+
+      <ConfigSection title={es.brSsrfPolicy} icon="shield" iconColor="text-red-500" defaultOpen={false}>
+        <SwitchField label={es.brAllowPrivateNetwork} tooltip={tip('browser.ssrfPolicy.allowPrivateNetwork')} value={g(['ssrfPolicy', 'allowPrivateNetwork']) === true} onChange={v => s(['ssrfPolicy', 'allowPrivateNetwork'], v)} />
+        <ArrayField label={es.brHostnameAllowlist} tooltip={tip('browser.ssrfPolicy.hostnameAllowlist')} value={g(['ssrfPolicy', 'hostnameAllowlist']) || []} onChange={v => s(['ssrfPolicy', 'hostnameAllowlist'], v)} placeholder="example.com" />
       </ConfigSection>
 
       <ConfigSection title={es.browserRequest} icon="public" iconColor="text-emerald-500" defaultOpen={false}>

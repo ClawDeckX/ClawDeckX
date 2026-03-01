@@ -103,6 +103,17 @@ function fmtMs(n: number | undefined | null): string {
   return v.toFixed(0) + 'ms';
 }
 
+function fmtPct(n: number): string {
+  if (n === 0) return '0%';
+  if (n < 1) return '<1%';
+  return n.toFixed(1) + '%';
+}
+
+function fmtCostPerMToken(cost: number, tokens: number): string {
+  if (!tokens || !cost) return '—';
+  return '$' + ((cost / tokens) * 1_000_000).toFixed(2) + '/M';
+}
+
 function fmtDate(d: string): string {
   const parts = d.split('-');
   if (parts.length === 3) return `${parts[1]}/${parts[2]}`;
@@ -198,8 +209,8 @@ function AnimatedBar({ value, max, color, label, sublabel, rightLabel }: { value
   );
 }
 
-// Donut chart
-function DonutChart({ segments, size = 100 }: { segments: Array<{ value: number; color: string; label: string }>; size?: number }) {
+// Donut chart with hover support
+function DonutChart({ segments, size = 100, hoveredIndex, onHover }: { segments: Array<{ value: number; color: string; label: string }>; size?: number; hoveredIndex?: number | null; onHover?: (i: number | null) => void }) {
   const total = segments.reduce((s, seg) => s + seg.value, 0);
   if (total === 0) return null;
   const r = (size - 8) / 2;
@@ -207,25 +218,30 @@ function DonutChart({ segments, size = 100 }: { segments: Array<{ value: number;
   const cy = size / 2;
   const circumference = 2 * Math.PI * r;
   let offset = 0;
+  let segIdx = 0;
 
   return (
-    <svg width={size} height={size} className="transform -rotate-90">
-      {segments.filter(s => s.value > 0).map((seg, i) => {
+    <svg width={size} height={size} className="transform -rotate-90" onMouseLeave={() => onHover?.(null)}>
+      {segments.filter(s => s.value > 0).map((seg) => {
+        const idx = segIdx++;
         const pct = seg.value / total;
         const dashLen = pct * circumference;
         const dashOffset = -offset * circumference;
         offset += pct;
+        const isHovered = hoveredIndex === idx;
         return (
           <circle
-            key={i}
+            key={idx}
             cx={cx} cy={cy} r={r}
             fill="none"
             stroke={seg.color}
-            strokeWidth="6"
+            strokeWidth={isHovered ? 9 : 6}
             strokeDasharray={`${dashLen} ${circumference - dashLen}`}
             strokeDashoffset={dashOffset}
             strokeLinecap="round"
-            className="transition-all duration-700"
+            className="transition-all duration-300 cursor-pointer"
+            style={{ filter: isHovered ? 'brightness(1.2)' : undefined }}
+            onMouseEnter={() => onHover?.(idx)}
           />
         );
       })}
@@ -233,8 +249,9 @@ function DonutChart({ segments, size = 100 }: { segments: Array<{ value: number;
   );
 }
 
-// Daily trend area chart
+// Daily trend area chart with hover tooltip, Y-axis refs, mid X-axis labels
 function TrendChart({ data, height = 140 }: { data: DailyEntry[]; height?: number }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   if (!data.length) return null;
   const width = 100; // percentage-based
   const maxTokens = Math.max(...data.map(d => d.tokens), 1);
@@ -252,8 +269,18 @@ function TrendChart({ data, height = 140 }: { data: DailyEntry[]; height?: numbe
     return `${x},${y}`;
   }).join(' ');
 
+  const midIdx = data.length > 2 ? Math.floor(data.length / 2) : -1;
+  const q1Idx = data.length > 4 ? Math.floor(data.length / 4) : -1;
+  const q3Idx = data.length > 4 ? Math.floor((data.length * 3) / 4) : -1;
+
   return (
-    <div style={{ height }} className="relative w-full">
+    <div style={{ height }} className="relative w-full group" onMouseLeave={() => setHoverIdx(null)}>
+      {/* Y-axis reference labels */}
+      <div className="absolute left-0 top-0 bottom-4 flex flex-col justify-between pointer-events-none z-10" style={{ width: 40 }}>
+        <span className="text-[9px] font-mono text-slate-300 dark:text-white/20">{fmtTokens(maxTokens)}</span>
+        <span className="text-[9px] font-mono text-slate-300 dark:text-white/20">{fmtTokens(maxTokens / 2)}</span>
+        <span className="text-[9px] font-mono text-slate-300 dark:text-white/20">0</span>
+      </div>
       <svg viewBox={`0 0 ${width} 100`} preserveAspectRatio="none" className="w-full h-full">
         <defs>
           <linearGradient id="tokenGrad" x1="0" y1="0" x2="0" y2="1">
@@ -275,15 +302,48 @@ function TrendChart({ data, height = 140 }: { data: DailyEntry[]; height?: numbe
         {/* Cost area */}
         <polygon points={`${costPoints} ${width},100 0,100`} fill="url(#costGrad)" />
         <polyline points={costPoints} fill="none" stroke="#f59e0b" strokeWidth="0.6" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2,1" />
+        {/* Hover hit areas */}
+        {data.map((_, i) => {
+          const x = (i / Math.max(data.length - 1, 1)) * width;
+          const barW = width / Math.max(data.length - 1, 1);
+          return (
+            <rect key={i} x={x - barW / 2} y={0} width={barW} height={100} fill="transparent"
+              onMouseEnter={() => setHoverIdx(i)} />
+          );
+        })}
+        {/* Hover vertical line */}
+        {hoverIdx !== null && (() => {
+          const x = (hoverIdx / Math.max(data.length - 1, 1)) * width;
+          return <line x1={x} y1={0} x2={x} y2={100} stroke="#6366f1" strokeWidth="0.3" strokeOpacity="0.6" />;
+        })()}
       </svg>
+      {/* Hover tooltip */}
+      {hoverIdx !== null && data[hoverIdx] && (() => {
+        const d = data[hoverIdx];
+        const leftPct = (hoverIdx / Math.max(data.length - 1, 1)) * 100;
+        return (
+          <div className="absolute z-20 pointer-events-none px-2.5 py-1.5 rounded-lg bg-slate-800 dark:bg-slate-700 text-white shadow-lg text-[10px] whitespace-nowrap"
+            style={{ left: `${Math.min(Math.max(leftPct, 10), 90)}%`, top: 4, transform: 'translateX(-50%)' }}>
+            <p className="font-bold">{fmtDate(d.date)}</p>
+            <p><span className="text-indigo-300">Token:</span> {fmtTokens(d.tokens)}</p>
+            <p><span className="text-amber-300">Cost:</span> {fmtCost(d.cost)}</p>
+            {d.messages != null && <p><span className="text-emerald-300">Msgs:</span> {d.messages}</p>}
+          </div>
+        );
+      })()}
       {/* X-axis labels */}
       <div className="absolute bottom-0 left-0 right-0 flex justify-between px-1">
         {data.length > 0 && <span className="text-[11px] text-slate-400 dark:text-white/35">{fmtDate(data[0].date)}</span>}
+        {q1Idx > 0 && <span className="text-[11px] text-slate-400 dark:text-white/25">{fmtDate(data[q1Idx].date)}</span>}
+        {midIdx > 0 && <span className="text-[11px] text-slate-400 dark:text-white/30">{fmtDate(data[midIdx].date)}</span>}
+        {q3Idx > 0 && q3Idx !== data.length - 1 && <span className="text-[11px] text-slate-400 dark:text-white/25">{fmtDate(data[q3Idx].date)}</span>}
         {data.length > 1 && <span className="text-[11px] text-slate-400 dark:text-white/35">{fmtDate(data[data.length - 1].date)}</span>}
       </div>
     </div>
   );
 }
+
+type SessionSort = 'tokens' | 'cost' | 'messages' | 'errors' | 'recent';
 
 // Budget settings interface
 interface BudgetSettings {
@@ -348,6 +408,16 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
   const [trendView, setTrendView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const fetchSeqRef = useRef(0);
 
+  // Session sorting & search
+  const [sessionSort, setSessionSort] = useState<SessionSort>('tokens');
+  const [sessionSearch, setSessionSearch] = useState('');
+
+  // Donut hover state
+  const [donutHover, setDonutHover] = useState<number | null>(null);
+
+  // Last update timestamp
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+
   const fetchData = useCallback(async () => {
     const seq = ++fetchSeqRef.current;
     setLoading(true);
@@ -361,6 +431,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
       if (seq !== fetchSeqRef.current) return;
       setUsageData(sessionsRes as any);
       setCostData(costRes as any);
+      setLastUpdated(new Date().toLocaleTimeString());
     } catch (err: any) {
       if (seq !== fetchSeqRef.current) return;
       setError(err?.message || String(err));
@@ -421,11 +492,76 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
 
   const MODEL_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
 
-  const tokenSegments = models.slice(0, 6).map((m, i) => ({
-    value: m.totals?.totalTokens || 0,
-    color: MODEL_COLORS[i % MODEL_COLORS.length],
-    label: m.model || m.provider || u.unknown,
-  }));
+  const tokenSegments = useMemo(() => {
+    const MAX_SLICES = 6;
+    const slices = models.slice(0, MAX_SLICES).map((m, i) => ({
+      value: m.totals?.totalTokens || 0,
+      color: MODEL_COLORS[i % MODEL_COLORS.length],
+      label: m.model || m.provider || u?.unknown,
+    }));
+    if (models.length > MAX_SLICES) {
+      const otherTokens = models.slice(MAX_SLICES).reduce((s, m) => s + (m.totals?.totalTokens || 0), 0);
+      if (otherTokens > 0) {
+        slices.push({ value: otherTokens, color: '#94a3b8', label: u?.other || 'Other' });
+      }
+    }
+    return slices;
+  }, [models, u?.unknown, u?.other]);
+
+  // Computed: error rate
+  const errorRate = useMemo(() => {
+    const total = agg?.messages?.total || 0;
+    const errors = agg?.messages?.errors || 0;
+    return total > 0 ? (errors / total) * 100 : 0;
+  }, [agg?.messages?.total, agg?.messages?.errors]);
+
+  // Computed: cache hit rate
+  const cacheHitRate = useMemo(() => {
+    const total = totals.totalTokens || 0;
+    const cacheRead = totals.cacheRead || 0;
+    return total > 0 ? (cacheRead / total) * 100 : 0;
+  }, [totals.totalTokens, totals.cacheRead]);
+
+  // Computed: period-over-period change for KPI cards
+  const periodChange = useMemo(() => {
+    if (daily.length < 2) return { tokens: 0, cost: 0 };
+    const mid = Math.floor(daily.length / 2);
+    const firstHalf = daily.slice(0, mid);
+    const secondHalf = daily.slice(mid);
+    const sumTokens1 = firstHalf.reduce((s, d) => s + d.tokens, 0);
+    const sumTokens2 = secondHalf.reduce((s, d) => s + d.tokens, 0);
+    const sumCost1 = firstHalf.reduce((s, d) => s + d.cost, 0);
+    const sumCost2 = secondHalf.reduce((s, d) => s + d.cost, 0);
+    return {
+      tokens: sumTokens1 > 0 ? ((sumTokens2 - sumTokens1) / sumTokens1) * 100 : 0,
+      cost: sumCost1 > 0 ? ((sumCost2 - sumCost1) / sumCost1) * 100 : 0,
+    };
+  }, [daily]);
+
+  // Budget projected monthly cost
+  const projectedMonthlyCost = useMemo(() => {
+    if (daily.length === 0) return 0;
+    const totalCostInPeriod = daily.reduce((s, d) => s + d.cost, 0);
+    const daysInPeriod = daily.length;
+    return (totalCostInPeriod / daysInPeriod) * 30;
+  }, [daily]);
+
+  // CSV export
+  const exportCSV = useCallback(() => {
+    if (!usageData) return;
+    const rows: string[] = ['Date,Tokens,Cost,Messages,ToolCalls,Errors'];
+    daily.forEach(d => {
+      const entry = d as DailyEntry;
+      rows.push(`${entry.date},${entry.tokens},${entry.cost},${entry.messages ?? 0},${entry.toolCalls ?? 0},${entry.errors ?? 0}`);
+    });
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `usage-${range}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [usageData, daily, range]);
 
   // Aggregate daily data by week/month for trend view
   const trendData = useMemo(() => {
@@ -462,15 +598,22 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
     return s.lastActiveAt || s.updatedAt;
   }, []);
 
-  // Filter sessions by selected model
+  // Filter sessions by selected model + search + sort
   const filteredSessions = useMemo(() => {
     let list = sessions.filter(s => getSessionTokens(s) > 0);
-    if (selectedModel) {
-      // Note: session doesn't have model info directly, this is a placeholder
-      // In real implementation, you'd need to track which models were used in each session
+    if (sessionSearch) {
+      const q = sessionSearch.toLowerCase();
+      list = list.filter(s => (s.label || s.key || '').toLowerCase().includes(q));
     }
-    return list.sort((a, b) => getSessionTokens(b) - getSessionTokens(a));
-  }, [sessions, selectedModel, getSessionTokens]);
+    const sortFns: Record<SessionSort, (a: SessionEntry, b: SessionEntry) => number> = {
+      tokens: (a, b) => getSessionTokens(b) - getSessionTokens(a),
+      cost: (a, b) => getSessionCost(b) - getSessionCost(a),
+      messages: (a, b) => (getSessionMessages(b).total || 0) - (getSessionMessages(a).total || 0),
+      errors: (a, b) => (getSessionMessages(b).errors || 0) - (getSessionMessages(a).errors || 0),
+      recent: (a, b) => (getSessionLastActive(b) || 0) - (getSessionLastActive(a) || 0),
+    };
+    return list.sort(sortFns[sessionSort] || sortFns.tokens);
+  }, [sessions, selectedModel, getSessionTokens, getSessionCost, getSessionMessages, getSessionLastActive, sessionSort, sessionSearch]);
 
   // Paginated sessions
   const paginatedSessions = useMemo(() => {
@@ -518,8 +661,15 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                   className="px-2 py-1 text-[10px] rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 dark:text-white/70" />
               </div>
             )}
+            {usageData && (
+              <button onClick={exportCSV} title="Export CSV"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5 transition-all">
+                <span className="material-symbols-outlined text-[18px]">download</span>
+              </button>
+            )}
             <button onClick={fetchData} disabled={loading}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-40">
+              className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-40"
+              title={lastUpdated ? `${u?.lastUpdate || 'Updated'}: ${lastUpdated}` : ''}>
               <span className={`material-symbols-outlined text-[18px] ${loading ? 'animate-spin' : ''}`}>refresh</span>
             </button>
           </div>
@@ -548,19 +698,29 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
         )}
 
         {loading && !usageData && (
-          <div className="flex items-center justify-center h-48 text-slate-400 dark:text-white/40">
-            <div className="flex flex-col items-center gap-2">
-              <span className="material-symbols-outlined text-3xl animate-spin">progress_activity</span>
-              <span className="text-[11px]">{u.loading}</span>
+          <div className="space-y-4 max-w-5xl mx-auto animate-pulse">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] p-4">
+                  <div className="h-3 w-16 rounded bg-slate-200 dark:bg-white/10 mb-2" />
+                  <div className="h-6 w-24 rounded bg-slate-200 dark:bg-white/10 mb-3" />
+                  <div className="h-7 w-full rounded bg-slate-100 dark:bg-white/5" />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              <div className="lg:col-span-2 rounded-2xl border border-slate-200/60 dark:border-white/[0.06] p-4 h-48" />
+              <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] p-4 h-48" />
             </div>
           </div>
         )}
 
         {!loading && !usageData && !error && (
-          <div className="flex items-center justify-center h-48 text-slate-400 dark:text-white/40">
-            <div className="flex flex-col items-center gap-2">
-              <span className="material-symbols-outlined text-3xl">analytics</span>
-              <span className="text-[11px]">{u.noData}</span>
+          <div className="flex items-center justify-center h-64 text-slate-400 dark:text-white/40">
+            <div className="flex flex-col items-center gap-3 text-center max-w-xs">
+              <span className="material-symbols-outlined text-4xl">analytics</span>
+              <span className="text-[12px] font-bold">{u.noData}</span>
+              <p className="text-[10px] text-slate-400 dark:text-white/30">{u?.noDataHint || 'Start a conversation with your AI to see usage data here.'}</p>
             </div>
           </div>
         )}
@@ -574,7 +734,14 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[10px] font-medium text-slate-400 dark:text-white/40 uppercase tracking-wider">{u.totalTokens}</p>
-                    <p className="text-xl font-black tabular-nums mt-1 dark:text-white text-slate-800">{fmtTokens(totals.totalTokens)}</p>
+                    <div className="flex items-baseline gap-1.5 mt-1">
+                      <p className="text-xl font-black tabular-nums dark:text-white text-slate-800">{fmtTokens(totals.totalTokens)}</p>
+                      {periodChange.tokens !== 0 && (
+                        <span className={`text-[10px] font-bold ${periodChange.tokens > 0 ? 'text-red-400' : 'text-emerald-500'}`}>
+                          {periodChange.tokens > 0 ? '↑' : '↓'}{Math.abs(periodChange.tokens).toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center">
                     <span className="material-symbols-outlined text-indigo-500 text-[18px]">token</span>
@@ -590,7 +757,17 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[10px] font-medium text-slate-400 dark:text-white/40 uppercase tracking-wider">{u.totalCost}</p>
-                    <p className="text-xl font-black tabular-nums mt-1 dark:text-white text-slate-800">{fmtCost(totals.totalCost)}</p>
+                    <div className="flex items-baseline gap-1.5 mt-1">
+                      <p className="text-xl font-black tabular-nums dark:text-white text-slate-800">{fmtCost(totals.totalCost)}</p>
+                      {periodChange.cost !== 0 && (
+                        <span className={`text-[10px] font-bold ${periodChange.cost > 0 ? 'text-red-400' : 'text-emerald-500'}`}>
+                          {periodChange.cost > 0 ? '↑' : '↓'}{Math.abs(periodChange.cost).toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                    {totals.totalCost === 0 && totals.totalTokens > 0 && (
+                      <p className="text-[9px] text-slate-400 dark:text-white/30 mt-0.5">{u?.noCostHint || 'No billing configured'}</p>
+                    )}
                   </div>
                   <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center">
                     <span className="material-symbols-outlined text-amber-500 text-[18px]">payments</span>
@@ -601,24 +778,37 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                 </div>
               </div>
 
-              {/* Messages */}
-              <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-gradient-to-br from-emerald-50/50 to-white dark:from-emerald-500/[0.06] dark:to-transparent p-4">
+              {/* Messages — with error rate warning */}
+              <div className={`relative overflow-hidden rounded-2xl border p-4 ${
+                errorRate > 20
+                  ? 'border-red-300 dark:border-red-500/30 bg-gradient-to-br from-red-50/50 to-white dark:from-red-500/[0.08] dark:to-transparent'
+                  : 'border-slate-200/60 dark:border-white/[0.06] bg-gradient-to-br from-emerald-50/50 to-white dark:from-emerald-500/[0.06] dark:to-transparent'
+              }`}>
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[10px] font-medium text-slate-400 dark:text-white/40 uppercase tracking-wider">{u.messages}</p>
                     <p className="text-xl font-black tabular-nums mt-1 dark:text-white text-slate-800">{fmtTokens(agg?.messages?.total || 0)}</p>
                   </div>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-emerald-500 text-[18px]">chat</span>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${errorRate > 20 ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
+                    <span className={`material-symbols-outlined text-[18px] ${errorRate > 20 ? 'text-red-500' : 'text-emerald-500'}`}>
+                      {errorRate > 20 ? 'warning' : 'chat'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-3 mt-3 text-[10px]">
                   <span className="text-slate-400 dark:text-white/40">{u.toolCalls}: <b className="text-slate-600 dark:text-white/60">{agg?.tools?.totalCalls || 0}</b></span>
                   <span className="text-slate-400 dark:text-white/40">{u.errors}: <b className="text-red-400">{agg?.messages?.errors || 0}</b></span>
+                  {errorRate > 0 && (
+                    <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${
+                      errorRate > 20 ? 'bg-red-500/15 text-red-500' : errorRate > 5 ? 'bg-amber-500/15 text-amber-500' : 'text-slate-400 dark:text-white/35'
+                    }`}>
+                      {fmtPct(errorRate)}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Latency */}
+              {/* Latency — with sparkline from daily messages */}
               <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-gradient-to-br from-violet-50/50 to-white dark:from-violet-500/[0.06] dark:to-transparent p-4">
                 <div className="flex items-start justify-between">
                   <div>
@@ -633,8 +823,38 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                   <span className="text-slate-400 dark:text-white/40">P95: <b className="text-slate-600 dark:text-white/60">{agg?.latency ? fmtMs(agg.latency.p95Ms) : '—'}</b></span>
                   <span className="text-slate-400 dark:text-white/40">{u.sessions}: <b className="text-slate-600 dark:text-white/60">{sessions.length}</b></span>
                 </div>
+                <div className="mt-1">
+                  <Sparkline data={daily.map(d => (d as DailyEntry).messages || 0)} color="#8b5cf6" height={20} width={100} />
+                </div>
               </div>
             </div>
+
+            {/* Cache Hit Rate + I/O Ratio mini bar */}
+            {totals.totalTokens > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-4 py-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-white/50 uppercase tracking-wider">{u?.cacheHitRate || 'Cache Hit Rate'}</span>
+                    <span className="text-[11px] font-black tabular-nums text-emerald-500">{fmtPct(cacheHitRate)}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
+                    <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(cacheHitRate, 100)}%` }} />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-4 py-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-white/50 uppercase tracking-wider">{u?.ioRatio || 'I/O Ratio'}</span>
+                    <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-white/50">
+                      {fmtTokens(totals.input)} / {fmtTokens(totals.output)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden flex">
+                    <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${(totals.input / totals.totalTokens) * 100}%` }} />
+                    <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${(totals.output / totals.totalTokens) * 100}%` }} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Budget Card */}
             {(() => {
@@ -702,6 +922,13 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                           </div>
                         </div>
                       )}
+                      {/* Projected monthly cost */}
+                      {projectedMonthlyCost > 0 && (
+                        <div className="col-span-2 mt-1 flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-white/40">
+                          <span className="material-symbols-outlined text-[12px]">trending_up</span>
+                          <span>{u?.projected || 'Projected'}: <b className="text-slate-600 dark:text-white/60">{fmtCost(projectedMonthlyCost)}/{u?.month || 'mo'}</b></span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p className="text-[11px] text-slate-400 dark:text-white/40 text-center py-2">{es.noBudgetSet}</p>
@@ -761,10 +988,20 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                 </div>
                 <div className="flex justify-center mb-3">
                   <div className="relative cursor-pointer" onClick={() => setSelectedModel(null)}>
-                    <DonutChart segments={tokenSegments} size={110} />
+                    <DonutChart segments={tokenSegments} size={110} hoveredIndex={donutHover} onHover={setDonutHover} />
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-[10px] text-slate-400 dark:text-white/40">{u.total}</span>
-                      <span className="text-sm font-black tabular-nums dark:text-white text-slate-700">{fmtTokens(totals.totalTokens)}</span>
+                      {donutHover !== null && tokenSegments[donutHover] ? (
+                        <>
+                          <span className="text-[9px] text-slate-400 dark:text-white/40 truncate max-w-[60px]">{tokenSegments[donutHover].label}</span>
+                          <span className="text-sm font-black tabular-nums dark:text-white text-slate-700">{fmtTokens(tokenSegments[donutHover].value)}</span>
+                          <span className="text-[9px] text-slate-400 dark:text-white/35">{fmtPct((tokenSegments[donutHover].value / (totals.totalTokens || 1)) * 100)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] text-slate-400 dark:text-white/40">{u.total}</span>
+                          <span className="text-sm font-black tabular-nums dark:text-white text-slate-700">{fmtTokens(totals.totalTokens)}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -844,6 +1081,9 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                     <div className="text-right">
                       <p className="text-sm font-black tabular-nums dark:text-white text-slate-700">{fmtTokens(m.totals?.totalTokens || 0)}</p>
                       <p className="text-[10px] font-mono text-amber-500">{fmtCost((m.totals?.totalCost || 0))}</p>
+                      {(m.totals?.totalCost || 0) > 0 && (
+                        <p className="text-[9px] font-mono text-slate-400 dark:text-white/30">{fmtCostPerMToken(m.totals?.totalCost || 0, m.totals?.totalTokens || 0)}</p>
+                      )}
                     </div>
                   </div>
                   <AnimatedBar value={m.totals?.totalTokens || 0} max={maxModelTokens} color={MODEL_COLORS[i % MODEL_COLORS.length]}
@@ -858,19 +1098,37 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
         {/* Sessions Tab */}
         {totals && tab === 'sessions' && (
           <div className="space-y-2 max-w-4xl mx-auto animate-in fade-in duration-300">
-            {/* Header with count and model filter indicator */}
-            <div className="flex items-center justify-between px-1 mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-500 dark:text-white/50">
-                  {u.sessionsCount}: {filteredSessions.length}
-                  {selectedModel && <span className="text-primary ml-1">· {u.filterByModel}: {selectedModel}</span>}
+            {/* Header with search, sort, count */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-1 mb-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="relative flex-1 max-w-[220px]">
+                  <span className="material-symbols-outlined text-[14px] text-slate-400 absolute left-2 top-1/2 -translate-y-1/2">search</span>
+                  <input type="text" value={sessionSearch} onChange={e => { setSessionSearch(e.target.value); setSessionsPage(1); }}
+                    placeholder={u?.searchSessions || 'Search sessions...'}
+                    className="w-full pl-7 pr-2 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 dark:text-white/70 outline-none focus:border-primary" />
+                </div>
+                <span className="text-[11px] text-slate-500 dark:text-white/50 shrink-0">
+                  {filteredSessions.length} {u?.sessionsCount || 'sessions'}
+                  {selectedModel && <span className="text-primary ml-1">· {selectedModel}</span>}
                 </span>
               </div>
-              {totalSessionPages > 1 && (
-                <span className="text-[10px] text-slate-400 dark:text-white/40">
-                  {u.pageXofY?.replace('{current}', String(sessionsPage)).replace('{total}', String(totalSessionPages)) || `${sessionsPage}/${totalSessionPages}`}
-                </span>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex bg-slate-100 dark:bg-white/[0.06] p-0.5 rounded-md">
+                  {(['tokens', 'cost', 'messages', 'errors', 'recent'] as const).map(s => (
+                    <button key={s} onClick={() => { setSessionSort(s); setSessionsPage(1); }}
+                      className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${
+                        sessionSort === s ? 'bg-white dark:bg-primary shadow-sm text-slate-700 dark:text-white' : 'text-slate-400 hover:text-slate-600'
+                      }`}>
+                      {s === 'tokens' ? 'Token' : s === 'cost' ? u?.cost || '$' : s === 'messages' ? u?.messages || 'Msg' : s === 'errors' ? u?.errors || 'Err' : u?.recent || 'Recent'}
+                    </button>
+                  ))}
+                </div>
+                {totalSessionPages > 1 && (
+                  <span className="text-[10px] text-slate-400 dark:text-white/40">
+                    {u.pageXofY?.replace('{current}', String(sessionsPage)).replace('{total}', String(totalSessionPages)) || `${sessionsPage}/${totalSessionPages}`}
+                  </span>
+                )}
+              </div>
             </div>
             {paginatedSessions.length === 0 ? (
               <div className="text-center py-12 text-slate-400 dark:text-white/40 text-[11px]">{u.noData}</div>

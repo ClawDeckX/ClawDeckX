@@ -13,7 +13,8 @@ interface EditorProps {
 type SectionId =
   | 'models' | 'agents' | 'tools' | 'channels' | 'messages' | 'commands'
   | 'session' | 'gateway' | 'hooks' | 'cron' | 'extensions'
-  | 'memory' | 'audio' | 'browser' | 'logging' | 'auth' | 'misc' | 'json' | 'live' | 'templates';
+  | 'memory' | 'audio' | 'browser' | 'logging' | 'auth' | 'misc' | 'json' | 'live' | 'templates'
+  | 'unmapped';
 
 interface SectionDef {
   id: SectionId;
@@ -41,6 +42,7 @@ const MiscSection = lazy(() => import('./sections/MiscSection').then(m => ({ def
 const JsonEditorSection = lazy(() => import('./sections/JsonEditorSection').then(m => ({ default: m.JsonEditorSection })));
 const LiveConfigSection = lazy(() => import('./sections/LiveConfigSection').then(m => ({ default: m.LiveConfigSection })));
 const TemplatesSection = lazy(() => import('./sections/TemplatesSectionV2').then(m => ({ default: m.TemplatesSectionV2 })));
+const UnmappedConfigSection = lazy(() => import('./sections/UnmappedConfigSection').then(m => ({ default: m.UnmappedConfigSection })));
 const SECTIONS: SectionDef[] = [
   // core sections
   { id: 'models', icon: 'psychology', labelKey: 'secModels', color: 'text-blue-500' },
@@ -64,6 +66,7 @@ const SECTIONS: SectionDef[] = [
   // tail sections
   { id: 'live', icon: 'cloud_sync', labelKey: 'secLive', color: 'text-amber-500' },
   { id: 'misc', icon: 'tune', labelKey: 'secMisc', color: 'text-slate-500' },
+  { id: 'unmapped', icon: 'new_releases', labelKey: 'secUnmapped', color: 'text-amber-500' },
   { id: 'json', icon: 'data_object', labelKey: 'secJson', color: 'text-slate-400' },
 ];
 
@@ -76,6 +79,7 @@ const Editor: React.FC<EditorProps> = ({ language }) => {
   const [activeSection, setActiveSection] = useState<SectionId>('models');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [newKeysCount, setNewKeysCount] = useState(0);
   const [openclawInstalled, setOpenclawInstalled] = useState<boolean | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
@@ -210,6 +214,7 @@ const Editor: React.FC<EditorProps> = ({ language }) => {
       case 'templates': return <TemplatesSection language={language} />;
       case 'json': return <JsonEditorSection config={editor.config} toJSON={editor.toJSON} fromJSON={editor.fromJSON} language={language} />;
       case 'live': return <LiveConfigSection language={language} />;
+      case 'unmapped': return <UnmappedConfigSection language={language} config={editor.config} setField={editor.setField} onNewKeysCount={setNewKeysCount} />;
       default: return null;
     }
   }, [activeSection, editor.config, editor.fromJSON, editor.toJSON, language, sectionProps]);
@@ -341,6 +346,9 @@ const Editor: React.FC<EditorProps> = ({ language }) => {
               >
                 <span className={`material-symbols-outlined text-[16px] ${activeSection === s.id ? 'text-primary' : s.color}`}>{s.icon}</span>
                 <span className="text-[11px] truncate">{(es as any)[s.labelKey]}</span>
+                {s.id === 'unmapped' && newKeysCount > 0 && (
+                  <span className="ml-auto text-[8px] px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">{newKeysCount}</span>
+                )}
               </button>
             ))}
           </nav>

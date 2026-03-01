@@ -5,8 +5,11 @@ import { getTranslation } from '../locales';
 import { authApi, backupApi, auditApi, hostInfoApi, notifyApi, selfUpdateApi, serverConfigApi } from '../services/api';
 import type { ServerConfig } from '../services/api';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
 import { SmartLink } from '../components/SmartLink';
+import NotifyChannelCard from '../components/NotifyChannelCard';
+import type { NotifyChannelDef } from '../components/NotifyChannelCard';
 
 type SettingsTab = 'account' | 'notify' | 'backup' | 'audit' | 'donate' | 'about';
 
@@ -16,8 +19,9 @@ interface SettingsProps {
 
 const Settings: React.FC<SettingsProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
-  const s = t.set as any;
+  const s = t.set;
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [activeTab, setActiveTab] = useState<SettingsTab>('account');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -92,8 +96,60 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
     { id: 'about', icon: 'info', label: s.about, color: 'bg-purple-500' },
   ];
 
-  const fetchBackups = useCallback(() => {
-    backupApi.list().then((data: any) => setBackups(Array.isArray(data) ? data : [])).catch(() => { });
+  const notifyChannelDefs: NotifyChannelDef[] = useMemo(() => [
+    {
+      id: 'telegram', icon: 'send', iconColor: 'text-[#229ED9]', title: s.notifyTelegram,
+      fields: [
+        { key: 'notify_telegram_token', label: s.notifyTgToken, hint: s.notifyTgTokenHint, placeholder: '123456:ABC-DEF...', type: 'password' },
+        { key: 'notify_telegram_chat_id', label: s.notifyTgChatId, hint: s.notifyTgChatIdHint, placeholder: '-1001234567890' },
+      ],
+    },
+    {
+      id: 'dingtalk', icon: 'notifications', iconColor: 'text-orange-500', title: s.notifyDingtalk,
+      fields: [
+        { key: 'notify_dingtalk_token', label: s.notifyDdToken, hint: s.notifyDdTokenHint, placeholder: 'access_token...', type: 'password' },
+        { key: 'notify_dingtalk_secret', label: s.notifyDdSecret, hint: s.notifyDdSecretHint, placeholder: 'SEC...', type: 'password' },
+      ],
+    },
+    {
+      id: 'lark', icon: 'apartment', iconColor: 'text-blue-500', title: s.notifyLark,
+      fields: [
+        { key: 'notify_lark_webhook_url', label: s.notifyLarkUrl, hint: s.notifyLarkUrlHint, placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...' },
+      ],
+    },
+    {
+      id: 'discord', icon: 'sports_esports', iconColor: 'text-indigo-500', title: s.notifyDiscord,
+      fields: [
+        { key: 'notify_discord_token', label: s.notifyDcToken, hint: s.notifyDcTokenHint, placeholder: 'Bot token...', type: 'password' },
+        { key: 'notify_discord_channel_id', label: s.notifyDcChannelId, hint: s.notifyDcChannelIdHint, placeholder: '123456789012345678' },
+      ],
+    },
+    {
+      id: 'slack', icon: 'tag', iconColor: 'text-green-600', title: s.notifySlack,
+      fields: [
+        { key: 'notify_slack_token', label: s.notifySlackToken, hint: s.notifySlackTokenHint, placeholder: 'xoxb-...', type: 'password' },
+        { key: 'notify_slack_channel_id', label: s.notifySlackChannelId, hint: s.notifySlackChannelIdHint, placeholder: 'C01234ABCDE' },
+      ],
+    },
+    {
+      id: 'wecom', icon: 'business', iconColor: 'text-emerald-500', title: s.notifyWecom,
+      fields: [
+        { key: 'notify_wecom_webhook_url', label: s.notifyWecomUrl, hint: s.notifyWecomUrlHint, placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...' },
+      ],
+    },
+    {
+      id: 'webhook', icon: 'webhook', iconColor: 'text-pink-500', title: s.notifyWebhook,
+      fields: [
+        { key: 'notify_webhook_url', label: s.notifyWebhookUrl, placeholder: 'https://hooks.example.com/...' },
+        { key: 'notify_webhook_method', label: s.notifyWebhookMethod, type: 'select', options: [{ value: 'POST', label: 'POST' }, { value: 'GET', label: 'GET' }, { value: 'PUT', label: 'PUT' }], half: true },
+        { key: 'notify_webhook_headers', label: s.notifyWebhookHeaders, hint: s.notifyWebhookHeadersHint, placeholder: 'Authorization:Bearer xxx', half: true },
+        { key: 'notify_webhook_template', label: s.notifyWebhookTemplate, hint: s.notifyWebhookTemplateHint, placeholder: '{"text": "{message}"}', type: 'textarea' },
+      ],
+    },
+  ], [s]);
+
+  const fetchBackups = useCallback((force = false) => {
+    backupApi.listCached(10000, force).then((data: any) => setBackups(Array.isArray(data) ? data : [])).catch(() => { });
   }, []);
 
   const fetchAuditLogs = useCallback((page: number) => {
@@ -106,8 +162,8 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
     }).catch(() => { }).finally(() => setAuditLoading(false));
   }, []);
 
-  const fetchNotifyConfig = useCallback(() => {
-    notifyApi.getConfig().then((data: any) => {
+  const fetchNotifyConfig = useCallback((force = false) => {
+    notifyApi.getConfigCached(15000, force).then((data) => {
       setNotifyCfg(data?.config || {});
       setNotifyActive(data?.active_channels || []);
       setNotifyAvailable(data?.available_channels || []);
@@ -118,7 +174,7 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
   const handleNotifySave = useCallback(async () => {
     setNotifySaving(true);
     try {
-      const res = await notifyApi.updateConfig(notifyCfg) as any;
+      const res = await notifyApi.updateConfig(notifyCfg);
       setNotifyActive(res?.active_channels || []);
       setNotifyDirty(false);
       toast('success', s.notifySaved);
@@ -374,6 +430,13 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
   };
 
   const handleRestore = async (id: string) => {
+    const ok = await confirm({
+      title: s.restoreConfirmTitle || s.restore,
+      message: s.restoreConfirmMsg || s.restoreConfirmMessage || 'Are you sure you want to restore this backup? Current configuration will be overwritten.',
+      confirmText: s.restore,
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const res = await backupApi.restore(id);
       if (res?.has_redacted) {
@@ -615,224 +678,19 @@ const Settings: React.FC<SettingsProps> = ({ language }) => {
                 </div>
               )}
 
-              {/* Telegram */}
-              <div className={rowCls}>
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-[#229ED9]">send</span>
-                      <p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.notifyTelegram}</p>
-                    </div>
-                    <button onClick={handleNotifyTest} disabled={notifyTesting}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-white/50 disabled:opacity-40 transition-colors">
-                      <span className={`material-symbols-outlined text-[12px] ${notifyTesting ? 'animate-spin' : ''}`}>{notifyTesting ? 'progress_activity' : 'send'}</span>
-                      {s.notifyTest}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className={labelCls}>{s.notifyTgToken}</label>
-                      <input type="password" value={notifyCfg.notify_telegram_token || ''} onChange={e => setNf('notify_telegram_token', e.target.value)}
-                        className={inputCls} placeholder="123456:ABC-DEF..." />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyTgTokenHint}</p>
-                    </div>
-                    <div>
-                      <label className={labelCls}>{s.notifyTgChatId}</label>
-                      <input type="text" value={notifyCfg.notify_telegram_chat_id || ''} onChange={e => setNf('notify_telegram_chat_id', e.target.value)}
-                        className={inputCls} placeholder="-1001234567890" />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyTgChatIdHint}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* DingTalk */}
-              <div className={rowCls}>
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-orange-500">notifications</span>
-                      <p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.notifyDingtalk}</p>
-                    </div>
-                    <button onClick={handleNotifyTest} disabled={notifyTesting}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-white/50 disabled:opacity-40 transition-colors">
-                      <span className={`material-symbols-outlined text-[12px] ${notifyTesting ? 'animate-spin' : ''}`}>{notifyTesting ? 'progress_activity' : 'send'}</span>
-                      {s.notifyTest}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className={labelCls}>{s.notifyDdToken}</label>
-                      <input type="password" value={notifyCfg.notify_dingtalk_token || ''} onChange={e => setNf('notify_dingtalk_token', e.target.value)}
-                        className={inputCls} placeholder="access_token..." />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyDdTokenHint}</p>
-                    </div>
-                    <div>
-                      <label className={labelCls}>{s.notifyDdSecret}</label>
-                      <input type="password" value={notifyCfg.notify_dingtalk_secret || ''} onChange={e => setNf('notify_dingtalk_secret', e.target.value)}
-                        className={inputCls} placeholder="SEC..." />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyDdSecretHint}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Lark / Feishu */}
-              <div className={rowCls}>
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-blue-500">apartment</span>
-                      <p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.notifyLark}</p>
-                    </div>
-                    <button onClick={handleNotifyTest} disabled={notifyTesting}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-white/50 disabled:opacity-40 transition-colors">
-                      <span className={`material-symbols-outlined text-[12px] ${notifyTesting ? 'animate-spin' : ''}`}>{notifyTesting ? 'progress_activity' : 'send'}</span>
-                      {s.notifyTest}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className={labelCls}>{s.notifyLarkUrl}</label>
-                      <input type="text" value={notifyCfg.notify_lark_webhook_url || ''} onChange={e => setNf('notify_lark_webhook_url', e.target.value)}
-                        className={inputCls} placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyLarkUrlHint}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Discord */}
-              <div className={rowCls}>
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-indigo-500">sports_esports</span>
-                      <p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.notifyDiscord}</p>
-                    </div>
-                    <button onClick={handleNotifyTest} disabled={notifyTesting}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-white/50 disabled:opacity-40 transition-colors">
-                      <span className={`material-symbols-outlined text-[12px] ${notifyTesting ? 'animate-spin' : ''}`}>{notifyTesting ? 'progress_activity' : 'send'}</span>
-                      {s.notifyTest}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className={labelCls}>{s.notifyDcToken}</label>
-                      <input type="password" value={notifyCfg.notify_discord_token || ''} onChange={e => setNf('notify_discord_token', e.target.value)}
-                        className={inputCls} placeholder="Bot token..." />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyDcTokenHint}</p>
-                    </div>
-                    <div>
-                      <label className={labelCls}>{s.notifyDcChannelId}</label>
-                      <input type="text" value={notifyCfg.notify_discord_channel_id || ''} onChange={e => setNf('notify_discord_channel_id', e.target.value)}
-                        className={inputCls} placeholder="123456789012345678" />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyDcChannelIdHint}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Slack */}
-              <div className={rowCls}>
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-green-600">tag</span>
-                      <p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.notifySlack}</p>
-                    </div>
-                    <button onClick={handleNotifyTest} disabled={notifyTesting}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-white/50 disabled:opacity-40 transition-colors">
-                      <span className={`material-symbols-outlined text-[12px] ${notifyTesting ? 'animate-spin' : ''}`}>{notifyTesting ? 'progress_activity' : 'send'}</span>
-                      {s.notifyTest}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className={labelCls}>{s.notifySlackToken}</label>
-                      <input type="password" value={notifyCfg.notify_slack_token || ''} onChange={e => setNf('notify_slack_token', e.target.value)}
-                        className={inputCls} placeholder="xoxb-..." />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifySlackTokenHint}</p>
-                    </div>
-                    <div>
-                      <label className={labelCls}>{s.notifySlackChannelId}</label>
-                      <input type="text" value={notifyCfg.notify_slack_channel_id || ''} onChange={e => setNf('notify_slack_channel_id', e.target.value)}
-                        className={inputCls} placeholder="C01234ABCDE" />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifySlackChannelIdHint}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* WeCom */}
-              <div className={rowCls}>
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-emerald-500">business</span>
-                      <p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.notifyWecom}</p>
-                    </div>
-                    <button onClick={handleNotifyTest} disabled={notifyTesting}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-white/50 disabled:opacity-40 transition-colors">
-                      <span className={`material-symbols-outlined text-[12px] ${notifyTesting ? 'animate-spin' : ''}`}>{notifyTesting ? 'progress_activity' : 'send'}</span>
-                      {s.notifyTest}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className={labelCls}>{s.notifyWecomUrl}</label>
-                      <input type="text" value={notifyCfg.notify_wecom_webhook_url || ''} onChange={e => setNf('notify_wecom_webhook_url', e.target.value)}
-                        className={inputCls} placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyWecomUrlHint}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Webhook */}
-              <div className={rowCls}>
-                <div className="px-4 py-3">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-pink-500">webhook</span>
-                      <p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.notifyWebhook}</p>
-                    </div>
-                    <button onClick={handleNotifyTest} disabled={notifyTesting}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-white/50 disabled:opacity-40 transition-colors">
-                      <span className={`material-symbols-outlined text-[12px] ${notifyTesting ? 'animate-spin' : ''}`}>{notifyTesting ? 'progress_activity' : 'send'}</span>
-                      {s.notifyTest}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className={labelCls}>{s.notifyWebhookUrl}</label>
-                      <input type="text" value={notifyCfg.notify_webhook_url || ''} onChange={e => setNf('notify_webhook_url', e.target.value)}
-                        className={inputCls} placeholder="https://hooks.example.com/..." />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={labelCls}>{s.notifyWebhookMethod}</label>
-                        <CustomSelect value={notifyCfg.notify_webhook_method || 'POST'} onChange={v => setNf('notify_webhook_method', v)}
-                          options={[{ value: 'POST', label: 'POST' }, { value: 'GET', label: 'GET' }, { value: 'PUT', label: 'PUT' }]}
-                          className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>{s.notifyWebhookHeaders}</label>
-                        <input type="text" value={notifyCfg.notify_webhook_headers || ''} onChange={e => setNf('notify_webhook_headers', e.target.value)}
-                          className={inputCls} placeholder="Authorization:Bearer xxx" />
-                        <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyWebhookHeadersHint}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <label className={labelCls}>{s.notifyWebhookTemplate}</label>
-                      <textarea value={notifyCfg.notify_webhook_template || ''} onChange={e => setNf('notify_webhook_template', e.target.value)}
-                        className={`${inputCls} h-20 py-2 resize-none font-mono text-[11px]`}
-                        placeholder={'{"text": "{message}"'} />
-                      <p className="text-[10px] text-slate-400 dark:text-white/20 mt-1">{s.notifyWebhookTemplateHint}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Notification channels — data-driven via NotifyChannelCard */}
+              {notifyChannelDefs.map(ch => (
+                <NotifyChannelCard
+                  key={ch.id}
+                  channel={ch}
+                  config={notifyCfg}
+                  onFieldChange={setNf}
+                  testLabel={s.notifyTest}
+                  inputClassName={inputCls}
+                  labelClassName={labelCls}
+                  rowClassName={rowCls}
+                />
+              ))}
 
               {/* Save button at bottom */}
               <div className="flex justify-end pt-2">

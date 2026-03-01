@@ -2,6 +2,8 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { Language } from '../../../types';
 import { getTranslation } from '../../../locales';
 import { gwApi } from '../../../services/api';
+import { SchemaSection } from '../../../components/SchemaField';
+import type { UiHints } from '../../../components/SchemaField';
 
 interface LiveConfigSectionProps {
   language: Language;
@@ -216,8 +218,70 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
         )}
       </div>
 
-      {/* Config Schema Viewer */}
-      {schema && (
+      {/* Config Schema Visual Editor */}
+      {schema && rawText && (() => {
+        const schemaObj = schema?.schema || schema;
+        const hints: UiHints = schema?.uiHints || {};
+        const topLevelKeys = Object.keys(schemaObj?.properties || {}).sort((a, b) => {
+          const ha = hints[a]?.order ?? 999;
+          const hb = hints[b]?.order ?? 999;
+          return ha - hb;
+        });
+        let parsedConfig: Record<string, any> = {};
+        try { parsedConfig = JSON.parse(rawText); } catch { /* ignore */ }
+
+        return (
+          <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px] text-sky-500">schema</span>
+                <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/70">{es.configSchema} — Visual</h3>
+              </div>
+              <button onClick={() => setSchema(null)} className="text-[10px] text-slate-400 hover:text-red-500 transition-colors">
+                <span className="material-symbols-outlined text-[14px]">close</span>
+              </button>
+            </div>
+            <div className="p-4 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
+              {topLevelKeys.map(key => {
+                const sectionHint = hints[key];
+                const sectionLabel = sectionHint?.label || key;
+                return (
+                  <details key={key} className="group">
+                    <summary className="flex items-center gap-2 cursor-pointer select-none py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors">
+                      <span className="material-symbols-outlined text-[14px] text-slate-400 group-open:rotate-90 transition-transform">chevron_right</span>
+                      <span className="text-[12px] font-bold text-slate-700 dark:text-white/70">{sectionLabel}</span>
+                      {sectionHint?.help && <span className="text-[10px] text-slate-400 dark:text-white/30 truncate max-w-[300px]">{sectionHint.help}</span>}
+                    </summary>
+                    <div className="ml-4 mt-1 pl-2 border-l-2 border-slate-200 dark:border-white/10">
+                      <SchemaSection
+                        sectionKey={key}
+                        schema={schemaObj}
+                        uiHints={hints}
+                        config={parsedConfig}
+                        onChange={(pathArr, val) => {
+                          try {
+                            const cfg = JSON.parse(rawText);
+                            let target = cfg;
+                            for (let i = 0; i < pathArr.length - 1; i++) {
+                              if (target[pathArr[i]] == null) target[pathArr[i]] = {};
+                              target = target[pathArr[i]];
+                            }
+                            target[pathArr[pathArr.length - 1]] = val;
+                            setRawText(JSON.stringify(cfg, null, 2));
+                          } catch { /* ignore parse errors */ }
+                        }}
+                      />
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Config Schema Raw JSON */}
+      {schema && !rawText && (
         <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-2">

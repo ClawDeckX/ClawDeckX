@@ -2,6 +2,7 @@
 // English is statically imported as fallback; all other languages are loaded on-demand.
 // To add a new language: 1) copy en/ folder → xx/  2) translate  3) add loader to `loaders` map + Language type
 import { Language } from '../types';
+import type { TranslationMap } from './types';
 
 // --- en (static fallback, always bundled) ---
 import commonEn from './en/common.json';
@@ -67,8 +68,8 @@ export async function loadLocale(lang: Language): Promise<boolean> {
 export const locales = localeMap;
 
 /** Synchronous — returns cached locale or English fallback. Call loadLocale() first. */
-export function getTranslation(lang: Language): any {
-  return localeMap[lang] || localeMap['en'];
+export function getTranslation(lang: Language): TranslationMap {
+  return (localeMap[lang] || localeMap['en']) as TranslationMap;
 }
 
 export function getTooltip(key: string, lang: Language): string {
