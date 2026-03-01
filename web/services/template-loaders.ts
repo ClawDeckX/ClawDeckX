@@ -214,7 +214,7 @@ export class GitHubTemplateLoader {
   private rawBase = 'https://raw.githubusercontent.com';
   private versionPrefix = 'clawdeckx_tpl_ver_';
   private bulkPrefix = 'clawdeckx_tpl_bulk_';
-  private manifestTTL = 300000; // 5 minutes - manifest checked frequently
+  private manifestTTL = 3600000; // 1 hour - templates rarely update
   private templateTTL = 86400000; // 24 hours - templates cached longer (version-gated)
 
   constructor(cache: TemplateCacheManager) {
