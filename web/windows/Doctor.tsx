@@ -1248,7 +1248,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                           {r === '1h' ? text.timeRange1h : r === '6h' ? text.timeRange6h : text.timeRange24h}
                         </button>
                       ))}
-                      <span className="text-[8px] text-slate-400 dark:text-white/25 ml-1">{text.timeRangeNote}</span>
+                      <span className="text-[8px] text-slate-400 dark:text-white/25 ml-1 hidden sm:inline">{text.timeRangeNote}</span>
                     </div>
                   </div>
                 </div>
@@ -1321,7 +1321,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                         const pct = Math.min(1, d.points / d.maxPoints);
                         const r = 18; const circ = Math.PI * r;
                         return (
-                          <div key={d.key} className="flex items-center gap-2 min-w-[120px]" title={d.key === 'gateway' ? text.deductionRuleGateway : d.key === 'critical' ? text.deductionRuleCritical : d.key === 'high' ? text.deductionRuleHigh : d.key === 'medium' ? text.deductionRuleMedium : text.deductionRuleHealthCheck}>
+                          <div key={d.key} className="flex items-center gap-2 min-w-[100px] sm:min-w-[120px]" title={d.key === 'gateway' ? text.deductionRuleGateway : d.key === 'critical' ? text.deductionRuleCritical : d.key === 'high' ? text.deductionRuleHigh : d.key === 'medium' ? text.deductionRuleMedium : text.deductionRuleHealthCheck}>
                             <svg viewBox="0 0 44 26" className="w-10 h-6 shrink-0">
                               <path d="M 4 24 A 18 18 0 0 1 40 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-200 dark:text-white/10" strokeLinecap="round" />
                               <path d="M 4 24 A 18 18 0 0 1 40 24" fill="none" stroke={d.color} strokeWidth="4" strokeLinecap="round"
@@ -1347,6 +1347,23 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
             )}
 
             {/* === ROW 2: Trend Charts (Health Score Area + Stacked Exceptions) === */}
+            {!overview && summaryView && (
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 animate-pulse">
+                <div className="xl:col-span-2 rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-3">
+                  <div className="h-3 w-24 bg-slate-200 dark:bg-white/10 rounded mb-3" />
+                  <div className="h-28 bg-slate-100 dark:bg-white/[0.03] rounded-lg" />
+                  <div className="h-20 bg-slate-100 dark:bg-white/[0.03] rounded-lg mt-2" />
+                </div>
+                <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-3">
+                  <div className="h-3 w-20 bg-slate-200 dark:bg-white/10 rounded mb-3" />
+                  <div className="flex justify-center"><div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-white/[0.03]" /></div>
+                  <div className="mt-3 space-y-2">
+                    <div className="h-3 bg-slate-100 dark:bg-white/[0.03] rounded" />
+                    <div className="h-3 bg-slate-100 dark:bg-white/[0.03] rounded w-2/3" />
+                  </div>
+                </div>
+              </div>
+            )}
             {overview && (
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
                 <div className="xl:col-span-2 rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-3">
@@ -1478,7 +1495,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
 
             {/* === ROW 4: Issue Timeline + Actions === */}
             {summaryView && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-3">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40 flex items-center gap-1">
