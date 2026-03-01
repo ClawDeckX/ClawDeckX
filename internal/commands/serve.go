@@ -1,4 +1,4 @@
-﻿package commands
+package commands
 
 import (
 	"context"
@@ -226,6 +226,7 @@ func RunServe(args []string) int {
 	configHandler := handlers.NewConfigHandler()
 	backupHandler := handlers.NewBackupHandler()
 	doctorHandler := handlers.NewDoctorHandler(svc)
+	doctorHandler.SetGWClient(gwClient)
 	exportHandler := handlers.NewExportHandler()
 	userHandler := handlers.NewUserHandler()
 	skillsHandler := handlers.NewSkillsHandler()
@@ -308,6 +309,7 @@ func RunServe(args []string) int {
 	router.GET("/api/v1/backups/", backupHandler.Download)
 
 	router.GET("/api/v1/doctor", doctorHandler.Run)
+	router.GET("/api/v1/doctor/summary", doctorHandler.Summary)
 	router.GET("/api/v1/doctor/overview", doctorHandler.Overview)
 	router.POST("/api/v1/doctor/fix", doctorHandler.Fix)
 

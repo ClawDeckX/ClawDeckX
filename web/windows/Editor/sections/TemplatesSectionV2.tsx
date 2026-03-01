@@ -247,7 +247,8 @@ export const TemplatesSectionV2: React.FC<TemplatesSectionV2Props> = ({ language
           <select
             value={targetFilter}
             onChange={e => setTargetFilter(e.target.value)}
-            className="h-7 px-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] text-[10px] text-slate-600 dark:text-white/60"
+            className="h-7 px-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e2028] text-[10px] text-slate-600 dark:text-white/60"
+            style={{ colorScheme: 'dark' }}
           >
             <option value="all">{ts.allFiles || 'All Files'}</option>
             {TARGET_FILES.map(f => (

@@ -22,6 +22,7 @@ import (
 // DoctorHandler provides diagnostic and repair operations.
 type DoctorHandler struct {
 	svc       *openclaw.Service
+	gwClient  *openclaw.GWClient
 	auditRepo *database.AuditLogRepo
 	activity  *database.ActivityRepo
 	alert     *database.AlertRepo
@@ -34,6 +35,11 @@ func NewDoctorHandler(svc *openclaw.Service) *DoctorHandler {
 		activity:  database.NewActivityRepo(),
 		alert:     database.NewAlertRepo(),
 	}
+}
+
+// SetGWClient injects the Gateway client reference.
+func (h *DoctorHandler) SetGWClient(client *openclaw.GWClient) {
+	h.gwClient = client
 }
 
 // CheckItem is a single diagnostic check result.
@@ -117,6 +123,37 @@ type overviewResponse struct {
 	Trend24h   []overviewTrendPoint `json:"trend24h"`
 	TopIssues  []overviewIssue      `json:"topIssues"`
 	Actions    []overviewAction     `json:"actions"`
+}
+
+type summaryHealthCheck struct {
+	Enabled   bool   `json:"enabled"`
+	FailCount int    `json:"failCount"`
+	MaxFails  int    `json:"maxFails"`
+	LastOK    string `json:"lastOk"`
+}
+
+type summaryExceptionCounts struct {
+	Medium5m   int `json:"medium5m"`
+	High5m     int `json:"high5m"`
+	Critical5m int `json:"critical5m"`
+	Total1h    int `json:"total1h"`
+	Total24h   int `json:"total24h"`
+}
+
+type summaryGateway struct {
+	Running bool   `json:"running"`
+	Detail  string `json:"detail"`
+}
+
+type doctorSummaryResponse struct {
+	Score          int                    `json:"score"`
+	Status         string                 `json:"status"` // ok / warn / error
+	Summary        string                 `json:"summary"`
+	UpdatedAt      string                 `json:"updatedAt"`
+	Gateway        summaryGateway         `json:"gateway"`
+	HealthCheck    summaryHealthCheck     `json:"healthCheck"`
+	ExceptionStats summaryExceptionCounts `json:"exceptionStats"`
+	RecentIssues   []overviewIssue        `json:"recentIssues"`
 }
 
 // dedupeCheckItems removes duplicate check items by normalized key, keeping the first occurrence.
@@ -509,6 +546,86 @@ func (h *DoctorHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Summary returns a lightweight health snapshot for fast UI loading.
+func (h *DoctorHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	st := h.svc.Status()
+	health := h.currentHealthCheck()
+
+	risk5m, _ := h.activity.CountByRisk(now.Add(-5 * time.Minute))
+	risk1h, _ := h.activity.CountByRisk(now.Add(-1 * time.Hour))
+	risk24h, _ := h.activity.CountByRisk(now.Add(-24 * time.Hour))
+	alertStats := h.collectAlertSummary(now)
+
+	stats := summaryExceptionCounts{
+		Medium5m:   int(risk5m["medium"]) + alertStats.Medium5m,
+		High5m:     int(risk5m["high"]) + alertStats.High5m,
+		Critical5m: int(risk5m["critical"]) + alertStats.Critical5m,
+		Total1h:    int(risk1h["medium"]+risk1h["high"]+risk1h["critical"]) + alertStats.Total1h,
+		Total24h:   int(risk24h["medium"]+risk24h["high"]+risk24h["critical"]) + alertStats.Total24h,
+	}
+
+	score := 100
+	if !st.Running {
+		score -= 35
+	}
+	score -= minInt(20, stats.Medium5m*4)
+	score -= minInt(36, stats.High5m*12)
+	score -= minInt(50, stats.Critical5m*25)
+	if health.Enabled && health.FailCount > 0 {
+		score -= minInt(30, health.FailCount*10)
+	}
+	if score < 0 {
+		score = 0
+	}
+
+	status := "ok"
+	switch {
+	case !st.Running:
+		status = "error"
+	case stats.Critical5m > 0:
+		status = "error"
+	case health.Enabled && health.FailCount > 0 && health.MaxFails > 0 && health.FailCount >= health.MaxFails:
+		status = "error"
+	case stats.High5m > 0 || stats.Medium5m > 0:
+		status = "warn"
+	case health.Enabled && health.FailCount > 0:
+		status = "warn"
+	}
+
+	summary := "Stable, no recent exceptions"
+	switch status {
+	case "error":
+		if !st.Running {
+			summary = "Gateway offline, immediate action recommended"
+		} else if stats.Critical5m > 0 {
+			summary = fmt.Sprintf("Critical exceptions in the last 5 minutes: %d", stats.Critical5m)
+		} else {
+			summary = "Health checks are failing repeatedly"
+		}
+	case "warn":
+		if stats.High5m > 0 || stats.Medium5m > 0 {
+			summary = fmt.Sprintf("Recent exceptions detected (%d in 1h)", stats.Total1h)
+		} else {
+			summary = "Gateway health check reported intermittent failures"
+		}
+	}
+
+	web.OK(w, r, doctorSummaryResponse{
+		Score:     score,
+		Status:    status,
+		Summary:   summary,
+		UpdatedAt: now.Format(time.RFC3339),
+		Gateway: summaryGateway{
+			Running: st.Running,
+			Detail:  st.Detail,
+		},
+		HealthCheck:    health,
+		ExceptionStats: stats,
+		RecentIssues:   h.collectRecentExceptionIssues(now, 8),
+	})
+}
+
 func normalizeRisk(v string) string {
 	x := strings.ToLower(strings.TrimSpace(v))
 	switch x {
@@ -533,6 +650,13 @@ func ternaryStatus(ok bool, warn bool) string {
 		return "warn"
 	}
 	return "error"
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // Fix runs automatic repairs.
@@ -824,6 +948,129 @@ func (h *DoctorHandler) gatewayDiagnoseChecks() []CheckItem {
 		})
 	}
 	return items
+}
+
+func (h *DoctorHandler) currentHealthCheck() summaryHealthCheck {
+	if h.gwClient == nil {
+		return summaryHealthCheck{}
+	}
+
+	raw := h.gwClient.HealthStatus()
+	resp := summaryHealthCheck{}
+	if v, ok := raw["enabled"].(bool); ok {
+		resp.Enabled = v
+	}
+	if v, ok := raw["fail_count"].(int); ok {
+		resp.FailCount = v
+	}
+	if v, ok := raw["max_fails"].(int); ok {
+		resp.MaxFails = v
+	}
+	if v, ok := raw["last_ok"].(string); ok {
+		resp.LastOK = v
+	}
+	return resp
+}
+
+func (h *DoctorHandler) collectAlertSummary(now time.Time) summaryExceptionCounts {
+	filter := database.AlertFilter{
+		Page:      1,
+		PageSize:  300,
+		SortBy:    "created_at",
+		SortOrder: "desc",
+		StartTime: now.Add(-24 * time.Hour).Format(time.RFC3339),
+	}
+	alerts, _, _ := h.alert.List(filter)
+
+	var stats summaryExceptionCounts
+	for _, a := range alerts {
+		risk := normalizeRisk(a.Risk)
+		if risk == "low" {
+			continue
+		}
+		age := now.Sub(a.CreatedAt.UTC())
+		if age <= time.Hour {
+			stats.Total1h++
+		}
+		stats.Total24h++
+		if age > 5*time.Minute {
+			continue
+		}
+		switch risk {
+		case "critical":
+			stats.Critical5m++
+		case "high":
+			stats.High5m++
+		default:
+			stats.Medium5m++
+		}
+	}
+
+	return stats
+}
+
+func (h *DoctorHandler) collectRecentExceptionIssues(now time.Time, limit int) []overviewIssue {
+	if limit <= 0 {
+		return nil
+	}
+
+	activityFilter := database.ActivityFilter{
+		Page:      1,
+		PageSize:  limit * 3,
+		SortBy:    "created_at",
+		SortOrder: "desc",
+		StartTime: now.Add(-24 * time.Hour).Format(time.RFC3339),
+	}
+	activities, _, _ := h.activity.List(activityFilter)
+
+	alertFilter := database.AlertFilter{
+		Page:      1,
+		PageSize:  limit * 3,
+		SortBy:    "created_at",
+		SortOrder: "desc",
+		StartTime: now.Add(-24 * time.Hour).Format(time.RFC3339),
+	}
+	alerts, _, _ := h.alert.List(alertFilter)
+
+	issues := make([]overviewIssue, 0, limit*2)
+	for _, a := range activities {
+		risk := normalizeRisk(a.Risk)
+		if risk == "low" {
+			continue
+		}
+		issues = append(issues, overviewIssue{
+			ID:        "activity:" + a.EventID,
+			Source:    a.Source,
+			Category:  a.Category,
+			Risk:      risk,
+			Title:     a.Summary,
+			Detail:    a.Detail,
+			Timestamp: pickActivityTime(a).UTC().Format(time.RFC3339),
+		})
+	}
+	for _, a := range alerts {
+		risk := normalizeRisk(a.Risk)
+		if risk == "low" {
+			continue
+		}
+		issues = append(issues, overviewIssue{
+			ID:        "alert:" + a.AlertID,
+			Source:    "alert",
+			Category:  "security",
+			Risk:      risk,
+			Title:     a.Message,
+			Detail:    a.Detail,
+			Timestamp: a.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+
+	sort.Slice(issues, func(i, j int) bool {
+		return issues[i].Timestamp > issues[j].Timestamp
+	})
+	if len(issues) > limit {
+		issues = issues[:limit]
+	}
+	return issues
 }
 
 func (h *DoctorHandler) runFix(item CheckItem) fixItemResult {

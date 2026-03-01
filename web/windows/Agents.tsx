@@ -607,8 +607,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
               <div className="flex gap-0.5 mt-3 border-b border-slate-200/60 dark:border-white/[0.06] overflow-x-auto no-scrollbar">
                 {TABS.map(tab => (
                   <button key={tab.id} onClick={() => selectPanel(tab.id)}
-                    className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${panel === tab.id ? 'border-primary text-primary' : 'border-transparent text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60'}`}>
-                    <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
+                    className={`px-3 py-2 text-[11px] font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${panel === tab.id ? 'border-primary text-primary' : 'border-transparent text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60'}`}>
                     {tab.label}
                   </button>
                 ))}

@@ -317,7 +317,7 @@
     "toolAccess": "工具访问",
     "coreFiles": "核心文件",
     "agentContext": "代理上下文",
-    "run": "运行",
+    "run": "对话",
     "runAgent": "运行代理",
     "runPrompt": "输入要发送给代理的消息...",
     "running": "运行中...",
@@ -1482,7 +1482,7 @@
     "combiningTipDesc": "多个场景可以组合使用！例如，您可以同时应用「个人助理」和「邮件管理」场景。每次应用场景时，内容会追加到工作区文件中（如 SOUL.md、HEARTBEAT.md），不会覆盖已有内容。这样您的 Agent 就能同时具备多种能力。"
   },
   "multiAgent": {
-    "title": "多 Agent 协作",
+    "title": "多代理协作",
     "subtitle": "部署多 Agent 协作工作流，实现复杂任务自动化",
     "tabTemplates": "协作模板",
     "tabWorkflow": "工作流状态",
@@ -1624,7 +1624,7 @@
     "refresh": "刷新",
     "viewAll": "全部",
     "viewOnline": "在线",
-    "viewInstalled": "已安装",
+    "viewInstalled": "本地",
     "allFiles": "所有文件",
     "searchPlaceholder": "搜索模板...",
     "loading": "加载中...",

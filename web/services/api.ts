@@ -229,6 +229,26 @@ export const backupApi = {
 export const doctorApi = {
   run: () => get('/api/v1/doctor'),
   runCached: (ttlMs = 10000, force = false) => getCached('/api/v1/doctor', ttlMs, force),
+  summary: () => get<{
+    score: number;
+    status: 'ok' | 'warn' | 'error';
+    summary: string;
+    updatedAt: string;
+    gateway: { running: boolean; detail: string };
+    healthCheck: { enabled: boolean; failCount: number; maxFails: number; lastOk: string };
+    exceptionStats: { medium5m: number; high5m: number; critical5m: number; total1h: number; total24h: number };
+    recentIssues: Array<{ id: string; source: string; category: string; risk: string; title: string; detail?: string; timestamp: string }>;
+  }>('/api/v1/doctor/summary'),
+  summaryCached: (ttlMs = 5000, force = false) => getCached<{
+    score: number;
+    status: 'ok' | 'warn' | 'error';
+    summary: string;
+    updatedAt: string;
+    gateway: { running: boolean; detail: string };
+    healthCheck: { enabled: boolean; failCount: number; maxFails: number; lastOk: string };
+    exceptionStats: { medium5m: number; high5m: number; critical5m: number; total1h: number; total24h: number };
+    recentIssues: Array<{ id: string; source: string; category: string; risk: string; title: string; detail?: string; timestamp: string }>;
+  }>('/api/v1/doctor/summary', ttlMs, force),
   overview: () => get<{
     score: number;
     status: 'ok' | 'warn' | 'error';
