@@ -1554,7 +1554,8 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     ) : (
                       <div className="space-y-2">
                         {(overview?.actions || []).map((a) => (
-                          <button key={a.id} onClick={() => jumpToWindow(a.target)} className="w-full text-left rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] px-2.5 py-2 hover:border-primary/30 transition-colors">
+                          <button key={a.id} onClick={() => a.id === 'run-fix' ? handleFix() : jumpToWindow(a.target)} disabled={a.id === 'run-fix' && (fixing || fixableCount === 0)}
+                            className="w-full text-left rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] px-2.5 py-2 hover:border-primary/30 transition-colors disabled:opacity-50">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[12px] font-bold text-slate-700 dark:text-white/75">{actionText(a.id, a.title)}</span>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${a.priority === 'high' ? 'bg-red-500/10 text-red-500' : a.priority === 'medium' ? 'bg-amber-500/10 text-amber-500' : 'bg-slate-500/10 text-slate-500'}`}>{priorityText(a.priority)}</span>
