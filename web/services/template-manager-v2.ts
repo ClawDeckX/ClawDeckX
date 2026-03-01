@@ -1,7 +1,7 @@
 import { Language } from '../types';
 import { templateI18n } from './template-i18n';
 import { templateSourceManager, TemplateSource } from './template-sources';
-import { cdnLoader, githubLoader, localLoader, templateCache } from './template-loaders';
+import { cdnLoader, githubLoader, localLoader, templateCache, TemplateManifest } from './template-loaders';
 
 // Template types
 export interface TemplateMetadata {
@@ -112,7 +112,9 @@ export interface AgentTemplate {
   type: 'agent';
   version: string;
   metadata: TemplateMetadata;
+  wizardPreset?: boolean;
   content: {
+    identityContent?: string;
     soulSnippet: string;
     traits?: string[];
     tone?: string;
@@ -135,6 +137,22 @@ class TemplateManagerV2 {
   private scenarioCache = new Map<string, ScenarioTemplate[]>();
   private multiAgentCache = new Map<string, MultiAgentTemplate[]>();
   private agentCache = new Map<string, AgentTemplate[]>();
+  private manifestCache: TemplateManifest | null = null;
+
+  /**
+   * Pre-fetch manifest for GitHub sources (shared across category loads).
+   * This ensures only 1 manifest request per sync cycle.
+   */
+  private async prefetchManifest(source: TemplateSource): Promise<TemplateManifest | null> {
+    if (source.type !== 'github') return null;
+    if (this.manifestCache) return this.manifestCache;
+    try {
+      this.manifestCache = await githubLoader.loadManifest(source);
+      return this.manifestCache;
+    } catch {
+      return null;
+    }
+  }
 
   // Load templates from multiple sources with fallback
   private async loadFromSources<T>(
@@ -194,13 +212,9 @@ class TemplateManagerV2 {
             )
           );
         } else if (source.type === 'github') {
-          // Load from GitHub
-          const index = await githubLoader.loadIndex(source, 'scenarios');
-          templates = await Promise.all(
-            index.templates.map((path: string) =>
-              githubLoader.load(source, `scenarios/${path}`)
-            )
-          );
+          // Load from GitHub with incremental sync
+          const manifest = await this.prefetchManifest(source);
+          templates = await githubLoader.loadCategoryTemplates(source, 'scenarios', manifest || undefined);
         }
 
         // Add source info to metadata
@@ -251,12 +265,9 @@ class TemplateManagerV2 {
             )
           );
         } else if (source.type === 'github') {
-          const index = await githubLoader.loadIndex(source, 'multi-agent');
-          templates = await Promise.all(
-            index.templates.map((path: string) =>
-              githubLoader.load(source, `multi-agent/${path}`)
-            )
-          );
+          // Load from GitHub with incremental sync
+          const manifest = await this.prefetchManifest(source);
+          templates = await githubLoader.loadCategoryTemplates(source, 'multi-agent', manifest || undefined);
         }
 
         templates.forEach(t => {
@@ -302,12 +313,9 @@ class TemplateManagerV2 {
             )
           );
         } else if (source.type === 'github') {
-          const index = await githubLoader.loadIndex(source, 'agents');
-          templates = await Promise.all(
-            index.templates.map((path: string) =>
-              githubLoader.load(source, `agents/${path}`)
-            )
-          );
+          // Load from GitHub with incremental sync
+          const manifest = await this.prefetchManifest(source);
+          templates = await githubLoader.loadCategoryTemplates(source, 'agents', manifest || undefined);
         }
 
         templates.forEach(t => {
@@ -395,6 +403,8 @@ class TemplateManagerV2 {
     const loaders: Record<string, () => Promise<any>> = {
       'professional': () => import('../../templates/official/agents/personas/professional.json'),
       'friendly': () => import('../../templates/official/agents/personas/friendly.json'),
+      'butler': () => import('../../templates/official/agents/personas/butler.json'),
+      'scholar': () => import('../../templates/official/agents/personas/scholar.json'),
       'concise': () => import('../../templates/official/agents/personas/concise.json'),
       'creative': () => import('../../templates/official/agents/personas/creative.json'),
     };
@@ -433,7 +443,9 @@ class TemplateManagerV2 {
     this.scenarioCache.clear();
     this.multiAgentCache.clear();
     this.agentCache.clear();
+    this.manifestCache = null;
     templateCache.clear();
+    githubLoader.clearVersionCache();
   }
 
   // Refresh templates (clear cache and reload)

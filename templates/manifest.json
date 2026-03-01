@@ -1,16 +1,18 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "name": "ClawDeckX Official Templates",
   "description": "Official template collection for ClawDeckX",
   "author": "ClawDeckX Team",
-  "homepage": "https://github.com/clawdeck/templates",
-  "lastUpdated": "2026-02-27T00:00:00Z",
+  "homepage": "https://github.com/ClawDeckX/ClawDeckX",
+  "lastUpdated": "2026-03-01T21:00:00Z",
   "categories": [
     {
       "id": "scenarios",
       "name": "Scenarios",
       "description": "Pre-configured scenario templates",
       "path": "official/scenarios",
+      "version": "1.0.0",
+      "templateCount": 26,
       "subcategories": [
         { "id": "productivity", "name": "Productivity", "icon": "work" },
         { "id": "social", "name": "Social Media", "icon": "share" },
@@ -26,6 +28,8 @@
       "name": "Multi-Agent Collaboration",
       "description": "Multi-agent workflow templates",
       "path": "official/multi-agent",
+      "version": "1.0.0",
+      "templateCount": 5,
       "subcategories": [
         { "id": "content", "name": "Content Production", "icon": "article" },
         { "id": "research", "name": "Research Teams", "icon": "biotech" },
@@ -39,6 +43,8 @@
       "name": "Agent Presets",
       "description": "Agent personality and configuration presets",
       "path": "official/agents",
+      "version": "1.0.1",
+      "templateCount": 6,
       "subcategories": [
         { "id": "personas", "name": "Personas", "icon": "person" }
       ]
@@ -48,6 +54,8 @@
       "name": "Automations",
       "description": "Automation script templates",
       "path": "official/automations",
+      "version": "1.0.0",
+      "templateCount": 0,
       "subcategories": [
         { "id": "heartbeat", "name": "Heartbeat", "icon": "favorite" },
         { "id": "cron", "name": "Scheduled Tasks", "icon": "schedule" }

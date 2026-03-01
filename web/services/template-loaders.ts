@@ -195,10 +195,27 @@ export class CDNTemplateLoader {
   }
 }
 
+export interface ManifestCategory {
+  id: string;
+  version: string;
+  templateCount: number;
+  path: string;
+}
+
+export interface TemplateManifest {
+  version: string;
+  lastUpdated: string;
+  categories: ManifestCategory[];
+}
+
 export class GitHubTemplateLoader {
   private cache: TemplateCacheManager;
   private apiBase = 'https://api.github.com';
   private rawBase = 'https://raw.githubusercontent.com';
+  private versionPrefix = 'clawdeckx_tpl_ver_';
+  private bulkPrefix = 'clawdeckx_tpl_bulk_';
+  private manifestTTL = 300000; // 5 minutes - manifest checked frequently
+  private templateTTL = 86400000; // 24 hours - templates cached longer (version-gated)
 
   constructor(cache: TemplateCacheManager) {
     this.cache = cache;
@@ -208,48 +225,169 @@ export class GitHubTemplateLoader {
     return `${this.rawBase}/${repo}/${branch}/${path}`;
   }
 
+  private getFullUrl(source: TemplateSource, path: string): string {
+    const basePath = source.githubPath || '';
+    const fullPath = basePath ? `${basePath}/${path}` : path;
+    return this.getRawUrl(source.repo!, source.branch!, fullPath);
+  }
+
+  // ---- Version tracking ----
+
+  private getStoredCategoryVersion(sourceId: string, category: string): string | null {
+    try {
+      return localStorage.getItem(`${this.versionPrefix}${sourceId}_${category}`);
+    } catch { return null; }
+  }
+
+  private storeCategoryVersion(sourceId: string, category: string, version: string): void {
+    try {
+      localStorage.setItem(`${this.versionPrefix}${sourceId}_${category}`, version);
+    } catch { /* ignore */ }
+  }
+
+  // ---- Bulk category cache ----
+
+  private getBulkKey(sourceId: string, category: string): string {
+    return `${this.bulkPrefix}${sourceId}_${category}`;
+  }
+
+  private getBulkCache(sourceId: string, category: string): any[] | null {
+    try {
+      const raw = localStorage.getItem(this.getBulkKey(sourceId, category));
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch { return null; }
+  }
+
+  private setBulkCache(sourceId: string, category: string, data: any[]): void {
+    try {
+      localStorage.setItem(this.getBulkKey(sourceId, category), JSON.stringify(data));
+    } catch { /* ignore */ }
+  }
+
+  // ---- Fetch helpers ----
+
+  private async fetchJson(url: string): Promise<any> {
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) {
+      throw new Error(`GitHub fetch failed: ${response.status} ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  // ---- Public API ----
+
+  /**
+   * Load manifest with short TTL (5min). This is the version-check entry point.
+   */
+  async loadManifest(source: TemplateSource): Promise<TemplateManifest> {
+    if (!source.repo || !source.branch) {
+      throw new Error('GitHub source missing repo or branch');
+    }
+    const url = this.getFullUrl(source, 'manifest.json');
+    const cached = this.cache.get(url, this.manifestTTL);
+    if (cached) {
+      console.log(`[GitHub] Manifest from cache (${this.manifestTTL / 1000}s TTL)`);
+      return cached.data;
+    }
+    console.log(`[GitHub] Fetching manifest: ${url}`);
+    const data = await this.fetchJson(url);
+    this.cache.set(url, data, source.id);
+    return data;
+  }
+
+  /**
+   * Check if a category needs update by comparing manifest version vs stored version.
+   */
+  isCategoryChanged(source: TemplateSource, manifest: TemplateManifest, category: string): boolean {
+    const cat = manifest.categories.find(c => c.id === category);
+    if (!cat) return true;
+    const stored = this.getStoredCategoryVersion(source.id, category);
+    if (!stored) return true;
+    return stored !== cat.version;
+  }
+
+  /**
+   * Load all templates for a category with incremental sync.
+   * 1. Check manifest category version vs local
+   * 2. Version matches → return bulk cache (0 requests)
+   * 3. Version differs → fetch index + all templates, update bulk cache + version
+   */
+  async loadCategoryTemplates(
+    source: TemplateSource,
+    category: string,
+    manifest?: TemplateManifest
+  ): Promise<any[]> {
+    if (!source.repo || !source.branch) {
+      throw new Error('GitHub source missing repo or branch');
+    }
+
+    // Step 1: Get manifest (from cache if fresh)
+    const m = manifest || await this.loadManifest(source);
+
+    // Step 2: Version comparison
+    if (!this.isCategoryChanged(source, m, category)) {
+      const bulk = this.getBulkCache(source.id, category);
+      if (bulk) {
+        console.log(`[GitHub] Category "${category}" unchanged (v${this.getStoredCategoryVersion(source.id, category)}), using cache (${bulk.length} templates)`);
+        return bulk;
+      }
+    }
+
+    const catMeta = m.categories.find(c => c.id === category);
+    const remoteVersion = catMeta?.version || 'unknown';
+    console.log(`[GitHub] Category "${category}" changed → v${remoteVersion}, fetching...`);
+
+    // Step 3: Fetch index
+    const indexUrl = this.getFullUrl(source, `${category}/index.json`);
+    const index = await this.fetchJson(indexUrl);
+    this.cache.set(indexUrl, index, source.id);
+
+    // Step 4: Fetch all templates in this category
+    const templates = await Promise.all(
+      (index.templates as string[]).map(async (path: string) => {
+        const url = this.getFullUrl(source, `${category}/${path}`);
+        // Individual template cache (24h) - reuse if still valid
+        const cached = this.cache.get(url, this.templateTTL);
+        if (cached) return cached.data;
+        const data = await this.fetchJson(url);
+        this.cache.set(url, data, source.id);
+        return data;
+      })
+    );
+
+    // Step 5: Store bulk cache + version
+    this.setBulkCache(source.id, category, templates);
+    this.storeCategoryVersion(source.id, category, remoteVersion);
+    console.log(`[GitHub] Category "${category}" synced: ${templates.length} templates (v${remoteVersion})`);
+
+    return templates;
+  }
+
+  /**
+   * Load a single file (for i18n, individual templates, etc.)
+   */
   async load(source: TemplateSource, path: string): Promise<any> {
     if (!source.repo || !source.branch) {
       throw new Error('GitHub source missing repo or branch');
     }
 
-    const basePath = source.githubPath || '';
-    const fullPath = basePath ? `${basePath}/${path}` : path;
-    const url = this.getRawUrl(source.repo, source.branch, fullPath);
-    const ttl = 3600000; // 1 hour for GitHub
+    const url = this.getFullUrl(source, path);
 
-    // Check cache first
-    const cached = this.cache.get(url, ttl);
+    // Check cache first (24h TTL for individual files)
+    const cached = this.cache.get(url, this.templateTTL);
     if (cached) {
       console.log(`[GitHub] Loaded from cache: ${path}`);
       return cached.data;
     }
 
-    // Fetch from GitHub
-    try {
-      console.log(`[GitHub] Fetching: ${url}`);
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`GitHub fetch failed: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      this.cache.set(url, data, source.id);
-      console.log(`[GitHub] Loaded and cached: ${path}`);
-      return data;
-    } catch (err: any) {
-      console.error(`[GitHub] Load error for ${path}:`, err);
-      throw err;
-    }
-  }
-
-  async loadManifest(source: TemplateSource): Promise<any> {
-    return this.load(source, 'manifest.json');
+    console.log(`[GitHub] Fetching: ${url}`);
+    const data = await this.fetchJson(url);
+    this.cache.set(url, data, source.id);
+    console.log(`[GitHub] Loaded and cached: ${path}`);
+    return data;
   }
 
   async loadIndex(source: TemplateSource, type: string): Promise<any> {
@@ -289,6 +427,20 @@ export class GitHubTemplateLoader {
       console.error(`[GitHub] List contents error:`, err);
       throw err;
     }
+  }
+
+  /**
+   * Clear all version tracking and bulk caches
+   */
+  clearVersionCache(): void {
+    try {
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith(this.versionPrefix) || key.startsWith(this.bulkPrefix)) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch { /* ignore */ }
   }
 }
 
