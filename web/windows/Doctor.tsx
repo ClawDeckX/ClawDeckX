@@ -479,6 +479,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
   useEffect(() => {
     if (activeTab !== 'diagnose') return;
     loadSummary(false);
+    loadOverview(false);
     const timer = setInterval(() => loadSummary(), 30000);
     const unsubscribe = subscribeManagerWS((msg: any) => {
       const typ = String(msg?.type || '');
@@ -675,9 +676,9 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
         summaryRefreshTimerRef.current = null;
       }
     };
-  }, [activeTab, applyBucketCountsToSummary, language, loadSummary, scheduleSummaryRefresh, text.actionReviewAlerts, text.issuesTitle, text.summaryGatewayShutdown, text.summaryKillSwitch]);
+  }, [activeTab, applyBucketCountsToSummary, language, loadOverview, loadSummary, scheduleSummaryRefresh, text.actionReviewAlerts, text.issuesTitle, text.summaryGatewayShutdown, text.summaryKillSwitch]);
 
-  // Auto-run diagnostics on first visit (no cached data). Delayed to avoid blocking initial render.
+  // Auto-run heavy diagnostics (runDoctor) after lightweight data is loaded.
   const autoRunTriggeredRef = useRef(false);
   useEffect(() => {
     if (activeTab !== 'diagnose') return;
@@ -685,10 +686,17 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     const hasRun = typeof window !== 'undefined' && window.localStorage.getItem(DOCTOR_HAS_RUN_KEY) === '1';
     if (!hasRun && !result && !loading && !isCachedResult) {
       autoRunTriggeredRef.current = true;
-      const timer = setTimeout(() => fetchAll(true), 800);
+      const timer = setTimeout(async () => {
+        setLoading(true);
+        try {
+          await runDoctor(true);
+          if (typeof window !== 'undefined') window.localStorage.setItem(DOCTOR_HAS_RUN_KEY, '1');
+        } catch { /* non-blocking */ }
+        setLoading(false);
+      }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, result, loading, isCachedResult, fetchAll]);
+  }, [activeTab, result, loading, isCachedResult, runDoctor]);
 
   // Full diagnostics stay manual.
 
