@@ -106,6 +106,8 @@ const SUMMARY_SOURCE_STORAGE_KEY = 'doctor.summarySourceFilter';
 const SUMMARY_RISK_STORAGE_KEY = 'doctor.summaryRiskFilter';
 const TIME_RANGE_STORAGE_KEY = 'doctor.timeRange';
 const DOCTOR_HAS_RUN_KEY = 'doctor.hasRun';
+const DOCTOR_RESULT_CACHE_KEY = 'doctor.resultCache';
+const DOCTOR_LAST_SCORE_KEY = 'doctor.lastScore';
 
 function statusClass(status: 'ok' | 'warn' | 'error') {
   if (status === 'ok') return 'text-emerald-500 bg-emerald-500/10';
@@ -202,7 +204,31 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     const saved = window.localStorage.getItem(TIME_RANGE_STORAGE_KEY);
     return (['1h', '6h', '24h'] as TimeRange[]).includes(saved as TimeRange) ? (saved as TimeRange) : '24h';
   });
-  const [result, setResult] = useState<DiagResult | null>(null);
+  const [result, setResult] = useState<DiagResult | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.localStorage.getItem(DOCTOR_RESULT_CACHE_KEY);
+      if (raw) return JSON.parse(raw) as DiagResult;
+    } catch { /* ignore */ }
+    return null;
+  });
+  const [isCachedResult, setIsCachedResult] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !!window.localStorage.getItem(DOCTOR_RESULT_CACHE_KEY);
+  });
+  const [lastScanTime, setLastScanTime] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      const raw = window.localStorage.getItem(DOCTOR_RESULT_CACHE_KEY);
+      if (raw) { const d = JSON.parse(raw); return d?._cachedAt || ''; }
+    } catch { /* ignore */ }
+    return '';
+  });
+  const [prevScore, setPrevScore] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const v = window.localStorage.getItem(DOCTOR_LAST_SCORE_KEY);
+    return v !== null ? Number(v) : null;
+  });
   const [overview, setOverview] = useState<DoctorOverview | null>(null);
   const [summary, setSummary] = useState<DoctorSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -217,6 +243,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
   const [fixingOne, setFixingOne] = useState<string>('');
   const [wsConnected, setWsConnected] = useState(true);
   const [showFirstRunPrompt, setShowFirstRunPrompt] = useState(false);
+  const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [summarySourceFilter, setSummarySourceFilter] = useState<SummarySourceKey>(() => {
     if (typeof window === 'undefined') return 'all';
     const saved = window.localStorage.getItem(SUMMARY_SOURCE_STORAGE_KEY);
@@ -240,8 +267,22 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
   }, [timeRange]);
 
   const runDoctor = useCallback(async (force = false) => {
-    const data = await doctorApi.runCached(12000, force) as DiagResult;
+    const data = await doctorApi.runCached(60000, force) as DiagResult;
     setResult(data);
+    setIsCachedResult(false);
+    const now = new Date().toISOString();
+    setLastScanTime(now);
+    if (typeof window !== 'undefined') {
+      try {
+        const toCache = { ...data, _cachedAt: now };
+        window.localStorage.setItem(DOCTOR_RESULT_CACHE_KEY, JSON.stringify(toCache));
+      } catch { /* quota exceeded — ignore */ }
+      if (typeof data?.score === 'number') {
+        const prev = window.localStorage.getItem(DOCTOR_LAST_SCORE_KEY);
+        if (prev !== null) setPrevScore(Number(prev));
+        window.localStorage.setItem(DOCTOR_LAST_SCORE_KEY, String(data.score));
+      }
+    }
   }, []);
 
   const pruneSummaryBuckets = useCallback((nowMs = Date.now()) => {
@@ -479,7 +520,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                 timestamp,
               },
               ...(prev.recentIssues || []).filter((item) => item.id !== String(data?.event_id || '')),
-            ].slice(0, 8),
+            ].slice(0, 16),
           };
           return deriveSummary(applyBucketCountsToSummary(next));
         });
@@ -523,7 +564,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                 timestamp,
               },
               ...(prev.recentIssues || []).filter((item) => item.id !== `alert:${alertID}`),
-            ].slice(0, 8),
+            ].slice(0, 16),
           };
           return deriveSummary(applyBucketCountsToSummary(next));
         });
@@ -592,7 +633,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                 timestamp,
               },
               ...(prev.recentIssues || []),
-            ].slice(0, 8),
+            ].slice(0, 16),
           };
           return deriveSummary(applyBucketCountsToSummary(next));
         });
@@ -630,15 +671,15 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     };
   }, [activeTab, applyBucketCountsToSummary, language, loadSummary, scheduleSummaryRefresh, text.actionReviewAlerts, text.issuesTitle, text.summaryGatewayShutdown, text.summaryKillSwitch]);
 
-  // First-run prompt: show dialog if no prior diagnostics cached.
+  // First-run prompt: show only if never run before AND no cached data at all.
   useEffect(() => {
     if (activeTab !== 'diagnose') return;
     const hasRun = typeof window !== 'undefined' && window.localStorage.getItem(DOCTOR_HAS_RUN_KEY) === '1';
-    if (!hasRun && !result && !loading) {
+    if (!hasRun && !result && !loading && !isCachedResult) {
       const timer = setTimeout(() => setShowFirstRunPrompt(true), 600);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, result, loading]);
+  }, [activeTab, result, loading, isCachedResult]);
 
   // Full diagnostics stay manual.
 
@@ -687,12 +728,13 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
   const fixableCount = (result?.items || []).filter(i => i.fixable).length;
   const filteredItems = useMemo(() => {
     const all = result?.items || [];
+    const severityOrder: Record<string, number> = { error: 0, warn: 1, ok: 2 };
     return all.filter((i) => {
       if (severityFilter !== 'all' && i.status !== severityFilter) return false;
       if (categoryFilter !== 'all' && (i.category || 'other') !== categoryFilter) return false;
       if (onlyFixable && !i.fixable) return false;
       return true;
-    });
+    }).sort((a, b) => (severityOrder[a.status] ?? 9) - (severityOrder[b.status] ?? 9));
   }, [categoryFilter, onlyFixable, result?.items, severityFilter]);
 
   const categories = useMemo(() => {
@@ -788,7 +830,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     });
     return Array.from(grouped.values())
       .sort((a, b) => new Date(b.issue.timestamp || 0).getTime() - new Date(a.issue.timestamp || 0).getTime())
-      .slice(0, 8);
+      .slice(0, 16);
   }, [filteredSummaryIssues, issueSourceMeta]);
 
   useEffect(() => {
@@ -1176,6 +1218,13 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                       <text x="60" y="52" textAnchor="middle" className="fill-slate-800 dark:fill-white" style={{ fontSize: '22px', fontWeight: 900 }}>{numericScore}</text>
                       <text x="60" y="66" textAnchor="middle" style={{ fontSize: '8px', fill: gColor, fontWeight: 700 }}>{statusLabel}</text>
                     </svg>
+                    {prevScore !== null && prevScore !== numericScore && (
+                      <p className={`text-[9px] font-bold mt-0.5 ${numericScore > prevScore ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {numericScore > prevScore
+                          ? formatText(text.scoreUp || '+{n}', { n: numericScore - prevScore })
+                          : formatText(text.scoreDown || '-{n}', { n: prevScore - numericScore })}
+                      </p>
+                    )}
                   </div>
 
                   {/* Summary text + time range */}
@@ -1189,7 +1238,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                         </span>
                       )}
                     </div>
-                    <p className="text-[14px] md:text-[15px] font-bold text-slate-700 dark:text-white/85">{summaryView.summary}</p>
+                    <button type="button" onClick={() => setShowExceptionModal(true)} className="text-[14px] md:text-[15px] font-bold text-slate-700 dark:text-white/85 hover:underline decoration-dotted underline-offset-2 text-left">{summaryView.summary}</button>
                     <p className="text-[10px] text-slate-400 dark:text-white/35 mt-1">{text.lastUpdate}: {new Date(summaryView.updatedAt || Date.now()).toLocaleString(dateLocale)}</p>
 
                     {/* #9 Time Range Selector */}
@@ -1199,6 +1248,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                           {r === '1h' ? text.timeRange1h : r === '6h' ? text.timeRange6h : text.timeRange24h}
                         </button>
                       ))}
+                      <span className="text-[8px] text-slate-400 dark:text-white/25 ml-1">{text.timeRangeNote}</span>
                     </div>
                   </div>
                 </div>
@@ -1219,6 +1269,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                       <p className="text-[12px] font-bold text-slate-700 dark:text-white/75">
                         {summaryView.healthCheck?.enabled ? `${summaryView.healthCheck.failCount || 0}/${summaryView.healthCheck.maxFails || 0}` : (text.summaryOff)}
                       </p>
+                      {summaryView.healthCheck?.enabled && <span className="text-[8px] text-slate-400 dark:text-white/30">{text.healthCheckLabel}</span>}
                       {summaryView.healthCheck?.enabled && (summaryView.healthCheck.failCount || 0) > 0 && (
                         <span className="material-symbols-outlined text-[12px] text-red-500">trending_up</span>
                       )}
@@ -1234,7 +1285,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     )}
                     <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">{summaryView.healthCheck?.lastOk ? new Date(summaryView.healthCheck.lastOk).toLocaleTimeString(dateLocale) : na}</p>
                   </button>
-                  <button type="button" onClick={() => jumpToWindow('activity')} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
+                  <button type="button" onClick={() => setShowExceptionModal(true)} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
                     <p className="text-[10px] text-slate-400 dark:text-white/35 uppercase tracking-wider">{text.summaryExceptions5m}</p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <p className="text-[12px] font-bold text-slate-700 dark:text-white/75">
@@ -1246,7 +1297,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     </div>
                     <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">{text.summaryRiskMix}</p>
                   </button>
-                  <button type="button" onClick={() => jumpToWindow(summarySourceFilter === 'alert' ? 'alerts' : 'activity')} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
+                  <button type="button" onClick={() => setShowExceptionModal(true)} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
                     <p className="text-[10px] text-slate-400 dark:text-white/35 uppercase tracking-wider">{text.summaryRecentVolume}</p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <p className="text-[12px] font-bold text-slate-700 dark:text-white/75">{scopedSummaryStats?.total1h || 0} / {scopedSummaryStats?.total24h || 0}</p>
@@ -1270,7 +1321,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                         const pct = Math.min(1, d.points / d.maxPoints);
                         const r = 18; const circ = Math.PI * r;
                         return (
-                          <div key={d.key} className="flex items-center gap-2 min-w-[120px]">
+                          <div key={d.key} className="flex items-center gap-2 min-w-[120px]" title={d.key === 'gateway' ? text.deductionRuleGateway : d.key === 'critical' ? text.deductionRuleCritical : d.key === 'high' ? text.deductionRuleHigh : d.key === 'medium' ? text.deductionRuleMedium : text.deductionRuleHealthCheck}>
                             <svg viewBox="0 0 44 26" className="w-10 h-6 shrink-0">
                               <path d="M 4 24 A 18 18 0 0 1 40 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-200 dark:text-white/10" strokeLinecap="round" />
                               <path d="M 4 24 A 18 18 0 0 1 40 24" fill="none" stroke={d.color} strokeWidth="4" strokeLinecap="round"
@@ -1433,7 +1484,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40 flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px]">timeline</span>{text.timelineTitle || text.issuesTitle}
                     </p>
-                    <button onClick={() => jumpToWindow('activity')} className="text-[10px] font-bold text-primary hover:opacity-80">{text.actionOpenEvents}</button>
+                    <button onClick={() => jumpToWindow('activity')} className="text-[10px] font-bold text-primary hover:opacity-80">{text.viewAllEvents || text.actionOpenEvents}</button>
                   </div>
                   {summarySourceOptions.length > 1 && (
                     <div className="flex flex-wrap gap-1.5 mb-2">
@@ -1571,7 +1622,21 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
 
             {/* === ROW 5: Diagnostics Check List === */}
             <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-3">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40 mb-2">{text.sectionChecks}</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40">{text.sectionChecks}</p>
+                {lastScanTime && (
+                  <p className="text-[10px] text-slate-400 dark:text-white/30 flex items-center gap-1">
+                    {isCachedResult && <span className="material-symbols-outlined text-[12px]">cached</span>}
+                    {text.cachedResultLabel}: {new Date(lastScanTime).toLocaleString(dateLocale)}
+                  </p>
+                )}
+              </div>
+              {isCachedResult && result && (
+                <div className="mb-2.5 px-2.5 py-1.5 rounded-lg bg-amber-50/80 dark:bg-amber-500/5 border border-amber-200/50 dark:border-amber-500/10 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[14px] text-amber-500">info</span>
+                  <span className="text-[10px] text-amber-700 dark:text-amber-300">{text.cachedResultHint}</span>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-1 mb-2.5">
                 {(['all', 'error', 'warn', 'ok'] as const).map(k => (
                   <button key={k} onClick={() => setSeverityFilter(k)} className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all ${severityFilter === k ? 'bg-primary/15 text-primary' : 'bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-white/40'}`}>
@@ -1629,6 +1694,62 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
           </div>
         )}
       </div>
+      {/* Exception Detail Modal */}
+      {showExceptionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowExceptionModal(false)}>
+          <div className="w-full max-w-lg max-h-[80vh] mx-4 rounded-2xl border border-slate-200/60 dark:border-white/10 bg-white dark:bg-slate-900 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/10">
+              <p className="text-[13px] font-bold text-slate-700 dark:text-white/85 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px] text-red-500">warning</span>
+                {text.exceptionModalTitle} ({(displaySummary?.recentIssues || []).length})
+              </p>
+              <button onClick={() => setShowExceptionModal(false)} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/[0.06]">
+                <span className="material-symbols-outlined text-[16px] text-slate-400">close</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+              {(displaySummary?.recentIssues || []).length === 0 ? (
+                <p className="text-[11px] text-slate-400 dark:text-white/40 py-8 text-center">{text.exceptionModalEmpty}</p>
+              ) : (
+                (displaySummary?.recentIssues || []).map((issue, idx) => {
+                  const srcMeta = issueSourceMeta(issue.source, issue.category);
+                  const action = summaryIssueAction(issue.source, issue.category);
+                  return (
+                    <div key={`${issue.id}-${idx}`} className="rounded-lg border border-slate-200/80 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.02] p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex items-center gap-2">
+                          <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${srcMeta.chip}`}>
+                            <span className="material-symbols-outlined text-[14px]">{srcMeta.icon}</span>
+                          </span>
+                          <p className="text-[12px] font-bold text-slate-700 dark:text-white/75 truncate">{issue.title}</p>
+                        </div>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${issue.risk === 'critical' ? 'bg-red-500/10 text-red-500' : issue.risk === 'high' ? 'bg-orange-500/10 text-orange-500' : 'bg-amber-500/10 text-amber-500'}`}>{riskText(issue.risk)}</span>
+                      </div>
+                      {issue.detail && <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1 break-all">{formatIssueDetail(issue.detail)}</p>}
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-[10px] text-slate-400 dark:text-white/35">{new Date(issue.timestamp).toLocaleString(dateLocale)}</span>
+                        <button onClick={() => { setShowExceptionModal(false); jumpToWindow(action.target); }} className="text-[10px] font-bold text-primary hover:opacity-80 flex items-center gap-0.5">
+                          <span className="material-symbols-outlined text-[12px]">open_in_new</span>
+                          {text.exceptionModalJump}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="px-4 py-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
+              <button onClick={() => { setShowExceptionModal(false); jumpToWindow('activity'); }} className="text-[11px] font-bold text-primary hover:opacity-80 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                {text.exceptionModalViewAll || text.viewAllEvents}
+              </button>
+              <button onClick={() => setShowExceptionModal(false)} className="h-8 px-3 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+                {text.exceptionModalClose}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

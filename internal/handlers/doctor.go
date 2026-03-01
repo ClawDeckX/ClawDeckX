@@ -519,11 +519,11 @@ func (h *DoctorHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	if errCount > 0 {
 		actions = append(actions, overviewAction{ID: "run-fix", Title: "Run Auto Fix", Target: "maintenance", Priority: "high"})
 	}
-	if riskCounts["critical"]+riskCounts["high"] > 0 {
+	if riskCounts["critical"]+riskCounts["high"] > 0 || events1h > 5 {
 		actions = append(actions, overviewAction{ID: "review-alerts", Title: "Review Alerts", Target: "alerts", Priority: "medium"})
 	}
 	if events1h > 0 {
-		actions = append(actions, overviewAction{ID: "open-events", Title: "Open Gateway Events", Target: "gateway", Priority: "low"})
+		actions = append(actions, overviewAction{ID: "open-events", Title: "Open Gateway Events", Target: "activity", Priority: "low"})
 	}
 
 	summary := "Healthy and stable"
@@ -622,7 +622,7 @@ func (h *DoctorHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		},
 		HealthCheck:    health,
 		ExceptionStats: stats,
-		RecentIssues:   h.collectRecentExceptionIssues(now, 8),
+		RecentIssues:   h.collectRecentExceptionIssues(now, 16),
 	})
 }
 
