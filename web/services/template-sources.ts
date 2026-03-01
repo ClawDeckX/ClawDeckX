@@ -68,14 +68,15 @@ export const DEFAULT_TEMPLATE_SOURCES: TemplateSource[] = [
   },
   {
     id: 'github',
-    name: 'Community Templates',
+    name: 'Official Online Templates',
     type: 'github',
-    enabled: false,
-    priority: 50,
-    repo: 'clawdeckx/community-templates',
+    enabled: true,
+    priority: 90,
+    repo: 'ClawDeckX/ClawDeckX',
     branch: 'main',
-    githubPath: 'templates',
-    requiresApproval: true
+    githubPath: 'templates/official',
+    fallback: 'local',
+    requiresApproval: false
   }
 ];
 
