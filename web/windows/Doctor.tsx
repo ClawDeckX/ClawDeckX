@@ -1553,7 +1553,19 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                         const quickAction = summaryIssueAction(i.source, i.category);
                         const isExpanded = expandedSummaryGroups.includes(key);
                         const detailText = i.detail ? formatIssueDetail(i.detail) : '';
-                        const showDetail = detailText && detailText !== i.title && !i.title.includes(detailText) && !detailText.includes(i.title);
+                        const dedupedDetail = (() => {
+                          if (!detailText || !i.title) return detailText;
+                          const titleLower = i.title.toLowerCase();
+                          const segments = detailText.split(' · ').filter(seg => {
+                            const segLower = seg.trim().toLowerCase();
+                            if (!segLower) return false;
+                            if (titleLower.includes(segLower)) return false;
+                            if (segLower.length > 8 && titleLower.includes(segLower.slice(0, Math.floor(segLower.length * 0.7)))) return false;
+                            return true;
+                          });
+                          return segments.join(' · ');
+                        })();
+                        const showDetail = !!dedupedDetail;
                         return (
                           <div key={i.id} className="relative">
                             <div className={`absolute -left-[21px] top-2.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${srcMeta.dot}`} />
@@ -1581,7 +1593,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                                   </div>
                                 )}
                               </div>
-                              {showDetail && <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1 break-all line-clamp-1">{detailText}</p>}
+                              {showDetail && <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1 break-all line-clamp-1">{dedupedDetail}</p>}
                               {count > 1 && (
                                 <div className="mt-1.5">
                                   <button onClick={() => setExpandedSummaryGroups((prev) => prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key])}
