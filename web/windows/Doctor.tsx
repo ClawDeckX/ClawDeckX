@@ -677,15 +677,18 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     };
   }, [activeTab, applyBucketCountsToSummary, language, loadSummary, scheduleSummaryRefresh, text.actionReviewAlerts, text.issuesTitle, text.summaryGatewayShutdown, text.summaryKillSwitch]);
 
-  // First-run prompt: show only if never run before AND no cached data at all.
+  // Auto-run diagnostics on first visit (no cached data). Delayed to avoid blocking initial render.
+  const autoRunTriggeredRef = useRef(false);
   useEffect(() => {
     if (activeTab !== 'diagnose') return;
+    if (autoRunTriggeredRef.current) return;
     const hasRun = typeof window !== 'undefined' && window.localStorage.getItem(DOCTOR_HAS_RUN_KEY) === '1';
     if (!hasRun && !result && !loading && !isCachedResult) {
-      const timer = setTimeout(() => setShowFirstRunPrompt(true), 600);
+      autoRunTriggeredRef.current = true;
+      const timer = setTimeout(() => fetchAll(true), 800);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, result, loading, isCachedResult]);
+  }, [activeTab, result, loading, isCachedResult, fetchAll]);
 
   // Full diagnostics stay manual.
 
@@ -1196,23 +1199,12 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
               <div className="rounded-lg border border-red-300/50 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-300">{loadError}</div>
             )}
 
-            {/* First-run prompt */}
-            {showFirstRunPrompt && !result && (
+            {/* Auto-run indicator (replaces first-run prompt) */}
+            {!result && !isCachedResult && loading && (
               <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-white to-white dark:from-primary/10 dark:via-white/[0.03] dark:to-transparent p-6 flex flex-col items-center text-center gap-3 shadow-sm">
-                <span className="material-symbols-outlined text-[36px] text-primary/70">health_and_safety</span>
+                <span className="material-symbols-outlined text-[36px] text-primary/70 animate-spin">progress_activity</span>
                 <p className="text-[14px] font-bold text-slate-700 dark:text-white/85">{text.firstRunTitle}</p>
                 <p className="text-[12px] text-slate-500 dark:text-white/50 max-w-sm">{text.firstRunMessage}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <button onClick={() => { setShowFirstRunPrompt(false); fetchAll(true); }} disabled={loading}
-                    className="h-9 px-4 rounded-lg text-[12px] font-bold bg-primary text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5">
-                    <span className={`material-symbols-outlined text-[16px] ${loading ? 'animate-spin' : ''}`}>{loading ? 'progress_activity' : 'troubleshoot'}</span>
-                    {text.firstRunConfirm}
-                  </button>
-                  <button onClick={() => setShowFirstRunPrompt(false)}
-                    className="h-9 px-4 rounded-lg text-[12px] font-bold border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:bg-slate-50 dark:hover:bg-white/[0.03]">
-                    {text.firstRunSkip}
-                  </button>
-                </div>
               </div>
             )}
 
@@ -1296,7 +1288,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     )}
                     <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">{summaryView.healthCheck?.lastOk ? new Date(summaryView.healthCheck.lastOk).toLocaleTimeString(dateLocale) : na}</p>
                   </button>
-                  <button type="button" onClick={() => setShowExceptionModal(true)} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
+                  <div className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left">
                     <p className="text-[10px] text-slate-400 dark:text-white/35 uppercase tracking-wider">{text.summaryExceptions5m}</p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <p className="text-[12px] font-bold text-slate-700 dark:text-white/75">
@@ -1307,14 +1299,14 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                       )}
                     </div>
                     <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">{text.summaryRiskMix}</p>
-                  </button>
-                  <button type="button" onClick={() => setShowExceptionModal(true)} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
+                  </div>
+                  <div className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left">
                     <p className="text-[10px] text-slate-400 dark:text-white/35 uppercase tracking-wider">{text.summaryRecentVolume}</p>
                     <div className="flex items-center gap-1.5 mt-1">
                       <p className="text-[12px] font-bold text-slate-700 dark:text-white/75">{scopedSummaryStats?.total1h || 0} / {scopedSummaryStats?.total24h || 0}</p>
                     </div>
                     <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">{text.summaryRecentWindow}</p>
-                  </button>
+                  </div>
                   <button type="button" onClick={() => jumpToWindow('sessions')} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
                     <p className="text-[10px] text-slate-400 dark:text-white/35 uppercase tracking-wider">{text.summarySessionErrors}</p>
                     <div className="flex items-center gap-1.5 mt-1">
@@ -1555,11 +1547,13 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                   {groupedSummaryIssues.length === 0 ? (
                     <p className="text-[11px] text-slate-400 dark:text-white/40">{text.noIssues}</p>
                   ) : (
-                    <div className="relative pl-4 border-l-2 border-slate-200 dark:border-white/10 space-y-2">
+                    <div className="relative pl-4 border-l-2 border-slate-200 dark:border-white/10 space-y-2 max-h-[340px] overflow-y-auto pr-1">
                       {groupedSummaryIssues.map(({ key, issue: i, count, recentTimestamps }) => {
                         const srcMeta = issueSourceMeta(i.source, i.category);
                         const quickAction = summaryIssueAction(i.source, i.category);
                         const isExpanded = expandedSummaryGroups.includes(key);
+                        const detailText = i.detail ? formatIssueDetail(i.detail) : '';
+                        const showDetail = detailText && detailText !== i.title && !i.title.includes(detailText) && !detailText.includes(i.title);
                         return (
                           <div key={i.id} className="relative">
                             <div className={`absolute -left-[21px] top-2.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${srcMeta.dot}`} />
@@ -1587,7 +1581,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                                   </div>
                                 )}
                               </div>
-                              {i.detail && <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1 break-all">{formatIssueDetail(i.detail)}</p>}
+                              {showDetail && <p className="text-[11px] text-slate-500 dark:text-white/40 mt-1 break-all line-clamp-1">{detailText}</p>}
                               {count > 1 && (
                                 <div className="mt-1.5">
                                   <button onClick={() => setExpandedSummaryGroups((prev) => prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key])}
