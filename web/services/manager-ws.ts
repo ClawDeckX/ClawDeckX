@@ -18,6 +18,11 @@ class ManagerWSBus {
     if (onStatus) this.statusSubscribers.add(onStatus);
     this.ensureConnected();
 
+    // If the WS is already open, immediately notify the new subscriber
+    if (onStatus && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      queueMicrotask(() => onStatus('open'));
+    }
+
     return () => {
       this.subscribers.delete(onMessage);
       if (onStatus) this.statusSubscribers.delete(onStatus);
@@ -51,7 +56,7 @@ class ManagerWSBus {
 
     ws.onopen = () => {
       this.backoffMs = 800;
-      ws.send(JSON.stringify({ action: 'subscribe', channels: ['gw_event', 'alert'] }));
+      ws.send(JSON.stringify({ action: 'subscribe', channels: ['gw_event', 'alert', 'activity'] }));
       this.notifyStatus('open');
     };
 
