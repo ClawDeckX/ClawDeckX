@@ -134,6 +134,11 @@
   "scoreDown": "vs last -{n}",
   "scoreNoChange": "Same as last",
   "viewAllEvents": "View all events",
+  "deductionSessionErrors": "Session Errors",
+  "deductionRuleSession": "Each error session: -3, max 15",
+  "summarySessionErrors": "Session Errors",
+  "summarySessionErrorsDetail": "{errors} errors / {sessions} sessions",
+  "summarySessionErrorsDetected": "Session errors detected ({errors} errors in {sessions} sessions)",
   "checkCatalog": {
     "openclaw_install": { "name": "OpenClaw Install" },
     "config_file": { "name": "Config File" },

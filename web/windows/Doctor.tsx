@@ -5,6 +5,7 @@ import { doctorApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { ContextBudgetPanel } from '../components/maintenance';
 import { subscribeManagerWS } from '../services/manager-ws';
+import CustomSelect from '../components/CustomSelect';
 import type { ManagerWSStatus } from '../services/manager-ws';
 
 type TabId = 'diagnose' | 'context';
@@ -63,6 +64,7 @@ interface DoctorSummary {
   gateway: { running: boolean; detail: string };
   healthCheck: { enabled: boolean; failCount: number; maxFails: number; lastOk: string };
   exceptionStats: { medium5m: number; high5m: number; critical5m: number; total1h: number; total24h: number };
+  sessionErrors: { totalErrors: number; sessionCount: number; errorSessions: number };
   recentIssues: Array<{ id: string; source: string; category: string; risk: string; title: string; detail?: string; timestamp: string }>;
 }
 
@@ -409,12 +411,16 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
     if (health.enabled && (health.failCount || 0) > 0) {
       score -= Math.min(30, (health.failCount || 0) * 10);
     }
+    const sess = base.sessionErrors || { totalErrors: 0, sessionCount: 0, errorSessions: 0 };
+    if (sess.totalErrors > 0) {
+      score -= Math.min(15, sess.errorSessions * 3);
+    }
     if (score < 0) score = 0;
 
     let status: 'ok' | 'warn' | 'error' = 'ok';
     if (!gatewayRunning || (stats.critical5m || 0) > 0 || (health.enabled && (health.maxFails || 0) > 0 && (health.failCount || 0) >= (health.maxFails || 0))) {
       status = 'error';
-    } else if ((stats.high5m || 0) > 0 || (stats.medium5m || 0) > 0 || (health.enabled && (health.failCount || 0) > 0)) {
+    } else if ((stats.high5m || 0) > 0 || (stats.medium5m || 0) > 0 || (health.enabled && (health.failCount || 0) > 0) || sess.errorSessions > 0) {
       status = 'warn';
     }
 
@@ -955,8 +961,13 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
       const hcPts = Math.min(30, (hc.failCount || 0) * 10);
       items.push({ key: 'healthcheck', label: text.deductionHealthCheck || 'Health Check', points: hcPts, maxPoints: 30, color: '#8b5cf6' });
     }
+    const sess = summaryView.sessionErrors || { totalErrors: 0, errorSessions: 0 };
+    if (sess.totalErrors > 0) {
+      const sessPts = Math.min(15, sess.errorSessions * 3);
+      items.push({ key: 'session', label: text.deductionSessionErrors || 'Session Errors', points: sessPts, maxPoints: 15, color: '#ec4899' });
+    }
     return items.sort((a, b) => b.points - a.points);
-  }, [summaryView, text.deductionGateway, text.deductionCritical, text.deductionHigh, text.deductionMedium, text.deductionHealthCheck]);
+  }, [summaryView, text.deductionGateway, text.deductionCritical, text.deductionHigh, text.deductionMedium, text.deductionHealthCheck, text.deductionSessionErrors]);
 
   const totalDeduction = deductions.reduce((s, d) => s + d.points, 0);
 
@@ -1254,7 +1265,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                 </div>
 
                 {/* #11 Snapshot Cards with Trend Arrows */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mt-3">
                   <button type="button" onClick={() => jumpToWindow('gateway')} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
                     <p className="text-[10px] text-slate-400 dark:text-white/35 uppercase tracking-wider">{text.summaryGateway}</p>
                     <div className="flex items-center gap-1.5 mt-1">
@@ -1304,6 +1315,20 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     </div>
                     <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">{text.summaryRecentWindow}</p>
                   </button>
+                  <button type="button" onClick={() => jumpToWindow('sessions')} className="rounded-xl bg-white/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/10 p-3 text-left hover:border-primary/30 transition-colors">
+                    <p className="text-[10px] text-slate-400 dark:text-white/35 uppercase tracking-wider">{text.summarySessionErrors}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <p className={`text-[12px] font-bold ${(summaryView.sessionErrors?.totalErrors || 0) > 0 ? 'text-pink-600 dark:text-pink-400' : 'text-slate-700 dark:text-white/75'}`}>
+                        {summaryView.sessionErrors?.totalErrors || 0}
+                      </p>
+                      {(summaryView.sessionErrors?.totalErrors || 0) > 0 && (
+                        <span className="material-symbols-outlined text-[12px] text-pink-500">error</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1">
+                      {formatText(text.summarySessionErrorsDetail || '{errors} errors / {sessions} sessions', { errors: summaryView.sessionErrors?.totalErrors || 0, sessions: summaryView.sessionErrors?.errorSessions || 0 })}
+                    </p>
+                  </button>
                 </div>
 
                 {/* #8 Score Deduction Panel — compact arc chips */}
@@ -1321,7 +1346,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                         const pct = Math.min(1, d.points / d.maxPoints);
                         const r = 18; const circ = Math.PI * r;
                         return (
-                          <div key={d.key} className="flex items-center gap-2 min-w-[100px] sm:min-w-[120px]" title={d.key === 'gateway' ? text.deductionRuleGateway : d.key === 'critical' ? text.deductionRuleCritical : d.key === 'high' ? text.deductionRuleHigh : d.key === 'medium' ? text.deductionRuleMedium : text.deductionRuleHealthCheck}>
+                          <div key={d.key} className="flex items-center gap-2 min-w-[100px] sm:min-w-[120px]" title={d.key === 'gateway' ? text.deductionRuleGateway : d.key === 'critical' ? text.deductionRuleCritical : d.key === 'high' ? text.deductionRuleHigh : d.key === 'medium' ? text.deductionRuleMedium : d.key === 'session' ? text.deductionRuleSession : text.deductionRuleHealthCheck}>
                             <svg viewBox="0 0 44 26" className="w-10 h-6 shrink-0">
                               <path d="M 4 24 A 18 18 0 0 1 40 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-200 dark:text-white/10" strokeLinecap="round" />
                               <path d="M 4 24 A 18 18 0 0 1 40 24" fill="none" stroke={d.color} strokeWidth="4" strokeLinecap="round"
@@ -1660,9 +1685,12 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     {k === 'all' ? text.all : k === 'ok' ? text.ok : k === 'warn' ? text.warn : text.error}
                   </button>
                 ))}
-                <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label={text.category} className="h-6 px-2 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-white/40">
-                  {categories.map((c) => <option key={c} value={c}>{c === 'all' ? text.all : c === 'other' ? text.other : c}</option>)}
-                </select>
+                <CustomSelect
+                  value={categoryFilter}
+                  onChange={(v) => setCategoryFilter(v)}
+                  options={categories.map((c) => ({ value: c, label: c === 'all' ? text.all : c === 'other' ? text.other : c }))}
+                  className="h-6 px-2 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-white/40"
+                />
                 <button onClick={() => setOnlyFixable((v) => !v)} className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all ${onlyFixable ? 'bg-blue-500/15 text-blue-500' : 'bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-white/40'}`}>
                   {text.fixable}
                 </button>

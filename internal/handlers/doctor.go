@@ -145,6 +145,12 @@ type summaryGateway struct {
 	Detail  string `json:"detail"`
 }
 
+type summarySessionErrors struct {
+	TotalErrors   int `json:"totalErrors"`
+	SessionCount  int `json:"sessionCount"`
+	ErrorSessions int `json:"errorSessions"`
+}
+
 type doctorSummaryResponse struct {
 	Score          int                    `json:"score"`
 	Status         string                 `json:"status"` // ok / warn / error
@@ -153,6 +159,7 @@ type doctorSummaryResponse struct {
 	Gateway        summaryGateway         `json:"gateway"`
 	HealthCheck    summaryHealthCheck     `json:"healthCheck"`
 	ExceptionStats summaryExceptionCounts `json:"exceptionStats"`
+	SessionErrors  summarySessionErrors   `json:"sessionErrors"`
 	RecentIssues   []overviewIssue        `json:"recentIssues"`
 }
 
@@ -565,6 +572,8 @@ func (h *DoctorHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		Total24h:   int(risk24h["medium"]+risk24h["high"]+risk24h["critical"]) + alertStats.Total24h,
 	}
 
+	sessErrors := h.collectSessionErrors()
+
 	score := 100
 	if !st.Running {
 		score -= 35
@@ -574,6 +583,9 @@ func (h *DoctorHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	score -= minInt(50, stats.Critical5m*25)
 	if health.Enabled && health.FailCount > 0 {
 		score -= minInt(30, health.FailCount*10)
+	}
+	if sessErrors.TotalErrors > 0 {
+		score -= minInt(15, sessErrors.ErrorSessions*3)
 	}
 	if score < 0 {
 		score = 0
@@ -591,6 +603,8 @@ func (h *DoctorHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		status = "warn"
 	case health.Enabled && health.FailCount > 0:
 		status = "warn"
+	case sessErrors.ErrorSessions > 0:
+		status = "warn"
 	}
 
 	summary := "Stable, no recent exceptions"
@@ -606,6 +620,8 @@ func (h *DoctorHandler) Summary(w http.ResponseWriter, r *http.Request) {
 	case "warn":
 		if stats.High5m > 0 || stats.Medium5m > 0 {
 			summary = fmt.Sprintf("Recent exceptions detected (%d in 1h)", stats.Total1h)
+		} else if sessErrors.TotalErrors > 0 {
+			summary = fmt.Sprintf("Session errors detected (%d errors in %d sessions)", sessErrors.TotalErrors, sessErrors.ErrorSessions)
 		} else {
 			summary = "Gateway health check reported intermittent failures"
 		}
@@ -622,6 +638,7 @@ func (h *DoctorHandler) Summary(w http.ResponseWriter, r *http.Request) {
 		},
 		HealthCheck:    health,
 		ExceptionStats: stats,
+		SessionErrors:  sessErrors,
 		RecentIssues:   h.collectRecentExceptionIssues(now, 16),
 	})
 }
@@ -1103,6 +1120,52 @@ func (h *DoctorHandler) runFix(item CheckItem) fixItemResult {
 		return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "success", Message: "fixed config file permissions to 600"}
 	default:
 		return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "skipped", Message: "no fixer available"}
+	}
+}
+
+func (h *DoctorHandler) collectSessionErrors() summarySessionErrors {
+	if h.gwClient == nil {
+		return summarySessionErrors{}
+	}
+	data, err := h.gwClient.RequestWithTimeout("sessions.usage", map[string]interface{}{
+		"days":  1,
+		"limit": 50,
+	}, 5*time.Second)
+	if err != nil {
+		return summarySessionErrors{}
+	}
+	var resp struct {
+		Sessions []struct {
+			Messages *struct {
+				Errors int `json:"errors"`
+			} `json:"messages"`
+			Usage *struct {
+				MessageCounts *struct {
+					Errors int `json:"errors"`
+				} `json:"messageCounts"`
+			} `json:"usage"`
+		} `json:"sessions"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return summarySessionErrors{}
+	}
+	var total, errorSessions int
+	for _, s := range resp.Sessions {
+		errs := 0
+		if s.Messages != nil {
+			errs = s.Messages.Errors
+		} else if s.Usage != nil && s.Usage.MessageCounts != nil {
+			errs = s.Usage.MessageCounts.Errors
+		}
+		if errs > 0 {
+			total += errs
+			errorSessions++
+		}
+	}
+	return summarySessionErrors{
+		TotalErrors:   total,
+		SessionCount:  len(resp.Sessions),
+		ErrorSessions: errorSessions,
 	}
 }
 

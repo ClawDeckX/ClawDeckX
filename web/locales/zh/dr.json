@@ -134,6 +134,11 @@
   "scoreDown": "较上次 -{n}",
   "scoreNoChange": "与上次相同",
   "viewAllEvents": "查看全部事件",
+  "deductionSessionErrors": "会话错误",
+  "deductionRuleSession": "每个错误会话扖3分，上限15",
+  "summarySessionErrors": "会话错误",
+  "summarySessionErrorsDetail": "{errors} 个错误 / {sessions} 个会话",
+  "summarySessionErrorsDetected": "检测到会话错误（{errors} 个错误，{sessions} 个会话）",
   "checkCatalog": {
     "openclaw_install": { "name": "OpenClaw 安装" },
     "config_file": { "name": "配置文件" },
