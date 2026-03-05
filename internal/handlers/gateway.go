@@ -184,9 +184,9 @@ func (h *GatewayHandler) GetHealthCheck(w http.ResponseWriter, r *http.Request) 
 // SetHealthCheck toggles the health check.
 func (h *GatewayHandler) SetHealthCheck(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Enabled              bool `json:"enabled"`
-		IntervalSec          *int `json:"interval_sec,omitempty"`
-		MaxFails             *int `json:"max_fails,omitempty"`
+		Enabled               bool `json:"enabled"`
+		IntervalSec           *int `json:"interval_sec,omitempty"`
+		MaxFails              *int `json:"max_fails,omitempty"`
 		ReconnectBackoffCapMs *int `json:"reconnect_backoff_cap_ms,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -234,10 +234,10 @@ func (h *GatewayHandler) SetHealthCheck(w http.ResponseWriter, r *http.Request) 
 		val = "true"
 	}
 	settingRepo.SetBatch(map[string]string{
-		"gateway_health_check_enabled":         val,
-		"gateway_health_check_interval_sec":    strconv.Itoa(intervalSec),
-		"gateway_health_check_max_fails":       strconv.Itoa(maxFails),
-		"gateway_reconnect_backoff_cap_ms":     strconv.Itoa(backoffCapMs),
+		"gateway_health_check_enabled":      val,
+		"gateway_health_check_interval_sec": strconv.Itoa(intervalSec),
+		"gateway_health_check_max_fails":    strconv.Itoa(maxFails),
+		"gateway_reconnect_backoff_cap_ms":  strconv.Itoa(backoffCapMs),
 	})
 
 	h.writeAudit(r, constants.ActionSettingsUpdate, "success",
@@ -250,10 +250,10 @@ func (h *GatewayHandler) SetHealthCheck(w http.ResponseWriter, r *http.Request) 
 		Int("reconnect_backoff_cap_ms", backoffCapMs).
 		Msg("watchdog setting updated")
 	web.OK(w, r, map[string]interface{}{
-		"enabled":                   req.Enabled,
-		"interval_sec":              intervalSec,
-		"max_fails":                 maxFails,
-		"reconnect_backoff_cap_ms":  backoffCapMs,
+		"enabled":                  req.Enabled,
+		"interval_sec":             intervalSec,
+		"max_fails":                maxFails,
+		"reconnect_backoff_cap_ms": backoffCapMs,
 	})
 }
 
@@ -295,7 +295,7 @@ func (h *GatewayHandler) DaemonInstall(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.DaemonInstall(); err != nil {
 		h.writeAudit(r, constants.ActionGatewayStart, "failed", "daemon install: "+err.Error())
 		logger.Gateway.Error().Err(err).Msg("daemon install failed")
-		web.FailErr(w, r, web.ErrGWStartFailed, err.Error())
+		web.FailErr(w, r, web.ErrDaemonInstallFailed, err.Error())
 		return
 	}
 
@@ -314,7 +314,7 @@ func (h *GatewayHandler) DaemonUninstall(w http.ResponseWriter, r *http.Request)
 	if err := h.svc.DaemonUninstall(); err != nil {
 		h.writeAudit(r, constants.ActionGatewayStop, "failed", "daemon uninstall: "+err.Error())
 		logger.Gateway.Error().Err(err).Msg("daemon uninstall failed")
-		web.FailErr(w, r, web.ErrGWStopFailed, err.Error())
+		web.FailErr(w, r, web.ErrDaemonUninstallFailed, err.Error())
 		return
 	}
 

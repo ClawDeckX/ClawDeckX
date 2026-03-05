@@ -90,5 +90,8 @@
   "TEMPLATE_CREATE_FAILED": "टेम्पलेट बनाना विफल",
   "TEMPLATE_UPDATE_FAILED": "टेम्पलेट अपडेट विफल",
   "TEMPLATE_DELETE_FAILED": "टेम्पलेट हटाना विफल",
-  "TEMPLATE_BUILTIN_READONLY": "अंतर्निहित टेम्पलेट केवल पढ़ने योग्य हैं"
+  "TEMPLATE_BUILTIN_READONLY": "अंतर्निहित टेम्पलेट केवल पढ़ने योग्य हैं",
+
+  "DAEMON_INSTALL_FAILED": "सेवा स्थापना विफल",
+  "DAEMON_UNINSTALL_FAILED": "सेवा स्थापना रद्द विफल"
 }

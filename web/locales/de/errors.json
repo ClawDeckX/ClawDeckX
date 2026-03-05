@@ -104,5 +104,8 @@
   "TEMPLATE_CREATE_FAILED": "Vorlagenerstellung fehlgeschlagen",
   "TEMPLATE_UPDATE_FAILED": "Vorlagenaktualisierung fehlgeschlagen",
   "TEMPLATE_DELETE_FAILED": "Vorlagenlöschung fehlgeschlagen",
-  "TEMPLATE_BUILTIN_READONLY": "Eingebaute Vorlagen sind schreibgeschützt"
+  "TEMPLATE_BUILTIN_READONLY": "Eingebaute Vorlagen sind schreibgeschützt",
+
+  "DAEMON_INSTALL_FAILED": "Dienstinstallation fehlgeschlagen",
+  "DAEMON_UNINSTALL_FAILED": "Dienstdeinstallation fehlgeschlagen"
 }

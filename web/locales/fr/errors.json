@@ -104,5 +104,8 @@
   "TEMPLATE_CREATE_FAILED": "Échec de la création du modèle",
   "TEMPLATE_UPDATE_FAILED": "Échec de la mise à jour du modèle",
   "TEMPLATE_DELETE_FAILED": "Échec de la suppression du modèle",
-  "TEMPLATE_BUILTIN_READONLY": "Les modèles intégrés sont en lecture seule"
+  "TEMPLATE_BUILTIN_READONLY": "Les modèles intégrés sont en lecture seule",
+
+  "DAEMON_INSTALL_FAILED": "Échec de l'installation du service",
+  "DAEMON_UNINSTALL_FAILED": "Échec de la désinstallation du service"
 }

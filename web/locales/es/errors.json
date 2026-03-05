@@ -104,5 +104,8 @@
   "TEMPLATE_CREATE_FAILED": "Error al crear plantilla",
   "TEMPLATE_UPDATE_FAILED": "Error al actualizar plantilla",
   "TEMPLATE_DELETE_FAILED": "Error al eliminar plantilla",
-  "TEMPLATE_BUILTIN_READONLY": "Las plantillas integradas son de solo lectura"
+  "TEMPLATE_BUILTIN_READONLY": "Las plantillas integradas son de solo lectura",
+
+  "DAEMON_INSTALL_FAILED": "Error al instalar el servicio",
+  "DAEMON_UNINSTALL_FAILED": "Error al desinstalar el servicio"
 }

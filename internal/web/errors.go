@@ -90,17 +90,19 @@ var (
 // ---------------------------------------------------------------------------
 
 var (
-	ErrGWNotConnected      = &AppError{"GW_NOT_CONNECTED", "gateway not connected", 502, nil}
-	ErrGWNotRunning        = &AppError{"GW_NOT_RUNNING", "gateway not running", 409, nil}
-	ErrGWStartFailed       = &AppError{"GW_START_FAILED", "gateway start failed", 500, nil}
-	ErrGWStartTimeout      = &AppError{"GW_START_TIMEOUT", "gateway start timeout", 408, nil}
-	ErrGWStopFailed        = &AppError{"GW_STOP_FAILED", "gateway stop failed", 500, nil}
-	ErrGWRestartFailed     = &AppError{"GW_RESTART_FAILED", "gateway restart failed", 500, nil}
-	ErrGWStatusFailed      = &AppError{"GW_STATUS_FAILED", "gateway status query failed", 502, nil}
-	ErrGWProfileNotFound   = &AppError{"GW_PROFILE_NOT_FOUND", "gateway profile not found", 404, nil}
-	ErrGWProfileSaveFail   = &AppError{"GW_PROFILE_SAVE_FAILED", "gateway profile save failed", 500, nil}
-	ErrGWProfileDeleteFail = &AppError{"GW_PROFILE_DELETE_FAILED", "gateway profile delete failed", 500, nil}
-	ErrGWDiagnoseFailed    = &AppError{"GW_DIAGNOSE_FAILED", "gateway diagnosis failed", 502, nil}
+	ErrGWNotConnected        = &AppError{"GW_NOT_CONNECTED", "gateway not connected", 502, nil}
+	ErrGWNotRunning          = &AppError{"GW_NOT_RUNNING", "gateway not running", 409, nil}
+	ErrGWStartFailed         = &AppError{"GW_START_FAILED", "gateway start failed", 500, nil}
+	ErrGWStartTimeout        = &AppError{"GW_START_TIMEOUT", "gateway start timeout", 408, nil}
+	ErrGWStopFailed          = &AppError{"GW_STOP_FAILED", "gateway stop failed", 500, nil}
+	ErrGWRestartFailed       = &AppError{"GW_RESTART_FAILED", "gateway restart failed", 500, nil}
+	ErrGWStatusFailed        = &AppError{"GW_STATUS_FAILED", "gateway status query failed", 502, nil}
+	ErrGWProfileNotFound     = &AppError{"GW_PROFILE_NOT_FOUND", "gateway profile not found", 404, nil}
+	ErrGWProfileSaveFail     = &AppError{"GW_PROFILE_SAVE_FAILED", "gateway profile save failed", 500, nil}
+	ErrGWProfileDeleteFail   = &AppError{"GW_PROFILE_DELETE_FAILED", "gateway profile delete failed", 500, nil}
+	ErrGWDiagnoseFailed      = &AppError{"GW_DIAGNOSE_FAILED", "gateway diagnosis failed", 502, nil}
+	ErrDaemonInstallFailed   = &AppError{"DAEMON_INSTALL_FAILED", "daemon install failed", 500, nil}
+	ErrDaemonUninstallFailed = &AppError{"DAEMON_UNINSTALL_FAILED", "daemon uninstall failed", 500, nil}
 )
 
 // ---------------------------------------------------------------------------

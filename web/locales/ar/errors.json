@@ -90,5 +90,8 @@
   "TEMPLATE_CREATE_FAILED": "فشل إنشاء القالب",
   "TEMPLATE_UPDATE_FAILED": "فشل تحديث القالب",
   "TEMPLATE_DELETE_FAILED": "فشل حذف القالب",
-  "TEMPLATE_BUILTIN_READONLY": "القوالب المدمجة للقراءة فقط"
+  "TEMPLATE_BUILTIN_READONLY": "القوالب المدمجة للقراءة فقط",
+
+  "DAEMON_INSTALL_FAILED": "فشل تثبيت الخدمة",
+  "DAEMON_UNINSTALL_FAILED": "فشل إلغاء تثبيت الخدمة"
 }

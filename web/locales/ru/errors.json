@@ -104,5 +104,8 @@
   "TEMPLATE_CREATE_FAILED": "Ошибка создания шаблона",
   "TEMPLATE_UPDATE_FAILED": "Ошибка обновления шаблона",
   "TEMPLATE_DELETE_FAILED": "Ошибка удаления шаблона",
-  "TEMPLATE_BUILTIN_READONLY": "Встроенные шаблоны доступны только для чтения"
+  "TEMPLATE_BUILTIN_READONLY": "Встроенные шаблоны доступны только для чтения",
+
+  "DAEMON_INSTALL_FAILED": "Ошибка установки службы",
+  "DAEMON_UNINSTALL_FAILED": "Ошибка удаления службы"
 }

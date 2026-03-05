@@ -104,5 +104,8 @@
   "TEMPLATE_CREATE_FAILED": "Falha ao criar template",
   "TEMPLATE_UPDATE_FAILED": "Falha ao atualizar template",
   "TEMPLATE_DELETE_FAILED": "Falha ao excluir template",
-  "TEMPLATE_BUILTIN_READONLY": "Templates integrados são somente leitura"
+  "TEMPLATE_BUILTIN_READONLY": "Templates integrados são somente leitura",
+
+  "DAEMON_INSTALL_FAILED": "Falha na instalação do serviço",
+  "DAEMON_UNINSTALL_FAILED": "Falha na desinstalação do serviço"
 }

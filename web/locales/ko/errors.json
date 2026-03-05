@@ -104,5 +104,8 @@
   "TEMPLATE_CREATE_FAILED": "템플릿 생성 실패",
   "TEMPLATE_UPDATE_FAILED": "템플릿 업데이트 실패",
   "TEMPLATE_DELETE_FAILED": "템플릿 삭제 실패",
-  "TEMPLATE_BUILTIN_READONLY": "기본 제공 템플릿은 읽기 전용입니다"
+  "TEMPLATE_BUILTIN_READONLY": "기본 제공 템플릿은 읽기 전용입니다",
+
+  "DAEMON_INSTALL_FAILED": "서비스 설치 실패",
+  "DAEMON_UNINSTALL_FAILED": "서비스 제거 실패"
 }

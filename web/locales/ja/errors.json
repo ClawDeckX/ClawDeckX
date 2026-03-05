@@ -104,5 +104,8 @@
   "TEMPLATE_CREATE_FAILED": "テンプレートの作成に失敗しました",
   "TEMPLATE_UPDATE_FAILED": "テンプレートの更新に失敗しました",
   "TEMPLATE_DELETE_FAILED": "テンプレートの削除に失敗しました",
-  "TEMPLATE_BUILTIN_READONLY": "組み込みテンプレートは読み取り専用です"
+  "TEMPLATE_BUILTIN_READONLY": "組み込みテンプレートは読み取り専用です",
+
+  "DAEMON_INSTALL_FAILED": "サービスのインストールに失敗しました",
+  "DAEMON_UNINSTALL_FAILED": "サービスのアンインストールに失敗しました"
 }

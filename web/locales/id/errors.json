@@ -90,5 +90,8 @@
   "TEMPLATE_CREATE_FAILED": "Gagal membuat template",
   "TEMPLATE_UPDATE_FAILED": "Gagal memperbarui template",
   "TEMPLATE_DELETE_FAILED": "Gagal menghapus template",
-  "TEMPLATE_BUILTIN_READONLY": "Template bawaan hanya-baca"
+  "TEMPLATE_BUILTIN_READONLY": "Template bawaan hanya-baca",
+
+  "DAEMON_INSTALL_FAILED": "Gagal menginstal layanan",
+  "DAEMON_UNINSTALL_FAILED": "Gagal menghapus layanan"
 }

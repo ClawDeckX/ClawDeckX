@@ -104,5 +104,8 @@
   "TEMPLATE_CREATE_FAILED": "Template creation failed",
   "TEMPLATE_UPDATE_FAILED": "Template update failed",
   "TEMPLATE_DELETE_FAILED": "Template deletion failed",
-  "TEMPLATE_BUILTIN_READONLY": "Built-in templates are read-only"
+  "TEMPLATE_BUILTIN_READONLY": "Built-in templates are read-only",
+
+  "DAEMON_INSTALL_FAILED": "Service installation failed",
+  "DAEMON_UNINSTALL_FAILED": "Service uninstallation failed"
 }
