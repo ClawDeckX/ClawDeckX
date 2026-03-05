@@ -758,6 +758,8 @@
   "messagePrefix": "Prefix Pesan",
   "responsePrefix": "Prefix Respons",
   "ackReaction": "Reaksi Ack",
+  "typingReaction": "Reaksi Mengetik",
+  "tipTypingReaction": "Reaksi emoji ditampilkan saat AI memproses (mis. hourglass_flowing_sand). Kosongkan untuk menonaktifkan",
   "ackEmoji": "Emoji Ack",
   "ackScope": "Lingkup Ack",
   "removeAfterReply": "Hapus Setelah Balas",

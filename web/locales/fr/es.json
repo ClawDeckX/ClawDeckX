@@ -758,6 +758,8 @@
   "messagePrefix": "Préfixe de message",
   "responsePrefix": "Préfixe de réponse",
   "ackReaction": "Réaction d'accusé",
+  "typingReaction": "Réaction de saisie",
+  "tipTypingReaction": "Réaction emoji affichée pendant le traitement IA (ex. hourglass_flowing_sand). Laisser vide pour désactiver",
   "ackEmoji": "Emoji d'accusé",
   "ackScope": "Portée d'accusé",
   "removeAfterReply": "Supprimer après réponse",

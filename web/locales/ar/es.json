@@ -758,6 +758,8 @@
   "messagePrefix": "بادئة الرسالة",
   "responsePrefix": "بادئة الاستجابة",
   "ackReaction": "تفاعل الاستلام",
+  "typingReaction": "تفاعل الكتابة",
+  "tipTypingReaction": "تفاعل رمزي يظهر أثناء معالجة الذكاء الاصطناعي (مثل hourglass_flowing_sand). اتركه فارغاً للتعطيل",
   "ackEmoji": "رمز الاستلام",
   "ackScope": "نطاق الاستلام",
   "removeAfterReply": "إزالة بعد الرد",

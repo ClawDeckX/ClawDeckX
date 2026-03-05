@@ -758,6 +758,8 @@
   "messagePrefix": "消息前缀",
   "responsePrefix": "回复前缀",
   "ackReaction": "确认反应",
+  "typingReaction": "输入中反应",
+  "tipTypingReaction": "AI 处理中显示的表情反应（如 hourglass_flowing_sand）。留空禁用",
   "ackEmoji": "确认 Emoji",
   "ackScope": "确认范围",
   "removeAfterReply": "回复后移除",

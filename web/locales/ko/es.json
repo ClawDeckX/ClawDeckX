@@ -758,6 +758,8 @@
   "messagePrefix": "메시지 접두사",
   "responsePrefix": "응답 접두사",
   "ackReaction": "수신 확인 반응",
+  "typingReaction": "입력 중 반응",
+  "tipTypingReaction": "AI 처리 중 표시되는 이모지 반응 (예: hourglass_flowing_sand). 비워두면 비활성화",
   "ackEmoji": "수신 확인 이모지",
   "ackScope": "수신 확인 범위",
   "removeAfterReply": "응답 후 제거",

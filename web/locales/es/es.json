@@ -758,6 +758,8 @@
   "messagePrefix": "Prefijo de mensaje",
   "responsePrefix": "Prefijo de respuesta",
   "ackReaction": "Reacción de confirmación",
+  "typingReaction": "Reacción de escritura",
+  "tipTypingReaction": "Reacción emoji mostrada mientras la IA procesa (ej. hourglass_flowing_sand). Dejar vacío para desactivar",
   "ackEmoji": "Emoji de confirmación",
   "ackScope": "Alcance de confirmación",
   "removeAfterReply": "Eliminar después de responder",

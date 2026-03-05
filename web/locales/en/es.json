@@ -758,6 +758,8 @@
   "messagePrefix": "Message Prefix",
   "responsePrefix": "Response Prefix",
   "ackReaction": "Ack Reaction",
+  "typingReaction": "Typing Reaction",
+  "tipTypingReaction": "Emoji reaction shown while AI is processing (e.g. hourglass_flowing_sand). Leave empty to disable",
   "ackEmoji": "Ack Emoji",
   "ackScope": "Ack Scope",
   "removeAfterReply": "Remove After Reply",

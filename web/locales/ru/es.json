@@ -758,6 +758,8 @@
   "messagePrefix": "Префикс сообщения",
   "responsePrefix": "Префикс ответа",
   "ackReaction": "Реакция подтверждения",
+  "typingReaction": "Реакция набора",
+  "tipTypingReaction": "Эмодзи-реакция во время обработки ИИ (напр. hourglass_flowing_sand). Оставьте пустым для отключения",
   "ackEmoji": "Эмодзи подтверждения",
   "ackScope": "Область подтверждения",
   "removeAfterReply": "Удалить после ответа",

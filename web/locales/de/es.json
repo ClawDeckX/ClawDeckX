@@ -758,6 +758,8 @@
   "messagePrefix": "Nachrichten-Präfix",
   "responsePrefix": "Antwort-Präfix",
   "ackReaction": "Bestätigungs-Reaktion",
+  "typingReaction": "Tipp-Reaktion",
+  "tipTypingReaction": "Emoji-Reaktion während KI-Verarbeitung (z.B. hourglass_flowing_sand). Leer lassen zum Deaktivieren",
   "ackEmoji": "Bestätigungs-Emoji",
   "ackScope": "Bestätigungsbereich",
   "removeAfterReply": "Nach Antwort entfernen",

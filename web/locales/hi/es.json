@@ -758,6 +758,8 @@
   "messagePrefix": "संदेश प्रीफ़िक्स",
   "responsePrefix": "उत्तर प्रीफ़िक्स",
   "ackReaction": "पावती रिएक्शन",
+  "typingReaction": "टाइपिंग रिएक्शन",
+  "tipTypingReaction": "AI प्रोसेसिंग के दौरान दिखाया जाने वाला इमोजी रिएक्शन (जैसे hourglass_flowing_sand)। अक्षम करने के लिए खाली छोड़ें",
   "ackEmoji": "पावती इमोजी",
   "ackScope": "पावती स्कोप",
   "removeAfterReply": "उत्तर के बाद हटाएं",

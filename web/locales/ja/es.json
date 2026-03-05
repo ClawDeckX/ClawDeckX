@@ -758,6 +758,8 @@
   "messagePrefix": "メッセージプレフィックス",
   "responsePrefix": "レスポンスプレフィックス",
   "ackReaction": "確認リアクション",
+  "typingReaction": "入力中リアクション",
+  "tipTypingReaction": "AI処理中に表示される絵文字リアクション（例: hourglass_flowing_sand）。空欄で無効",
   "ackEmoji": "確認絵文字",
   "ackScope": "確認スコープ",
   "removeAfterReply": "返信後に削除",

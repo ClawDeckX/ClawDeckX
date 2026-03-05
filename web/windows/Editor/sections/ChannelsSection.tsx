@@ -580,6 +580,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
             <SwitchField label={es.allowBots} value={g(['allowBots']) === true} onChange={v => s(['allowBots'], v)} tooltip={es.tipSlackBots} />
             <TextField label={es.responsePrefix || 'Response Prefix'} value={g(['responsePrefix']) || ''} onChange={v => s(['responsePrefix'], v)} tooltip={tip('responsePrefix')} />
             <TextField label={es.ackReaction || 'Ack Reaction'} value={g(['ackReaction']) || ''} onChange={v => s(['ackReaction'], v)} placeholder="eyes" tooltip={tip('ackReaction')} />
+            <TextField label={es.typingReaction || 'Typing Reaction'} value={g(['typingReaction']) || ''} onChange={v => s(['typingReaction'], v)} placeholder="hourglass_flowing_sand" tooltip={es.tipTypingReaction} />
             {/* Slack Slash Command */}
             <div className="pt-2 pb-1">
               <span className="text-[11px] font-bold text-slate-500 dark:text-white/40">{es.slackSlashTitle || 'Slash Command'}</span>
