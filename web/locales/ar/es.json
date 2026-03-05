@@ -125,6 +125,7 @@
   "elevatedDefault": "الافتراضي المرتفع",
   "typingMode": "تجربة الكتابة",
   "compactionMode": "وضع الضغط",
+  "bootstrapTruncationWarning": "تحذير اقتطاع Bootstrap",
   "humanDelay": "تأخير بشري",
   "heartbeat": "نبض القلب",
   "intervalS": "الفاصل (ثانية)",

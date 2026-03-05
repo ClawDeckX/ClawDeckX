@@ -125,6 +125,7 @@
   "elevatedDefault": "提權預設",
   "typingMode": "輸入體驗",
   "compactionMode": "壓縮模式",
+  "bootstrapTruncationWarning": "Bootstrap 截斷警告",
   "humanDelay": "人性化延遲",
   "heartbeat": "心跳配置",
   "intervalS": "間隔(秒)",

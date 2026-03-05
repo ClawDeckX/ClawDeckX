@@ -48,6 +48,7 @@ export const AgentsSection: React.FC<SectionProps> = ({ config, setField, getFie
         <SelectField label={es.elevatedDefault} tooltip={tip('agents.defaults.elevatedDefault')} value={d(['elevatedDefault']) || 'off'} onChange={v => sd(['elevatedDefault'], v)} options={ELEVATED_OPTIONS} />
         <SelectField label={es.typingMode} value={d(['typingMode']) || 'never'} onChange={v => sd(['typingMode'], v)} options={TYPING_OPTIONS} />
         <SelectField label={es.compactionMode} tooltip={tip('agents.defaults.compaction.mode')} value={d(['compaction', 'mode']) || 'default'} onChange={v => sd(['compaction', 'mode'], v)} options={COMPACTION_OPTIONS} />
+        <SwitchField label={es.bootstrapTruncationWarning || 'Bootstrap Truncation Warning'} tooltip={tip('agents.defaults.bootstrapTruncationWarning')} value={d(['bootstrapTruncationWarning']) !== false} onChange={v => sd(['bootstrapTruncationWarning'], v)} />
       </ConfigSection>
 
       <ConfigSection title={es.humanDelay} icon="timer" iconColor="text-teal-500" defaultOpen={false}>

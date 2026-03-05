@@ -125,6 +125,7 @@
   "elevatedDefault": "提权默认",
   "typingMode": "输入体验",
   "compactionMode": "压缩模式",
+  "bootstrapTruncationWarning": "Bootstrap 截断警告",
   "humanDelay": "人性化延迟",
   "heartbeat": "心跳配置",
   "intervalS": "间隔(秒)",

@@ -125,6 +125,7 @@
   "elevatedDefault": "Повышенный по умолчанию",
   "typingMode": "Эффект набора",
   "compactionMode": "Режим сжатия",
+  "bootstrapTruncationWarning": "Предупреждение об усечении Bootstrap",
   "humanDelay": "Задержка",
   "heartbeat": "Heartbeat",
   "intervalS": "Интервал (с)",

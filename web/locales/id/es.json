@@ -125,6 +125,7 @@
   "elevatedDefault": "Default Elevated",
   "typingMode": "Pengalaman Mengetik",
   "compactionMode": "Mode Kompresi",
+  "bootstrapTruncationWarning": "Peringatan Pemotongan Bootstrap",
   "humanDelay": "Delay Manusia",
   "heartbeat": "Heartbeat",
   "intervalS": "Interval (d)",

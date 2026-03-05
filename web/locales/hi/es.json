@@ -125,6 +125,7 @@
   "elevatedDefault": "एलिवेटेड डिफ़ॉल्ट",
   "typingMode": "टाइपिंग अनुभव",
   "compactionMode": "संकुचन मोड",
+  "bootstrapTruncationWarning": "Bootstrap छंटनी चेतावनी",
   "humanDelay": "मानवीय विलंब",
   "heartbeat": "हार्टबीट",
   "intervalS": "अंतराल (सेकंड)",

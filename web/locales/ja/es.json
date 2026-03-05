@@ -125,6 +125,7 @@
   "elevatedDefault": "昇格デフォルト",
   "typingMode": "タイピング体験",
   "compactionMode": "コンパクションモード",
+  "bootstrapTruncationWarning": "Bootstrap切り詰め警告",
   "humanDelay": "ヒューマンディレイ",
   "heartbeat": "ハートビート",
   "intervalS": "間隔（秒）",

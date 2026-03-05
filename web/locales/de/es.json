@@ -125,6 +125,7 @@
   "elevatedDefault": "Erweiterte Standard",
   "typingMode": "Tipperlebnis",
   "compactionMode": "Komprimierungsmodus",
+  "bootstrapTruncationWarning": "Bootstrap-Kürzungswarnung",
   "humanDelay": "Menschliche Verzögerung",
   "heartbeat": "Heartbeat",
   "intervalS": "Intervall (s)",

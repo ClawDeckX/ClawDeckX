@@ -125,6 +125,7 @@
   "elevatedDefault": "권한 상승 기본값",
   "typingMode": "타이핑 경험",
   "compactionMode": "압축 모드",
+  "bootstrapTruncationWarning": "Bootstrap 잘림 경고",
   "humanDelay": "휴먼 딜레이",
   "heartbeat": "하트비트",
   "intervalS": "간격 (초)",

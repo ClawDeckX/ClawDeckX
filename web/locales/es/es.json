@@ -125,6 +125,7 @@
   "elevatedDefault": "Elevado predeterminado",
   "typingMode": "Experiencia de escritura",
   "compactionMode": "Modo de compactación",
+  "bootstrapTruncationWarning": "Aviso de truncamiento Bootstrap",
   "humanDelay": "Retraso humano",
   "heartbeat": "Heartbeat",
   "intervalS": "Intervalo (s)",
