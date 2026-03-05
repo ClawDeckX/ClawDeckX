@@ -319,6 +319,7 @@
   "httpChat": "Completaciones de chat",
   "httpResponses": "Responses",
   "httpStsHeader": "Encabezado HSTS",
+  "permissionsPolicy": "Permissions-Policy",
   "trustedProxies": "Proxies de confianza",
   "allowRealIpFallback": "Permitir fallback de Real-IP",
   "gwToolAccess": "Acceso a herramientas del Gateway",

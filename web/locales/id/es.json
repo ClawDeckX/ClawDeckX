@@ -319,6 +319,7 @@
   "httpChat": "Chat Completions",
   "httpResponses": "Responses",
   "httpStsHeader": "Header HSTS",
+  "permissionsPolicy": "Kebijakan Izin",
   "trustedProxies": "Proxy Terpercaya",
   "allowRealIpFallback": "Izinkan Fallback Real-IP",
   "gwToolAccess": "Akses Alat Gateway",

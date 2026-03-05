@@ -319,6 +319,7 @@
   "httpChat": "チャット補完",
   "httpResponses": "レスポンス",
   "httpStsHeader": "HSTSヘッダー",
+  "permissionsPolicy": "Permissions-Policy",
   "trustedProxies": "信頼済みプロキシ",
   "allowRealIpFallback": "Real-IPフォールバックを許可",
   "gwToolAccess": "ゲートウェイツールアクセス",

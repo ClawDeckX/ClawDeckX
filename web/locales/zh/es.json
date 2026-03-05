@@ -319,6 +319,7 @@
   "httpChat": "对话补全 (Chat)",
   "httpResponses": "响应 (Responses)",
   "httpStsHeader": "HSTS 头",
+  "permissionsPolicy": "权限策略",
   "trustedProxies": "受信任代理",
   "allowRealIpFallback": "允许 Real-IP 回退",
   "gwToolAccess": "网关工具访问控制",

@@ -319,6 +319,7 @@
   "httpChat": "إكمالات المحادثة",
   "httpResponses": "الاستجابات",
   "httpStsHeader": "ترويسة HSTS",
+  "permissionsPolicy": "سياسة الأذونات",
   "trustedProxies": "الوكلاء الموثوقون",
   "allowRealIpFallback": "السماح باحتياطي Real-IP",
   "gwToolAccess": "وصول أدوات البوابة",

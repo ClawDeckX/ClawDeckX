@@ -319,6 +319,7 @@
   "httpChat": "Завершения чата",
   "httpResponses": "Ответы",
   "httpStsHeader": "Заголовок HSTS",
+  "permissionsPolicy": "Permissions-Policy",
   "trustedProxies": "Доверенные прокси",
   "allowRealIpFallback": "Разрешить Real-IP Fallback",
   "gwToolAccess": "Доступ к инструментам шлюза",

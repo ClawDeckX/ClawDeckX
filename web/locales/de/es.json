@@ -319,6 +319,7 @@
   "httpChat": "Chat-Vervollständigungen",
   "httpResponses": "Responses",
   "httpStsHeader": "HSTS-Header",
+  "permissionsPolicy": "Permissions-Policy",
   "trustedProxies": "Vertrauenswürdige Proxies",
   "allowRealIpFallback": "Real-IP-Fallback erlauben",
   "gwToolAccess": "Gateway Tool-Zugriff",

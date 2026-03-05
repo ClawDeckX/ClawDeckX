@@ -319,6 +319,7 @@
   "httpChat": "채팅 완성",
   "httpResponses": "Responses",
   "httpStsHeader": "HSTS 헤더",
+  "permissionsPolicy": "Permissions-Policy",
   "trustedProxies": "신뢰 프록시",
   "allowRealIpFallback": "Real-IP 폴백 허용",
   "gwToolAccess": "게이트웨이 도구 접근",
