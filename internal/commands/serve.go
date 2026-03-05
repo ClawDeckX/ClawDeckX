@@ -85,7 +85,7 @@ func RunServe(args []string) int {
 
 	// Init logger
 	logger.Init(cfg.Log)
-	logger.Log.Info().Str("version", "0.1.0").Msg(i18n.T(i18n.MsgLogServeStarting))
+	logger.Log.Info().Str("version", version.Version).Msg(i18n.T(i18n.MsgLogServeStarting))
 
 	// Init database
 	if err := database.Init(cfg.Database, cfg.IsDebug()); err != nil {
@@ -940,15 +940,17 @@ func getPublicIP() string {
 		if err != nil {
 			continue
 		}
-		defer resp.Body.Close()
 
+		var ip string
 		if resp.StatusCode == http.StatusOK {
 			body := make([]byte, 64)
 			n, _ := resp.Body.Read(body)
-			ip := strings.TrimSpace(string(body[:n]))
-			if net.ParseIP(ip) != nil {
-				return ip
-			}
+			ip = strings.TrimSpace(string(body[:n]))
+		}
+		resp.Body.Close()
+
+		if ip != "" && net.ParseIP(ip) != nil {
+			return ip
 		}
 	}
 	return ""
