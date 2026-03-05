@@ -205,6 +205,7 @@ const PROVIDERS: ProviderPreset[] = [
   ], baseUrl: 'https://api.mistral.ai/v1', api: 'openai-completions', helpUrl: 'https://console.mistral.ai' },
   { id: 'minimax', name: 'MiniMax', icon: 'Ⓜ️', category: 'builtin', envVar: 'MINIMAX_API_KEY', defaultModel: 'MiniMax-M2.5', models: [
     { id: 'MiniMax-M2.5', name: 'MiniMax M2.5', ctx: '200K', cost: { input: 0.3, output: 1.2, cacheRead: 0.03, cacheWrite: 0.12 } },
+    { id: 'MiniMax-M2.5-highspeed', name: 'MiniMax M2.5 Highspeed', ctx: '200K', cost: { input: 0.3, output: 1.2, cacheRead: 0.03, cacheWrite: 0.12 } },
     { id: 'MiniMax-VL-01', name: 'MiniMax VL 01', ctx: '200K', cost: { input: 0.3, output: 1.2, cacheRead: 0.03, cacheWrite: 0.12 } }
   ], baseUrl: 'https://api.minimax.io/anthropic', api: 'anthropic-messages', helpUrl: 'https://platform.minimaxi.com' },
   { id: 'nvidia', name: 'NVIDIA NIM', icon: '🟩', category: 'builtin', envVar: 'NVIDIA_API_KEY', defaultModel: 'nvidia/llama-3.1-nemotron-70b-instruct', models: [
