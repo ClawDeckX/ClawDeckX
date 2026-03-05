@@ -773,28 +773,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
           </div>
         )}
 
-        {/* Smart recommendation - hide when targeting the same section that's currently open */}
-        {failCount > 0 && rec.targetSection !== activeSection && (
-          <div className="rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/[0.06] to-transparent p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="material-symbols-outlined text-[14px] text-primary">auto_awesome</span>
-              <span className="text-[10px] font-bold text-primary">{o?.smartRecommend}</span>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[18px] text-primary">{rec.icon}</span>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-white/60 flex-1">{rec.msg}</p>
-              </div>
-              <button onClick={rec.action}
-                className="text-[10px] px-3 py-1.5 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 transition-colors shrink-0 flex items-center gap-1 self-start sm:self-auto">
-                <span className="material-symbols-outlined text-[12px]">arrow_forward</span>
-                {rec.btn}
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Smart recommendation removed */}
 
         {/* Check sections */}
         {checks.map((section, si) => {
