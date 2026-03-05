@@ -198,7 +198,7 @@ func (s *Service) Start() error {
 	}
 	switch s.DetectRuntime() {
 	case RuntimeSystemd:
-		return runCommand("systemctl", "start", "openclaw-gateway")
+		return runCommand("sudo", "systemctl", "start", "openclaw-gateway")
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
@@ -238,7 +238,7 @@ func (s *Service) Stop() error {
 	}
 	switch s.DetectRuntime() {
 	case RuntimeSystemd:
-		return runCommand("systemctl", "stop", "openclaw-gateway")
+		return runCommand("sudo", "systemctl", "stop", "openclaw-gateway")
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
@@ -295,7 +295,7 @@ func (s *Service) Restart() error {
 	logger.Gateway.Debug().Str("runtime", fmt.Sprintf("%v", rt)).Msg(i18n.T(i18n.MsgLogRestartDetectedRuntime))
 	switch rt {
 	case RuntimeSystemd:
-		return runCommand("systemctl", "restart", "openclaw-gateway")
+		return runCommand("sudo", "systemctl", "restart", "openclaw-gateway")
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
