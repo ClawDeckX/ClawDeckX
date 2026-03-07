@@ -44,6 +44,14 @@ func (h *BadgeHandler) Counts(w http.ResponseWriter, r *http.Request) {
 				result["nodes"] = int64(len(resp.Pending))
 			}
 		}
+	} else if h.gwClient != nil {
+		result["gateway"] = 1
+	}
+
+	// Scheduler: show badge when last scheduled backup failed
+	settingRepo := database.NewSettingRepo()
+	if v, err := settingRepo.Get("snapshot_schedule_last_status"); err == nil && v == "failed" {
+		result["scheduler"] = 1
 	}
 
 	web.OK(w, r, result)

@@ -267,6 +267,12 @@ func RunServe(args []string) int {
 							badges["nodes"] = int64(len(resp.Pending))
 						}
 					}
+				} else {
+					badges["gateway"] = 1
+				}
+				settingRepo := database.NewSettingRepo()
+				if v, err := settingRepo.Get("snapshot_schedule_last_status"); err == nil && v == "failed" {
+					badges["scheduler"] = 1
 				}
 				wsHub.Broadcast("", "badge_update", badges)
 			}()
