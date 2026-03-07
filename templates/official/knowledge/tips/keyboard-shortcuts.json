@@ -1,20 +1,22 @@
 {
-  "id": "tip-efficient-workflow",
+  "id": "tip-clawdeckx-workflow",
   "type": "tip",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
-    "name": "高效使用技巧",
-    "description": "掌握这些技巧，让 ClawDeckX 用起来更顺手",
+    "name": "ClawDeckX 高效操作指南",
+    "description": "掌握 ClawDeckX 桌面操作、配置中心导航和健康中心的实用技巧",
     "category": "productivity",
-    "tags": ["tips", "productivity", "workflow"],
+    "tags": ["clawdeckx", "workflow", "productivity", "navigation"],
+    "difficulty": "easy",
+    "featured": true,
     "i18n": {
       "en": {
-        "name": "Efficient Workflow Tips",
-        "description": "Master these tips to get the most out of ClawDeckX"
+        "name": "ClawDeckX Workflow Guide",
+        "description": "Master ClawDeckX desktop operations, config center navigation and health center tips"
       }
     }
   },
   "content": {
-    "body": "## 桌面导航\n\n- **双击桌面空白处** — 快速回到仪表盘\n- **拖拽窗口标题栏** — 自由调整窗口位置和大小\n- **Dock 栏** — 底部常驻快捷入口，一键打开常用功能\n\n## 配置中心\n\n- **实时预览** — 修改配置后即时看到效果，无需手动重启\n- **配置对比** — 切换到「对比视图」查看你的修改与默认值的差异\n- **导入导出** — 在「系统 → 备份」中一键导出所有配置，方便迁移\n\n## 健康中心\n\n- **定期诊断** — 建议每次更新配置后运行一次诊断\n- **一键修复** — 大部分常见问题可以自动修复\n- **了解更多** — 每个诊断项都有对应的知识库文章，点击即可跳转\n\n## 使用向导\n\n- **进度追踪** — 使用向导会显示你的配置完成度\n- **去设置** — 每个待完成项都有直达按钮，跳转到对应配置页面"
+    "body": "## 桌面导航\n\n- **双击桌面空白处** — 快速回到仪表盘，查看网关状态和频道连接情况\n- **拖拽窗口标题栏** — 自由移动窗口；拖拽窗口边缘可调整大小\n- **Dock 栏** — 底部常驻快捷入口，包含仪表盘、配置中心、聊天、健康中心等\n- **右键 Dock 图标** — 部分图标支持右键菜单，提供快捷操作\n\n## 配置中心操作\n\n配置中心是管理 OpenClaw 的核心界面，左侧导航栏包含 20+ 个配置区域：\n\n- **模型 (models)** — 添加 AI 提供商、设置主模型/备用模型/子代理模型\n- **频道 (channels)** — 管理 Telegram/Discord/WhatsApp 等消息频道\n- **代理 (agents)** — 创建多代理、设置身份/行为/沙箱\n- **工具 (tools)** — 控制工具权限配置文件 (profile)、网络搜索、文件系统访问\n- **会话 (session)** — 会话范围、自动重置、维护策略\n- **网关 (gateway)** — 端口、认证模式、TLS、远程连接\n\n**操作技巧：**\n- 修改任何配置后点击「保存」，网关会自动热重载\n- 使用顶部搜索栏可快速定位配置项\n- 切换到「JSON 编辑器」可直接编辑原始配置文件\n- 在「实时配置」区域可查看当前运行中的完整配置\n\n## 健康中心\n\n- **运行诊断** — 点击「运行诊断」按钮，自动检查 50+ 项配置和运行状态\n- **严重程度标记** — 🔴 错误必须修复、🟡 警告建议优化、🟢 通过无需操作\n- **一键修复** — 部分诊断项提供自动修复按钮\n- **关联知识库** — 每个诊断项可链接到知识库文章，点击即可查看详细说明\n- **建议频率** — 每次修改配置或升级 OpenClaw 后运行一次\n\n## 使用向导\n\n- **配置完成度** — 使用向导会计算你的整体配置得分（百分比）\n- **分步引导** — 从基础检查 → 身份设置 → 场景模板 → 记忆系统 → 能力限制\n- **直达配置** — 每个待完成项都有「去设置」按钮，直接跳转到对应配置页面\n- **场景模板** — 内置多种场景模板（技术助手、翻译、写作等），一键应用"
   }
 }

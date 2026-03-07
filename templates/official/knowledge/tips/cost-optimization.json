@@ -1,0 +1,32 @@
+{
+  "id": "tip-cost-optimization",
+  "type": "tip",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "成本优化",
+    "description": "通过心跳模型、活跃时段和压缩策略大幅降低 API 开支",
+    "category": "advanced",
+    "difficulty": "easy",
+    "icon": "savings",
+    "color": "from-emerald-500 to-emerald-600",
+    "tags": ["cost", "heartbeat", "optimization", "budget"],
+    "lastUpdated": "2026-03-08",
+    "i18n": {
+      "en": {
+        "name": "Cost Optimization",
+        "description": "Significantly reduce API costs with heartbeat model, active hours and compaction strategies"
+      }
+    }
+  },
+  "content": {
+    "body": "## 成本从哪里来？\n\nAI 助手的主要开支：\n\n1. **主模型调用** — 每次对话的 token 消耗\n2. **心跳检查** — 定时检查任务（如邮件、日历）的 token 消耗\n3. **长上下文** — Session 过长导致每次请求发送大量上下文\n\n## 优化策略\n\n### 1. 心跳用便宜模型\n\n心跳检查不需要最强的模型。使用低成本模型可以节省 **70-90%** 心跳开支：\n\n- **推荐**：Claude Haiku、GPT-4o-mini、Gemini Flash\n- 在配置中心 → 模型 → 心跳模型中设置\n\n### 2. 设置活跃时段（activeHours）\n\n限制心跳只在你需要的时间段运行：\n\n```yaml\nheartbeat:\n  activeHours: \"09:00-23:00\"  # 只在白天运行\n  timezone: \"Asia/Shanghai\"\n```\n\n### 3. 合理设置压缩阈值\n\n- 较低的阈值（20K）= 更频繁压缩 = 更低成本\n- 较高的阈值（100K）= 更少压缩 = 更高质量但更贵\n- **推荐**：50K 是性价比较好的平衡点\n\n### 4. 子代理用中端模型\n\n子代理（Sub-agents）处理分解的子任务，不需要最强模型：\n\n- **推荐**：Claude Sonnet、GPT-4o\n- 主模型保持高端（Claude Opus、GPT-4.5）\n\n### 5. 备用模型\n\n设置备用模型，主模型不可用时自动切换，避免重试浪费：\n\n- 主模型：Claude Opus → 备用：GPT-4o\n- 或者主：GPT-4.5 → 备用：Claude Sonnet\n\n## 成本监控\n\n在 ClawDeckX 的「使用统计」中查看 token 消耗趋势，及时发现异常。",
+    "editorSection": "models",
+    "statusCheck": {
+      "type": "config_field",
+      "field": "agents.defaults.heartbeat.model",
+      "okWhen": "truthy",
+      "okTemplate": "心跳模型: {value}",
+      "failTemplate": "未设置心跳模型，主模型用于心跳会增加成本"
+    }
+  }
+}

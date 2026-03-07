@@ -1,22 +1,24 @@
 {
   "id": "faq-gateway-not-running",
   "type": "faq",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "网关无法启动",
-    "description": "排查网关无法启动或无法连接的常见问题",
+    "description": "系统排查网关无法启动、无法连接或反复崩溃的问题",
     "category": "troubleshooting",
-    "tags": ["gateway", "troubleshooting", "startup"],
+    "tags": ["gateway", "troubleshooting", "startup", "port", "config"],
+    "difficulty": "easy",
+    "featured": true,
     "i18n": {
       "en": {
-        "name": "Gateway Not Running",
-        "description": "Troubleshoot when the gateway is not running or unreachable"
+        "name": "Gateway Won't Start",
+        "description": "Systematically troubleshoot gateway startup failures, connection issues or crashes"
       }
     }
   },
   "content": {
     "question": "网关无法启动或连接不上怎么办？",
-    "answer": "## 常见原因\n\n1. **网关进程未启动** — 打开 ClawDeckX 仪表盘，点击顶部的「启动网关」按钮一键启动。\n\n2. **端口冲突** — 默认端口 18789 可能被占用。前往 **配置中心 → 网关** 修改端口号。\n\n3. **进程残留** — 上次异常退出可能留下残留文件。打开 **健康中心**，点击「一键修复」自动清理。\n\n4. **配置文件缺失** — 首次使用请先运行 **安装向导**（桌面图标），它会自动生成所需配置。\n\n## 快速修复\n\n打开 **健康中心**（桌面图标），运行诊断后点击「一键修复」，可自动解决常见问题。",
+    "answer": "## 排查步骤\n\n### 1. 检查网关进程\n打开 ClawDeckX 仪表盘，查看顶部网关状态指示灯：\n- 🔴 红色 = 未运行 → 点击「启动网关」按钮\n- 🟡 黄色 = 启动中 → 等待 10 秒，如果长时间卡住，查看日志\n- 🟢 绿色 = 正常运行\n\n### 2. 端口冲突\n默认端口 **18789** 可能被其他程序占用。\n- 前往「配置中心 → 网关 → 基本设置」修改端口号\n- Windows：在终端运行 `netstat -ano | findstr 18789` 检查占用\n- macOS/Linux：运行 `lsof -i :18789` 检查占用\n\n### 3. 进程残留（PID 锁文件）\n上次异常退出可能留下 PID 锁文件导致无法启动。\n- 打开「健康中心」→ 运行诊断 → 如果出现「PID 锁文件」警告，点击「修复」自动清理\n- 手动清理：删除 `~/.openclaw/gateway.pid` 文件\n\n### 4. 配置文件错误\n配置 JSON 语法错误会导致启动失败。\n- 前往「配置中心 → JSON 编辑器」检查是否有红色语法错误标记\n- 运行「健康中心」诊断，config.file 检查项会报告配置问题\n- 备份当前配置后，可在「JSON 编辑器」中重置为默认配置\n\n### 5. Node.js 版本不兼容\nOpenClaw 需要 Node.js **22+**。\n- 在终端运行 `node -v` 检查版本\n- 如果低于 22，升级 Node.js 后重新启动\n\n### 6. 绑定地址问题\n如果设置了 `gateway.bind` 为 `lan` 或 `custom`，可能因网络变化导致绑定失败。\n- 前往「配置中心 → 网关 → 基本设置」，将 bind 改为 `auto` 或 `loopback`\n\n## 快速修复\n\n打开「健康中心」→ 运行诊断 → 点击「一键修复」，可自动解决以上大部分问题。",
     "relatedDoctorChecks": ["gateway.status", "pid.lock", "config.file", "port.default"],
     "editorSection": "gateway"
   }

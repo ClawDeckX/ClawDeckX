@@ -161,7 +161,22 @@ export interface KnowledgeItem {
     examples?: string[];
     relatedDoctorChecks?: string[];
     editorSection?: string;
+    statusCheck?: KnowledgeStatusCheck;
   };
+}
+
+export interface KnowledgeStatusCheck {
+  type: 'channels_count' | 'agent_count' | 'config_field' | 'security_configured';
+  /** Dot-path into gateway config, e.g. "agents.defaults.compaction.threshold" */
+  field?: string;
+  /** Comparison rule: "truthy", "gt:0", "eq:true" */
+  okWhen?: string;
+  /** Minimum count for channels_count / agent_count checks */
+  threshold?: number;
+  /** Template string shown when check passes. Placeholders: {value}, {n} */
+  okTemplate?: string;
+  /** Template string shown when check fails. Placeholders: {value}, {n} */
+  failTemplate?: string;
 }
 
 export type Template = ScenarioTemplate | MultiAgentTemplate | AgentTemplate | KnowledgeItem;

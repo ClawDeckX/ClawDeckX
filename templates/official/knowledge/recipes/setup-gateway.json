@@ -1,39 +1,51 @@
 {
   "id": "recipe-quickstart",
   "type": "recipe",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "metadata": {
     "name": "快速开始配置",
-    "description": "通过 ClawDeckX 可视化界面完成首次配置，5 分钟上手",
+    "description": "通过 ClawDeckX 可视化界面完成首次配置，从安装到能对话只需 5 分钟",
     "category": "setup",
-    "tags": ["quickstart", "setup", "beginner"],
+    "tags": ["quickstart", "setup", "beginner", "first-time"],
     "difficulty": "easy",
     "featured": true,
     "i18n": {
       "en": {
         "name": "Quick Start Guide",
-        "description": "Complete first-time setup through ClawDeckX visual interface in 5 minutes"
+        "description": "Complete first-time setup through ClawDeckX visual interface — from install to first conversation in 5 minutes"
       }
     }
   },
   "content": {
-    "body": "通过 ClawDeckX 的可视化界面完成首次配置，无需手动编辑配置文件。",
+    "body": "通过 ClawDeckX 的可视化界面完成首次配置，全程无需手动编辑配置文件。\n\n**前提条件：**\n- 已安装 OpenClaw（`npm i -g openclaw` 或使用安装脚本）\n- 至少一个 AI 提供商的 API Key（如 OpenAI、Anthropic、Google 等）\n\n完成后你将拥有一个可以通过消息频道对话的 AI 助手。",
     "steps": [
       {
-        "title": "运行安装向导",
-        "description": "打开 ClawDeckX → 点击桌面上的「安装向导」图标，按提示完成基础配置（选择 AI 提供商、填写 API Key）。"
+        "title": "启动网关",
+        "description": "打开 ClawDeckX → 仪表盘 → 点击「启动网关」按钮。如果是首次运行，ClawDeckX 会自动检测 OpenClaw 安装状态并引导你完成初始化。"
       },
       {
-        "title": "配置模型",
-        "description": "前往「配置中心 → 模型」，选择主模型。推荐使用 gpt-4o 或 claude-sonnet 作为入门模型。"
+        "title": "添加 AI 提供商",
+        "description": "前往「配置中心 → 模型」→ 点击「添加提供商」按钮。选择提供商类型（OpenAI / Anthropic / Google 等），填入 API Key，点击「测试连接」确认可用。"
       },
       {
-        "title": "添加频道",
-        "description": "前往「配置中心 → 频道」，添加你要使用的消息频道（Telegram、Discord、WhatsApp 等），填入对应的 Bot Token。"
+        "title": "设置主模型",
+        "description": "在「配置中心 → 模型」页面，找到「主模型」区域，从已添加的提供商中选择一个模型。推荐入门选择：gpt-4o（OpenAI）、claude-sonnet（Anthropic）或 gemini-pro（Google）。"
       },
       {
-        "title": "启动并验证",
-        "description": "回到仪表盘，点击「启动网关」。启动后打开「健康中心」运行诊断，确认所有项目通过。"
+        "title": "添加消息频道",
+        "description": "前往「配置中心 → 频道」→ 点击「添加频道」。选择你要使用的平台（Telegram / Discord / WhatsApp / Slack 等），按提示填入 Bot Token 或扫码连接。"
+      },
+      {
+        "title": "设置代理身份（可选）",
+        "description": "前往「配置中心 → 代理」→ 编辑默认代理的 IDENTITY.md 和 SOUL.md，定义 AI 助手的人格和行为风格。也可以在「使用向导 → 身份设置」中从预设模板选择。"
+      },
+      {
+        "title": "运行诊断验证",
+        "description": "打开「健康中心」→ 点击「运行诊断」。确认所有关键项（网关状态、模型连接、频道连接）显示为绿色通过。如有红色/黄色项，点击对应的「修复」按钮或查看详情。"
+      },
+      {
+        "title": "发送第一条消息",
+        "description": "在已连接的消息频道中向 AI 助手发送任意消息，或打开 ClawDeckX 内置的「聊天」窗口直接对话。收到回复即表示配置成功。"
       }
     ],
     "editorSection": "models"

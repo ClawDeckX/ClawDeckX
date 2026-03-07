@@ -1,0 +1,31 @@
+{
+  "id": "tip-security-hardening",
+  "type": "tip",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "安全加固",
+    "description": "通过白名单、访问控制和沙箱模式保护你的 AI 助手",
+    "category": "advanced",
+    "difficulty": "medium",
+    "icon": "shield",
+    "color": "from-orange-500 to-orange-600",
+    "tags": ["security", "access-control", "allowlist", "sandbox"],
+    "featured": true,
+    "lastUpdated": "2026-03-08",
+    "i18n": {
+      "en": {
+        "name": "Security Hardening",
+        "description": "Protect your AI assistant with allowlists, access control and sandbox mode"
+      }
+    }
+  },
+  "content": {
+    "body": "## 为什么需要安全加固？\n\n如果你的 AI 助手连接了公开的聊天平台（如 Telegram、Discord），任何人都可能尝试与它对话。安全加固确保只有授权用户才能使用。\n\n## 三层安全防护\n\n### 1. allowFrom 白名单\n\n限制哪些用户或群组可以与 AI 对话：\n\n```yaml\nchannels:\n  telegram:\n    allowFrom:\n      - \"user:123456789\"    # 特定用户\n      - \"group:-100xxxx\"    # 特定群组\n```\n\n### 2. dmPolicy 访问控制\n\n控制私聊权限：\n\n- **`open`** — 任何人都可以私聊（不推荐用于生产）\n- **`allowlist`** — 只有白名单用户可以私聊（推荐）\n- **`closed`** — 禁止所有私聊\n\n### 3. 网关认证\n\n保护 Web UI 和 API 接口：\n\n- **Token 认证** — 设置一个访问 Token\n- **密码认证** — 设置用户名和密码\n- **TLS 加密** — 生产环境强烈建议启用\n\n## 沙箱模式\n\n限制 AI 可以执行的操作：\n\n- 禁用文件系统写入\n- 禁用命令执行\n- 限制网络访问范围\n\n## 最佳实践\n\n- **生产环境必须** 设置 allowFrom 和 dmPolicy\n- 使用 Token 或密码保护网关 API\n- 定期检查访问日志，确认没有异常访问\n- 使用健康中心的安全诊断验证配置",
+    "editorSection": "channels",
+    "statusCheck": {
+      "type": "security_configured",
+      "okTemplate": "已配置访问控制",
+      "failTemplate": "未配置访问控制，建议设置 allowFrom 或 dmPolicy"
+    }
+  }
+}

@@ -5,6 +5,12 @@
     "faq/gateway-not-running.json",
     "recipes/setup-gateway.json",
     "tips/keyboard-shortcuts.json",
+    "tips/multi-channel-routing.json",
+    "tips/session-management.json",
+    "tips/security-hardening.json",
+    "tips/cost-optimization.json",
+    "tips/multi-agent.json",
+    "tips/thinking-mode.json",
     "snippets/model-config.json"
   ]
 }

@@ -1805,7 +1805,6 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                     <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/40 flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px]">timeline</span>{text.timelineTitle || text.issuesTitle}
                     </p>
-                    <button onClick={() => jumpToWindow('activity')} className="text-[10px] font-bold text-primary hover:opacity-80">{text.viewAllEvents || text.actionOpenEvents}</button>
                   </div>
                   {summarySourceOptions.length > 1 && (
                     <div className="flex flex-wrap gap-1.5 mb-2">

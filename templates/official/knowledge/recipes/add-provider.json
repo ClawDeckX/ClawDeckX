@@ -1,0 +1,49 @@
+{
+  "id": "recipe-add-provider",
+  "type": "recipe",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "添加 AI 提供商",
+    "description": "在 ClawDeckX 中添加 OpenAI、Anthropic、Google 等 AI 提供商并配置 API Key",
+    "category": "setup",
+    "tags": ["provider", "model", "apikey", "openai", "anthropic", "google"],
+    "difficulty": "easy",
+    "featured": true,
+    "i18n": {
+      "en": {
+        "name": "Add AI Provider",
+        "description": "Add OpenAI, Anthropic, Google or other AI providers and configure API keys in ClawDeckX"
+      }
+    }
+  },
+  "content": {
+    "body": "OpenClaw 支持 20+ 种 AI 提供商，包括 OpenAI、Anthropic、Google、Mistral、Groq、Ollama 等。每个提供商需要配置 API 类型、Base URL 和 API Key。\n\n**支持的 API 类型：**\n- `openai` — OpenAI 及兼容的提供商（如 Groq、Together、OpenRouter）\n- `anthropic` — Anthropic Claude 系列\n- `google` — Google Gemini 系列\n- `mistral` — Mistral AI\n- `ollama` — 本地 Ollama 推理\n- `azure` — Azure OpenAI Service\n\n**安全提示：** API Key 会加密存储在本地配置文件中，不会上传到任何远程服务。",
+    "steps": [
+      {
+        "title": "打开模型配置",
+        "description": "前往「配置中心 → 模型」，点击页面顶部的「添加提供商」按钮。"
+      },
+      {
+        "title": "选择提供商类型",
+        "description": "在弹出的向导中选择提供商（如 OpenAI），系统会自动填充默认的 API 类型和 Base URL。如果是兼容 OpenAI 格式的第三方提供商（如 Groq），选择 OpenAI 类型并修改 Base URL。"
+      },
+      {
+        "title": "填写 API Key",
+        "description": "在 API Key 字段中粘贴你的密钥。点击「测试连接」按钮验证密钥是否有效。如果测试失败，检查密钥是否正确以及网络是否能访问提供商的 API 地址。"
+      },
+      {
+        "title": "发现可用模型",
+        "description": "连接成功后，点击「发现模型」按钮自动获取该提供商支持的所有模型列表。你也可以手动输入模型名称。"
+      },
+      {
+        "title": "设置为主模型（可选）",
+        "description": "在「主模型」区域，从下拉列表中选择刚添加的提供商的模型。建议设置 1-2 个备用模型（fallbacks），当主模型不可用时自动切换。"
+      },
+      {
+        "title": "保存并验证",
+        "description": "点击「保存」按钮，网关会自动重载配置。打开「聊天」窗口发送测试消息，确认模型可以正常回复。"
+      }
+    ],
+    "editorSection": "models"
+  }
+}

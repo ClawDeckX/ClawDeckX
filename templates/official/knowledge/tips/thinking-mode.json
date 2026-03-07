@@ -1,0 +1,32 @@
+{
+  "id": "tip-thinking-mode",
+  "type": "tip",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "Thinking 模式",
+    "description": "开启深度思考让 AI 处理复杂推理、规划和分析任务",
+    "category": "advanced",
+    "difficulty": "easy",
+    "icon": "neurology",
+    "color": "from-pink-500 to-pink-600",
+    "tags": ["thinking", "reasoning", "extended-thinking", "deep-analysis"],
+    "lastUpdated": "2026-03-08",
+    "i18n": {
+      "en": {
+        "name": "Thinking Mode",
+        "description": "Enable extended thinking for complex reasoning, planning and analysis tasks"
+      }
+    }
+  },
+  "content": {
+    "body": "## 什么是 Thinking 模式？\n\n开启 Thinking（Extended Thinking）后，AI 在回答前会先进行**深度推理**，类似人类的「先想清楚再说」。\n\n## 适用场景\n\n- **复杂数学推理** — 多步骤计算和证明\n- **代码架构设计** — 需要权衡多种方案\n- **长文分析** — 阅读长文档并总结关键信息\n- **策略规划** — 制定多步骤计划\n- **调试复杂问题** — 需要系统性排查\n\n## 配置方法\n\n在配置中心 → 模型 → 开启 `reasoning` 选项。\n\n```yaml\nagents:\n  defaults:\n    model:\n      reasoning: true\n```\n\n## 支持的模型\n\n不是所有模型都支持 Thinking：\n\n| 模型 | 支持 Thinking |\n|------|---------------|\n| Claude Opus / Sonnet | ✅ |\n| GPT-4o / 4.5 | ✅ |\n| Gemini Pro / Ultra | ✅ |\n| Claude Haiku | ❌ |\n| GPT-4o-mini | ❌ |\n\n## 注意事项\n\n- **成本更高** — Thinking 会产生额外的 token 消耗（thinking tokens）\n- **延迟更长** — AI 需要更多时间思考，首次响应会慢几秒\n- **不适合简单问答** — 日常闲聊不需要开启\n\n## 最佳实践\n\n- 对于主力工作 Agent 开启 Thinking\n- 对于轻量级的生活助手可以关闭以节省成本\n- 可以通过 `/think` 命令临时触发深度思考，而非全局开启",
+    "editorSection": "models",
+    "statusCheck": {
+      "type": "config_field",
+      "field": "agents.defaults.model.reasoning",
+      "okWhen": "eq:true",
+      "okTemplate": "已启用",
+      "failTemplate": "未启用 Thinking 模式"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "id": "recipe-setup-discord",
+  "type": "recipe",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "连接 Discord",
+    "description": "创建 Discord Bot 并通过 ClawDeckX 连接到 OpenClaw 网关",
+    "category": "setup",
+    "tags": ["discord", "channel", "bot", "setup"],
+    "difficulty": "easy",
+    "i18n": {
+      "en": {
+        "name": "Connect Discord",
+        "description": "Create a Discord Bot and connect it to OpenClaw gateway via ClawDeckX"
+      }
+    }
+  },
+  "content": {
+    "body": "Discord Bot 需要在 Discord Developer Portal 中创建应用并获取 Token。\n\n**前提条件：**\n- 一个 Discord 账户\n- 你管理的 Discord 服务器（用于邀请 Bot）\n- OpenClaw 网关已启动且模型已配置",
+    "steps": [
+      {
+        "title": "创建 Discord 应用",
+        "description": "访问 https://discord.com/developers/applications → 点击「New Application」→ 输入应用名称 → 创建。"
+      },
+      {
+        "title": "获取 Bot Token",
+        "description": "在应用页面左侧选择「Bot」→ 点击「Reset Token」获取 Token。**重要：** Token 只显示一次，立即复制保存。在「Privileged Gateway Intents」中启用 Message Content Intent。"
+      },
+      {
+        "title": "邀请 Bot 到服务器",
+        "description": "在左侧选择「OAuth2」→「URL Generator」→ 勾选 bot 和 applications.commands → 在 Bot Permissions 中勾选 Send Messages、Read Message History、Add Reactions → 复制生成的 URL 在浏览器中打开，选择你的服务器并授权。"
+      },
+      {
+        "title": "在 ClawDeckX 中配置",
+        "description": "前往「配置中心 → 频道」→ 点击「添加频道」→ 选择 Discord。在 Token 字段中粘贴 Bot Token。如果你只想让 Bot 在特定服务器工作，可以填写 guildId。"
+      },
+      {
+        "title": "保存并测试",
+        "description": "点击「保存」，等待网关重载。在 Discord 服务器中 @提及 Bot 或在 DM 中发送消息。收到 AI 回复即表示配置成功。"
+      }
+    ],
+    "editorSection": "channels"
+  }
+}

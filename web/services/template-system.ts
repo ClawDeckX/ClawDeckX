@@ -29,6 +29,7 @@ export type {
   SkillConfig,
   CronJobConfig,
   IntegrationConfig,
+  KnowledgeStatusCheck,
   TemplateMetadata,
   TemplateRequirements,
 } from './template-manager-v2';

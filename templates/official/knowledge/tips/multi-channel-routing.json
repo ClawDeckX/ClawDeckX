@@ -1,0 +1,32 @@
+{
+  "id": "tip-multi-channel-routing",
+  "type": "tip",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "多频道路由",
+    "description": "同一个 AI 同时服务多个聊天平台，每个频道可以有不同的行为规则",
+    "category": "advanced",
+    "difficulty": "medium",
+    "icon": "alt_route",
+    "color": "from-blue-500 to-blue-600",
+    "tags": ["routing", "channels", "multi-platform"],
+    "featured": true,
+    "lastUpdated": "2026-03-08",
+    "i18n": {
+      "en": {
+        "name": "Multi-Channel Routing",
+        "description": "Serve multiple chat platforms with a single AI, each channel can have different behavior rules"
+      }
+    }
+  },
+  "content": {
+    "body": "## 什么是多频道路由？\n\n多频道路由让你的 AI 助手同时连接 Telegram、Discord、WhatsApp、Signal 等多个聊天平台，**每个频道可以有独立的行为规则**。\n\n## 为什么需要它？\n\n- **统一管理** — 一个 AI 服务所有平台，不用为每个平台单独部署\n- **差异化行为** — 工作频道严肃专业，私人频道轻松活泼\n- **访问控制** — 不同频道设置不同的 allowFrom 白名单和 dmPolicy\n\n## 配置方法\n\n### 1. 添加多个频道\n\n在配置中心的「频道」部分，添加你需要的聊天平台，填入对应的 Token。\n\n### 2. 设置频道路由规则\n\n每个频道可以独立设置：\n- **dmPolicy** — 控制谁可以发起私聊（`open` / `allowlist` / `closed`）\n- **allowFrom** — 白名单，只允许特定用户或群组\n- **groupPolicy** — 群组消息的响应策略\n\n### 3. 频道级别 SOUL 覆盖\n\n你可以为特定频道添加额外的 SOUL 指令，比如让 Discord 频道用英文回复，Telegram 频道用中文回复。\n\n## 最佳实践\n\n- 先连接一个频道确认正常，再逐步添加其他频道\n- 生产环境建议为每个频道设置 allowFrom 白名单\n- 使用 `openclaw channels status --probe` 验证所有频道状态",
+    "editorSection": "channels",
+    "statusCheck": {
+      "type": "channels_count",
+      "threshold": 2,
+      "okTemplate": "已连接 {n} 个频道",
+      "failTemplate": "当前仅连接 {n} 个频道，添加更多以启用路由"
+    }
+  }
+}

@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Language } from '../../types';
 import { getTranslation } from '../../locales';
-import { templateSystem, KnowledgeItem, KnowledgeItemType } from '../../services/template-system';
-import { recipeApi } from '../../services/api';
+import { templateSystem, KnowledgeItem, KnowledgeItemType, KnowledgeStatusCheck } from '../../services/template-system';
+import { recipeApi, gwApi } from '../../services/api';
 import { FileApplyConfirm, FileApplyRequest } from '../FileApplyConfirm';
 import AgentPickerModal from '../AgentPickerModal';
 import { useToast } from '../Toast';
@@ -34,6 +34,9 @@ const KnowledgeHub: React.FC<KnowledgeHubProps> = ({ language, defaultAgentId, p
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [doctorStatusMap, setDoctorStatusMap] = useState<Record<string, 'ok' | 'warn' | 'error'>>({});
+  const [gwConfig, setGwConfig] = useState<any>(null);
+  const [gwChannels, setGwChannels] = useState<any[]>([]);
+  const [gwAgentCount, setGwAgentCount] = useState(0);
   const [pendingFileApply, setPendingFileApply] = useState<FileApplyRequest | null>(null);
   const [pendingApplyData, setPendingApplyData] = useState<{ fileName: string; content: string; mode: 'append' | 'replace'; title: string } | null>(null);
 
@@ -71,6 +74,66 @@ const KnowledgeHub: React.FC<KnowledgeHubProps> = ({ language, defaultAgentId, p
       setDoctorStatusMap(map);
     } catch { /* ignore */ }
   }, []);
+
+  // Fetch gateway data for dynamic statusCheck evaluation
+  useEffect(() => {
+    const settle = (p: Promise<any>) => p.catch(() => null);
+    Promise.all([
+      settle(gwApi.configGet()),
+      settle(gwApi.channels()),
+      settle(gwApi.agents()),
+    ]).then(([cfgData, chData, agData]) => {
+      if (cfgData) setGwConfig(cfgData.config || cfgData.parsed || cfgData);
+      const rawCh = chData?.channels ?? chData?.list ?? chData;
+      if (Array.isArray(rawCh)) setGwChannels(rawCh);
+      const agList = Array.isArray(agData) ? agData : agData?.agents || [];
+      setGwAgentCount(agList.length || Object.keys(agList).length);
+    });
+  }, []);
+
+  // Evaluate a statusCheck definition against live gateway data
+  const evalStatusCheck = useCallback((check: KnowledgeStatusCheck): { ok: boolean; detail: string } => {
+    const getField = (path: string): any => {
+      if (!gwConfig || !path) return undefined;
+      return path.split('.').reduce((o, k) => o?.[k], gwConfig);
+    };
+    const fill = (tpl: string | undefined, vars: Record<string, string | number>) => {
+      if (!tpl) return '';
+      let s = tpl;
+      for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, String(v));
+      return s;
+    };
+
+    switch (check.type) {
+      case 'channels_count': {
+        const active = gwChannels.filter((ch: any) => ch.status === 'connected' || ch.connected);
+        const n = active.length;
+        const ok = n >= (check.threshold ?? 1);
+        return { ok, detail: fill(ok ? check.okTemplate : check.failTemplate, { n }) };
+      }
+      case 'agent_count': {
+        const n = gwAgentCount;
+        const ok = n >= (check.threshold ?? 1);
+        return { ok, detail: fill(ok ? check.okTemplate : check.failTemplate, { n }) };
+      }
+      case 'config_field': {
+        const value = getField(check.field || '');
+        let ok = false;
+        const rule = check.okWhen || 'truthy';
+        if (rule === 'truthy') ok = !!value;
+        else if (rule.startsWith('gt:')) ok = Number(value) > Number(rule.slice(3));
+        else if (rule.startsWith('eq:')) ok = String(value) === rule.slice(3);
+        const display = value == null ? '' : String(value);
+        return { ok, detail: fill(ok ? check.okTemplate : check.failTemplate, { value: display }) };
+      }
+      case 'security_configured': {
+        const hasDm = gwChannels.some((ch: any) => ch.dmPolicy || ch.allowFrom?.length > 0);
+        return { ok: hasDm, detail: fill(hasDm ? check.okTemplate : check.failTemplate, {}) };
+      }
+      default:
+        return { ok: false, detail: '' };
+    }
+  }, [gwConfig, gwChannels, gwAgentCount]);
 
   const filteredItems = useMemo(() => {
     let result = activeFilter === 'all' ? items : items.filter(item => item.type === activeFilter);
@@ -158,6 +221,7 @@ const KnowledgeHub: React.FC<KnowledgeHubProps> = ({ language, defaultAgentId, p
               typeConfig={TYPE_CONFIG[item.type]}
               onClick={() => setExpandedId(item.id)}
               tm={tm}
+              evalStatusCheck={evalStatusCheck}
             />
           ))}
         </div>
@@ -188,6 +252,7 @@ const KnowledgeHub: React.FC<KnowledgeHubProps> = ({ language, defaultAgentId, p
             }}
             tm={tm}
             doctorStatusMap={doctorStatusMap}
+            evalStatusCheck={evalStatusCheck}
           />
         );
       })()}
@@ -275,6 +340,7 @@ interface KnowledgeCardSummaryProps {
   typeConfig: { icon: string; colorClass: string; borderColor: string; iconBg: string; iconColor: string };
   onClick: () => void;
   tm: any;
+  evalStatusCheck: (check: KnowledgeStatusCheck) => { ok: boolean; detail: string };
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -283,12 +349,21 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   hard: 'bg-red-500/10 text-red-600 dark:text-red-400',
 };
 
-const KnowledgeCardSummary: React.FC<KnowledgeCardSummaryProps> = ({ item, typeLabel, typeConfig, onClick, tm }) => {
+const KnowledgeCardSummary: React.FC<KnowledgeCardSummaryProps> = ({ item, typeLabel, typeConfig, onClick, tm, evalStatusCheck }) => {
+  const statusCheck = item.content.statusCheck;
+  const status = statusCheck ? evalStatusCheck(statusCheck) : null;
+
   return (
     <div
       id={`knowledge-card-${item.id}`}
       onClick={onClick}
-      className={`p-3.5 rounded-xl border-l-[3px] border border-slate-200/60 dark:border-white/[0.06] ${typeConfig.borderColor} cursor-pointer transition-all bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.05] hover:shadow-sm`}
+      className={`p-3.5 rounded-xl border-l-[3px] border transition-all cursor-pointer hover:shadow-sm ${
+        status
+          ? status.ok
+            ? 'border-emerald-300/40 dark:border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-500/[0.02] hover:bg-emerald-50/50 dark:hover:bg-emerald-500/[0.04]'
+            : 'border-amber-300/40 dark:border-amber-500/20 bg-amber-50/30 dark:bg-amber-500/[0.02] hover:bg-amber-50/50 dark:hover:bg-amber-500/[0.04]'
+          : `border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.05]`
+      } ${typeConfig.borderColor}`}
     >
       <div className="flex items-start gap-2.5">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
@@ -319,7 +394,19 @@ const KnowledgeCardSummary: React.FC<KnowledgeCardSummaryProps> = ({ item, typeL
         </div>
       </div>
 
-      {item.metadata.tags && item.metadata.tags.length > 0 && (
+      {/* Status badge */}
+      {status && (
+        <div className={`flex items-center gap-1.5 mt-2.5 px-2 py-1 rounded-lg text-[10px] font-bold ${
+          status.ok
+            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+        }`}>
+          <span className="material-symbols-outlined text-[12px]">{status.ok ? 'check_circle' : 'info'}</span>
+          {status.detail || (status.ok ? (tm.statusOk || 'Configured') : (tm.statusTodo || 'Not configured'))}
+        </div>
+      )}
+
+      {(!status) && item.metadata.tags && item.metadata.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2.5">
           {item.metadata.tags.slice(0, 4).map(tag => (
             <span key={tag} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.05] text-[10px] text-slate-500 dark:text-white/40">
@@ -343,9 +430,10 @@ interface KnowledgeDetailModalProps {
   onApplyFile?: (fileName: string, content: string, mode: 'append' | 'replace') => void;
   tm: any;
   doctorStatusMap: Record<string, 'ok' | 'warn' | 'error'>;
+  evalStatusCheck: (check: KnowledgeStatusCheck) => { ok: boolean; detail: string };
 }
 
-const KnowledgeDetailModal: React.FC<KnowledgeDetailModalProps> = ({ item, allItems, typeLabel, typeConfig, onClose, onNavigate, onApplyFile, tm, doctorStatusMap }) => {
+const KnowledgeDetailModal: React.FC<KnowledgeDetailModalProps> = ({ item, allItems, typeLabel, typeConfig, onClose, onNavigate, onApplyFile, tm, doctorStatusMap, evalStatusCheck }) => {
   const [copied, setCopied] = useState(false);
   const [copiedStepIdx, setCopiedStepIdx] = useState<number | null>(null);
   const [applyingStepIdx, setApplyingStepIdx] = useState<number | null>(null);
@@ -462,6 +550,25 @@ const KnowledgeDetailModal: React.FC<KnowledgeDetailModalProps> = ({ item, allIt
               ))}
             </div>
           )}
+
+          {/* Status check banner */}
+          {item.content.statusCheck && (() => {
+            const status = evalStatusCheck(item.content.statusCheck);
+            return (
+              <div className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border ${
+                status.ok
+                  ? 'bg-emerald-50/50 dark:bg-emerald-500/[0.04] border-emerald-200/50 dark:border-emerald-500/15'
+                  : 'bg-amber-50/50 dark:bg-amber-500/[0.04] border-amber-200/50 dark:border-amber-500/15'
+              }`}>
+                <span className={`material-symbols-outlined text-[16px] ${status.ok ? 'text-emerald-500' : 'text-amber-500'}`}>
+                  {status.ok ? 'check_circle' : 'info'}
+                </span>
+                <span className={`text-[11px] font-bold ${status.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                  {status.detail || (status.ok ? (tm.statusOk || 'Configured') : (tm.statusTodo || 'Not configured'))}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Recipe steps */}
           {item.type === 'recipe' && item.content.steps && item.content.steps.length > 0 && (

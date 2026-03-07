@@ -35,14 +35,13 @@ interface CapabilityCheck {
   recommendation: string;
 }
 
-// Step definitions — check → identity → scenarios → memory → capability → tips
+// Step definitions — check → identity → scenarios → memory → capability
 const STEPS = [
   { key: 'check', icon: 'verified' },
   { key: 'identity', icon: 'badge' },
   { key: 'scenarios', icon: 'category' },
   { key: 'memory', icon: 'psychology' },
   { key: 'capability', icon: 'tune' },
-  { key: 'tips', icon: 'lightbulb' },
 ] as const;
 
 type StepKey = typeof STEPS[number]['key'];
@@ -58,23 +57,6 @@ const IDENTITY_FILES = [
 // Note: Scenario definitions moved to templates/official/scenarios/
 // ScenarioLibraryV2 component now loads scenarios from the unified template system
 
-// Tip definitions with status detection and editor section navigation
-interface TipDef {
-  id: string;
-  icon: string;
-  color: string;
-  editorSection: string;
-  docUrl?: string;
-}
-
-const TIPS: TipDef[] = [
-  { id: 'Routing', icon: 'alt_route', color: 'bg-blue-500', editorSection: 'channels', docUrl: 'https://docs.openclaw.ai/configuration#channels' },
-  { id: 'Session', icon: 'history', color: 'bg-green-500', editorSection: 'session', docUrl: 'https://docs.openclaw.ai/configuration#compaction' },
-  { id: 'Security', icon: 'shield', color: 'bg-orange-500', editorSection: 'channels', docUrl: 'https://docs.openclaw.ai/configuration#security' },
-  { id: 'Cost', icon: 'savings', color: 'bg-emerald-500', editorSection: 'models', docUrl: 'https://docs.openclaw.ai/configuration#heartbeat' },
-  { id: 'MultiAgent', icon: 'group_work', color: 'bg-violet-500', editorSection: 'agents', docUrl: 'https://docs.openclaw.ai/configuration#agents' },
-  { id: 'Thinking', icon: 'neurology', color: 'bg-pink-500', editorSection: 'models', docUrl: 'https://docs.openclaw.ai/configuration#models' },
-];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -596,36 +578,6 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
     fetchAll();
   }, [o, toast, fetchAll]);
 
-  // Tip status detection: returns ok + detail label when configured
-  const getTipStatus = useCallback((tipId: string): { ok: boolean; detail: string } => {
-    switch (tipId) {
-      case 'Routing': {
-        const n = activeChannels.length;
-          return { ok: n > 1, detail: n > 1 ? o?.tipRoutingStatus.replace('{n}', String(n)) : '' };
-      }
-      case 'Session': {
-        const threshold = config?.agents?.defaults?.compaction?.threshold || 0;
-          return { ok: threshold > 0, detail: threshold > 0 ? o?.tipSessionStatus.replace('{n}', String(threshold)) : '' };
-      }
-      case 'Security': {
-        const hasDm = channels.some((ch: any) => ch.dmPolicy || ch.allowFrom?.length > 0);
-        return { ok: hasDm, detail: hasDm ? (o?.tipSecurityStatus ?? '') : '' };
-      }
-      case 'Cost': {
-        const m = heartbeatModel;
-          return { ok: !!m, detail: m ? o?.tipCostStatus.replace('{m}', m) : '' };
-      }
-      case 'MultiAgent': {
-        const agentCount = Object.keys(agentFiles).length;
-          return { ok: agentCount > 1, detail: agentCount > 1 ? o?.tipMultiAgentStatus.replace('{n}', String(agentCount)) : '' };
-      }
-      case 'Thinking': {
-        const reasoning = config?.agents?.defaults?.model?.reasoning === true;
-        return { ok: reasoning, detail: reasoning ? (o?.tipThinkingStatus ?? '') : '' };
-      }
-      default: return { ok: false, detail: '' };
-    }
-  }, [activeChannels, config, channels, heartbeatModel, agentFiles, o]);
 
   // ---------------------------------------------------------------------------
   // Render helpers
@@ -900,7 +852,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
                   <span className="material-symbols-outlined text-[16px]">chat</span>{o?.completionGoChat}
                 </button>
               )}
-              <button onClick={() => handleStepChange('tips')}
+              <button onClick={() => window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'knowledge' } }))}
                 className="text-[11px] px-4 py-2 rounded-xl border border-mac-green/30 text-mac-green font-bold hover:bg-mac-green/5 transition-colors flex items-center gap-1">
                 <span className="material-symbols-outlined text-[14px]">lightbulb</span>{o?.completionGoTips}
               </button>
@@ -1303,80 +1255,6 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
     />
   );
 
-  // ---------------------------------------------------------------------------
-  // Step 4: Tips
-  // ---------------------------------------------------------------------------
-
-  const renderStepTips = () => {
-    const sortedTips = [...TIPS].sort((a, b) => {
-      const aOk = getTipStatus(a.id).ok ? 1 : 0;
-      const bOk = getTipStatus(b.id).ok ? 1 : 0;
-      return aOk - bOk;
-    });
-    return (
-    <div className="space-y-4">
-      <p className="text-[10px] text-slate-400 dark:text-white/40">{o?.tipsSubtitle}</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {sortedTips.map(tip => {
-          const titleKey = `tip${tip.id}Title` as string;
-          const descKey = `tip${tip.id}Desc` as string;
-          const guideKey = `tip${tip.id}Guide` as string;
-          const status = getTipStatus(tip.id);
-          return (
-            <div key={tip.id} className={`rounded-2xl border transition-all ${status.ok ? 'border-mac-green/20 bg-mac-green/[0.02]' : 'border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02]'} p-4`}>
-              <div className="flex items-start gap-3">
-                <div className={`w-9 h-9 rounded-xl ${tip.color} flex items-center justify-center shrink-0`}>
-                  <span className="material-symbols-outlined text-[18px] text-white">{tip.icon}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-700 dark:text-white/80">{(o as any)?.[titleKey]}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5 ${status.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
-                      <span className="material-symbols-outlined text-[10px]">{status.ok ? 'check_circle' : 'info'}</span>
-                      {status.ok ? (status.detail || o?.tipDone) : o?.tipTodo}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 dark:text-white/40 mt-1 leading-relaxed">{(o as any)?.[descKey]}</p>
-                </div>
-              </div>
-              {/* Guide path — shown when NOT configured */}
-              {!status.ok && (
-                <div className="mt-3 rounded-lg bg-amber-50/50 dark:bg-amber-500/[0.04] border border-amber-200/40 dark:border-amber-500/10 px-3 py-2.5">
-                  <p className="text-[10px] font-bold text-amber-600/70 dark:text-amber-400/50 mb-1">{o?.tipGuidePath}</p>
-                  <p className="text-[10px] text-amber-700 dark:text-amber-300/70 font-medium">{(o as any)?.[guideKey]}</p>
-                </div>
-              )}
-              {/* Status detail — shown when configured */}
-              {status.ok && status.detail && (
-                <div className="mt-3 rounded-lg bg-mac-green/[0.04] border border-mac-green/10 px-3 py-2 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[14px] text-mac-green">verified</span>
-                  <span className="text-[10px] text-mac-green font-medium">{status.detail}</span>
-                </div>
-              )}
-              {/* Action row */}
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-white/[0.04]">
-                {!status.ok && (
-                  <button onClick={() => openEditorSection(tip.editorSection)}
-                    className="text-[10px] px-2.5 py-1 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 transition-colors flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[12px]">settings</span>
-                    {o?.tipGoSetup}
-                  </button>
-                )}
-                {tip.docUrl && (
-                  <a href={tip.docUrl} target="_blank" rel="noopener noreferrer"
-                    className={`text-[10px] px-2.5 py-1 rounded-lg text-slate-500 dark:text-white/40 hover:text-primary hover:bg-primary/5 font-bold transition-colors flex items-center gap-1 ${status.ok ? '' : 'ms-auto'}`}>
-                    <span className="material-symbols-outlined text-[12px]">open_in_new</span>
-                    {o?.tipLearnMore}
-                  </a>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-    );
-  };
 
   // ---------------------------------------------------------------------------
   // Step content router
@@ -1388,7 +1266,6 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
     scenarios: renderStepScenarios,
     identity: renderStepIdentity,
     memory: renderStepMemory,
-    tips: renderStepTips,
   };
 
   const currentStepIdx = STEPS.findIndex(s => s.key === activeStep);
@@ -1401,9 +1278,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
           ? 'identityStepTitle'
           : activeStep === 'memory'
             ? 'memoryTitle'
-            : activeStep === 'scenarios'
-              ? 'scenarioTitle'
-              : 'tipsTitle'
+            : 'scenarioTitle'
   ] || activeStep;
 
   // ---------------------------------------------------------------------------

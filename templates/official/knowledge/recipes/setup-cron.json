@@ -1,0 +1,44 @@
+{
+  "id": "recipe-setup-cron",
+  "type": "recipe",
+  "version": "1.0.0",
+  "metadata": {
+    "name": "配置定时任务",
+    "description": "设置 AI 助手的定时任务，实现自动化日常工作（如每日摘要、定时提醒）",
+    "category": "automation",
+    "tags": ["cron", "automation", "schedule", "daily", "reminder"],
+    "difficulty": "medium",
+    "i18n": {
+      "en": {
+        "name": "Set Up Cron Jobs",
+        "description": "Configure scheduled tasks for your AI assistant — daily summaries, reminders and more"
+      }
+    }
+  },
+  "content": {
+    "body": "OpenClaw 的定时任务系统（cron）可以让 AI 助手按计划执行任务，无需手动触发。常见用途包括：\n- 每天早上发送新闻摘要或天气预报\n- 定时检查邮件/日历并汇报\n- 周期性健康检查或数据备份提醒\n\n**配置字段说明：**\n- `enabled` — 是否启用定时任务系统\n- `maxConcurrentRuns` — 同时运行的最大任务数\n- `retry.maxAttempts` — 任务失败时的最大重试次数\n- `retry.retryOn` — 触发重试的错误类型（rate_limit / network / timeout 等）",
+    "steps": [
+      {
+        "title": "启用定时任务系统",
+        "description": "前往「配置中心 → 定时任务」→ 确保顶部的「启用定时任务」开关已打开。"
+      },
+      {
+        "title": "创建任务",
+        "description": "点击「添加定时任务」按钮。填写任务名称、Cron 表达式（如 '0 8 * * *' 表示每天早上 8 点）、要发送的提示词。选择目标频道和代理。"
+      },
+      {
+        "title": "配置重试策略（推荐）",
+        "description": "在「定时任务」配置区域的「重试」部分，设置 maxAttempts 为 2-3，retryOn 选择 rate_limit 和 network。这样当 AI 提供商暂时不可用时，任务会自动重试。"
+      },
+      {
+        "title": "配置失败告警（可选）",
+        "description": "启用 failureAlert，设置 after 为 2（连续失败 2 次后告警）。告警消息会发送到指定的频道和联系人。"
+      },
+      {
+        "title": "保存并验证",
+        "description": "保存配置后，可以在「定时任务」页面查看任务列表和下次执行时间。点击单个任务的「立即执行」按钮可以手动触发一次测试。"
+      }
+    ],
+    "editorSection": "cron"
+  }
+}

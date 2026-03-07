@@ -1,0 +1,32 @@
+{
+  "id": "tip-session-management",
+  "type": "tip",
+  "version": "1.1.0",
+  "metadata": {
+    "name": "Session 管理",
+    "description": "掌握会话重置、上下文压缩和作用域设置，让对话更高效",
+    "category": "advanced",
+    "difficulty": "easy",
+    "icon": "history",
+    "color": "from-green-500 to-green-600",
+    "tags": ["session", "compaction", "context"],
+    "lastUpdated": "2026-03-08",
+    "i18n": {
+      "en": {
+        "name": "Session Management",
+        "description": "Master session reset, context compaction and scope settings for more efficient conversations"
+      }
+    }
+  },
+  "content": {
+    "body": "## Session 基础\n\n每次对话都在一个 Session 中进行。Session 会记住上下文，但太长的上下文会增加成本和延迟。\n\n## 常用命令\n\n| 命令 | 作用 |\n|------|------|\n| `/new` | 重置当前会话，清空上下文 |\n| `/compact` | 手动压缩上下文，保留关键信息 |\n| `/undo` | 撤销上一条消息 |\n\n## 压缩阈值（Compaction）\n\n当 Session 的 token 数超过阈值时，AI 会自动压缩上下文：\n\n- **推荐值**：`50000`（50K tokens）\n- **低成本**：`20000`（更频繁压缩，但节省 token）\n- **高质量**：`100000`（更少压缩，保留更多上下文）\n\n## 作用域设置\n\n- **per-sender** — 每个用户独立 Session（默认，推荐）\n- **per-channel** — 每个频道/群组共享 Session\n\n## 记忆刷新（Memory Flush）\n\n开启 `memoryFlush` 后，Session 压缩时会自动将重要信息保存到长期记忆文件中，防止关键信息因压缩而丢失。\n\n## 最佳实践\n\n- 长时间不同话题的对话，主动用 `/new` 重置\n- 开启 memoryFlush 防止重要信息丢失\n- 根据你的模型 context window 大小调整压缩阈值",
+    "editorSection": "session",
+    "statusCheck": {
+      "type": "config_field",
+      "field": "agents.defaults.compaction.threshold",
+      "okWhen": "gt:0",
+      "okTemplate": "压缩阈值: {value}",
+      "failTemplate": "未设置压缩阈值，建议配置"
+    }
+  }
+}
