@@ -317,7 +317,7 @@ const Desktop: React.FC<DesktopProps> = ({
             >
               <div className="relative shrink-0">
                 <div className={`w-[50px] h-[50px] rounded-[1.1rem] bg-gradient-to-b ${app.gradient} flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.3)] border-[0.5px] border-black/10 group-hover:brightness-110 group-active:scale-90 transition-all duration-200 overflow-hidden`}>
-                  <div className="absolute top-0 start-0 end-0 h-[40%] bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
+                  <div className="absolute top-0 start-0 end-0 h-[40%] rounded-t-[inherit] bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
                   <span className="material-symbols-outlined text-[26px] text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] select-none z-10">{app.icon}</span>
                 </div>
                 <Badge count={(badges as any)[app.id] || 0} />
@@ -352,7 +352,7 @@ const Desktop: React.FC<DesktopProps> = ({
               >
                 <div className="relative shrink-0">
                   <div className={`w-[60px] h-[60px] rounded-[1.2rem] bg-gradient-to-b ${app.gradient} flex items-center justify-center shadow-[0_8px_16px_-4px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.3)] border-[0.5px] border-black/10 group-hover:brightness-110 group-active:scale-90 transition-all duration-200 overflow-hidden`}>
-                    <div className="absolute top-0 start-0 end-0 h-[40%] bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
+                    <div className="absolute top-0 start-0 end-0 h-[40%] rounded-t-[inherit] bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
                     <span className="material-symbols-outlined text-[32px] text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] select-none z-10">{app.icon}</span>
                   </div>
                   <Badge count={(badges as any)[app.id] || 0} />

@@ -72,6 +72,7 @@ func (c *GWCollector) Start() {
 		select {
 		case <-ticker.C:
 			c.poll()
+			c.broadcastBadges()
 		case <-logTicker.C:
 			c.pollLogs(false)
 		case <-c.stopCh:
@@ -239,6 +240,32 @@ func (c *GWCollector) handleCronEvent(event string, payload json.RawMessage) {
 	}
 	summary := fmt.Sprintf("Cron task %s: %s", strings.TrimPrefix(event, "cron."), name)
 	c.writeActivity("System", "low", summary, string(payload), "cron", "allow", "")
+}
+
+// broadcastBadges pushes badge counts to all WS clients.
+func (c *GWCollector) broadcastBadges() {
+	badges := map[string]int64{}
+	alertRepo := database.NewAlertRepo()
+	if n, err := alertRepo.CountUnread(); err == nil {
+		badges["alerts"] = n
+	}
+	if c.client.IsConnected() {
+		if raw, err := c.client.Request("device.pair.list", nil); err == nil {
+			var resp struct {
+				Pending []json.RawMessage `json:"pending"`
+			}
+			if json.Unmarshal(raw, &resp) == nil && len(resp.Pending) > 0 {
+				badges["nodes"] = int64(len(resp.Pending))
+			}
+		}
+	} else {
+		badges["gateway"] = 1
+	}
+	settingRepo := database.NewSettingRepo()
+	if v, err := settingRepo.Get("snapshot_schedule_last_status"); err == nil && v == "failed" {
+		badges["scheduler"] = 1
+	}
+	c.wsHub.Broadcast("", "badge_update", badges)
 }
 
 func (c *GWCollector) poll() {

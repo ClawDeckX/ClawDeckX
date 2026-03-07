@@ -248,37 +248,6 @@ func RunServe(args []string) int {
 		notifyMgr.Send(msg)
 	})
 
-	// Push badge updates to frontend via WS when gateway events arrive.
-	// This eliminates the need for frontend polling of /api/v1/badges.
-	gwClient.SetEventHandler(func(event string, payload json.RawMessage) {
-		if event == "health" {
-			go func() {
-				badges := map[string]int64{}
-				alertRepo := database.NewAlertRepo()
-				if n, err := alertRepo.CountUnread(); err == nil {
-					badges["alerts"] = n
-				}
-				if gwClient.IsConnected() {
-					if raw, err := gwClient.Request("device.pair.list", nil); err == nil {
-						var resp struct {
-							Pending []json.RawMessage `json:"pending"`
-						}
-						if json.Unmarshal(raw, &resp) == nil && len(resp.Pending) > 0 {
-							badges["nodes"] = int64(len(resp.Pending))
-						}
-					}
-				} else {
-					badges["gateway"] = 1
-				}
-				settingRepo := database.NewSettingRepo()
-				if v, err := settingRepo.Get("snapshot_schedule_last_status"); err == nil && v == "failed" {
-					badges["scheduler"] = 1
-				}
-				wsHub.Broadcast("", "badge_update", badges)
-			}()
-		}
-	})
-
 	gwCollector := monitor.NewGWCollector(gwClient, wsHub, cfg.Monitor.IntervalSeconds)
 	go gwCollector.Start()
 	defer gwCollector.Stop()
