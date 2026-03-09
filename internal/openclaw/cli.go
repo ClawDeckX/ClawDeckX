@@ -272,12 +272,23 @@ func DetectOpenClawBinary() (cmd string, version string, installed bool) {
 }
 
 func NpmUninstallGlobal(ctx context.Context, pkg string) (string, error) {
-	c := exec.CommandContext(ctx, "npm", "uninstall", "-g", pkg)
+	cmdStr := "npm uninstall -g " + pkg
+	if runtime.GOOS != "windows" && !isRunningAsRoot() {
+		cmdStr = "sudo " + cmdStr
+	}
+	c := exec.CommandContext(ctx, "sh", "-c", cmdStr)
 	out, err := c.CombinedOutput()
 	if err != nil {
 		return strings.TrimSpace(string(out)), fmt.Errorf("npm uninstall -g %s: %s", pkg, strings.TrimSpace(string(out)))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func isRunningAsRoot() bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+	return os.Getuid() == 0
 }
 
 func RunCLIWithTimeout(args ...string) (string, error) {
