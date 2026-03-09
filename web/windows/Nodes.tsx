@@ -456,7 +456,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text);
     toast('success', nd.copied);
-  }, [toast, nd]);
+  }, [toast, nd.copied]);
 
   const fetchDevices = useCallback(async () => {
     setDevicesLoading(true); setDevicesError('');
