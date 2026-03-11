@@ -501,22 +501,6 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
     }
   }, [installingSlug, sk, toast]);
 
-  // Smart button: copy CLI command if not installed, install with confirmation if installed
-  const handleSmartAction = useCallback(async (skill: SkillHubSkill) => {
-    if (cliStatus === 'installed') {
-      // Show confirmation dialog
-      const confirmed = window.confirm(
-        `${sk.confirmInstall || 'Are you sure you want to install'} "${skill.name}"?\n\n${sk.confirmInstallHint || 'This will execute: skillhub install'} ${skill.slug}`
-      );
-      if (confirmed) {
-        await handleInstallSkill(skill);
-      }
-    } else {
-      // Copy CLI command to clipboard
-      handleCopyCLI(skill);
-    }
-  }, [cliStatus, sk, handleInstallSkill, handleCopyCLI]);
-
   const categories = useMemo(() => {
     if (!data) return [];
     return Object.keys(data.categories);
