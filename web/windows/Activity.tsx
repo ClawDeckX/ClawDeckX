@@ -6,6 +6,7 @@ import { gwApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface ActivityProps { language: Language; onNavigateToSession?: (key: string) => void; }
 
@@ -325,7 +326,7 @@ const Activity: React.FC<ActivityProps> = ({ language, onNavigateToSession }) =>
 
   // Copy message
   const copyText = useCallback((text: string) => {
-    navigator.clipboard.writeText(text).then(() => toast('success', a.copied || 'Copied'));
+    copyToClipboard(text).then(() => toast('success', a.copied || 'Copied')).catch(() => {});
   }, [toast, a]);
 
   const kindCounts = useMemo(() => {

@@ -11,6 +11,7 @@ import { saTranslate } from '../utils/saTranslate';
 import { templateSystem } from '../services/template-system';
 import type { KnowledgeItem } from '../services/template-system';
 import type { ManagerWSStatus } from '../services/manager-ws';
+import { copyToClipboard } from '../utils/clipboard';
 
 type TabId = 'diagnose' | 'testing';
 type TimeRange = '1h' | '6h' | '24h';
@@ -2172,7 +2173,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                                     {extractedCmd && (
                                       <button onClick={(e) => {
                                         e.stopPropagation();
-                                        navigator.clipboard.writeText(extractedCmd);
+                                        copyToClipboard(extractedCmd);
                                         setCopiedCmd(item.id);
                                         setTimeout(() => setCopiedCmd(''), 2000);
                                       }} className="mt-1.5 flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 bg-blue-100/60 dark:bg-blue-500/10 px-2 py-1 rounded">

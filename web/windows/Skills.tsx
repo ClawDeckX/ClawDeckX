@@ -10,6 +10,7 @@ import TranslateModelPicker from '../components/TranslateModelPicker';
 import EmptyState from '../components/EmptyState';
 import PluginCenter from './PluginCenter';
 import SkillHub from './SkillHub';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface SkillsProps { language: Language; }
 
@@ -616,9 +617,9 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       toast('error', 'Clipboard not available');
       return;
     }
-    navigator.clipboard.writeText(prompt).then(() => {
+    copyToClipboard(prompt).then(() => {
       toast('success', sk.copiedHint);
-    }).catch(() => { /* fallback: ignore */ });
+    }).catch(() => { toast('error', 'Copy failed'); });
   }, [sk, toast]);
 
   // 一键发送技能安装信息给代理
@@ -639,9 +640,9 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       toast('error', 'Clipboard not available');
       return;
     }
-    navigator.clipboard.writeText(prompt).then(() => {
+    copyToClipboard(prompt).then(() => {
       toast('success', sk.copiedHint);
-    }).catch(() => { /* fallback: ignore */ });
+    }).catch(() => { toast('error', 'Copy failed'); });
   }, [sk, toast]);
 
   // 一键发送市场技能安装信息给代理

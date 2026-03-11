@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo } from 'react';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -39,7 +40,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       `Stack: ${error?.stack || ''}`,
       `Component Stack: ${errorInfo?.componentStack || ''}`,
     ].join('\n\n');
-    navigator.clipboard.writeText(text).catch(() => {});
+    copyToClipboard(text).catch(() => {});
   };
 
   render() {

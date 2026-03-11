@@ -12,6 +12,7 @@ import EventsPanel from './Gateway/EventsPanel';
 import ChannelsPanel from './Gateway/ChannelsPanel';
 import DebugPanel from './Gateway/DebugPanel';
 import ServicePanel from './Gateway/ServicePanel';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface OpenWindowDetail {
   id?: string;
@@ -597,7 +598,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
 
   // Copy log line
   const copyLogLine = useCallback((text: string) => {
-    navigator.clipboard.writeText(text).then(() => toast('success', gw.copied || 'Copied'));
+    copyToClipboard(text).then(() => toast('success', gw.copied || 'Copied')).catch(() => {});
   }, [toast, gw]);
 
   // Export events CSV
@@ -1300,7 +1301,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
             healthCheckEnabled={healthCheckEnabled}
             healthStatus={healthStatus}
             gw={gw}
-            onCopy={(text) => { navigator.clipboard.writeText(text).then(() => toast('success', gw.serviceCopied || 'Copied')).catch(() => {}); }}
+            onCopy={(text) => { copyToClipboard(text).then(() => toast('success', gw.serviceCopied || 'Copied')).catch(() => {}); }}
             toast={toast}
             remote={activeProfile ? !isLocal(activeProfile.host) : false}
           />

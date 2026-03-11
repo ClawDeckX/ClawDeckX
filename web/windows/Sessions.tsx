@@ -7,6 +7,7 @@ import { subscribeManagerWS } from '../services/manager-ws';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface SessionsProps {
   language: Language;
@@ -748,10 +749,10 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
   // Copy message
   const handleCopy = useCallback((idx: number, text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
+    copyToClipboard(text).then(() => {
       setCopiedIdx(idx);
       setTimeout(() => setCopiedIdx(null), 2000);
-    });
+    }).catch(() => {});
   }, []);
 
   // Inject system message (via REST proxy)

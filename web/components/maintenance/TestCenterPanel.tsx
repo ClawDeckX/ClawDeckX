@@ -7,6 +7,7 @@ import { useToast } from '../Toast';
 import { analyzeCommandResult, guessCommandId } from './resultAnalyzers';
 import type { AnalyzedResult } from './resultAnalyzers';
 import { saTranslate } from '../../utils/saTranslate';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface TestCenterPanelProps {
   language: Language;
@@ -43,7 +44,7 @@ const stripAnsi = (str: string): string =>
   str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
 
 const copyText = async (text: string) => {
-  try { await navigator.clipboard.writeText(text); } catch {}
+  try { await copyToClipboard(text); } catch {}
 };
 
 const TestCenterPanel: React.FC<TestCenterPanelProps> = ({ language }) => {

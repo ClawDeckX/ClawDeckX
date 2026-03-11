@@ -8,6 +8,7 @@ import AgentPickerModal from '../AgentPickerModal';
 import { useToast } from '../Toast';
 import { useConfirm } from '../ConfirmDialog';
 import SimpleMarkdown from './SimpleMarkdown';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface KnowledgeHubProps {
   language: Language;
@@ -442,7 +443,7 @@ const KnowledgeDetailModal: React.FC<KnowledgeDetailModalProps> = ({ item, allIt
 
   const handleCopySnippet = () => {
     const text = item.content.snippet || '';
-    navigator.clipboard.writeText(text).then(() => {
+    copyToClipboard(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -456,7 +457,7 @@ const KnowledgeDetailModal: React.FC<KnowledgeDetailModalProps> = ({ item, allIt
 
     if (action === 'append' || action === 'replace') {
       if (!step.file) {
-        navigator.clipboard.writeText(step.code);
+        copyToClipboard(step.code);
         setCopiedStepIdx(stepIdx);
         setTimeout(() => setCopiedStepIdx(null), 2000);
         return;
@@ -478,7 +479,7 @@ const KnowledgeDetailModal: React.FC<KnowledgeDetailModalProps> = ({ item, allIt
       return;
     }
 
-    navigator.clipboard.writeText(step.code).then(() => {
+    copyToClipboard(step.code).then(() => {
       setCopiedStepIdx(stepIdx);
       setTimeout(() => setCopiedStepIdx(null), 2000);
     });

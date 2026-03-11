@@ -6,6 +6,7 @@ import { gwApi, gatewayApi, pairingApi, pluginApi } from '../../../services/api'
 import { post } from '../../../services/request';
 import CustomSelect from '../../../components/CustomSelect';
 import { useToast } from '../../../components/Toast';
+import { copyToClipboard } from '../../../utils/clipboard';
 
 // ============================================================================
 // 频道定义：核心 + 扩展 + 国内平台
@@ -1692,9 +1693,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-[10px] font-bold text-slate-600 dark:text-white/50">{cw.copyPermJson}</span>
                           <button onClick={() => {
-                            navigator.clipboard.writeText(cw.feishuPermJson).then(() => {
+                            copyToClipboard(cw.feishuPermJson).then(() => {
                               toast('success', cw.copied || 'Copied!');
-                            });
+                            }).catch(() => {});
                           }}
                             className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold text-primary hover:bg-primary/10 transition-colors">
                             <span className="material-symbols-outlined text-[12px]">content_copy</span>

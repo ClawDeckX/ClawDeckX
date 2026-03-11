@@ -8,6 +8,7 @@ import { useGatewayEvents } from '../hooks/useGatewayEvents';
 import CustomSelect from '../components/CustomSelect';
 import NumberStepper from '../components/NumberStepper';
 import EmptyState from '../components/EmptyState';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface NodesProps { language: Language; }
 
@@ -452,13 +453,8 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     });
   }, [selectedIds, batchCmd, batchParams, batching, nd, toast]);
 
-  const copyToClipboard = useCallback((text: string) => {
-    if (!navigator.clipboard) {
-      toast('error', 'Clipboard not available');
-      return;
-    }
-    navigator.clipboard.writeText(text);
-    toast('success', nd.copied);
+  const handleCopy = useCallback((text: string) => {
+    copyToClipboard(text).then(() => toast('success', nd.copied)).catch(() => toast('error', 'Copy failed'));
   }, [toast, nd.copied]);
 
   const fetchDevices = useCallback(async () => {
@@ -666,11 +662,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     try {
       const res = await gwApi.deviceTokenRotate(deviceId, role, scopes) as any;
       if (res?.token) {
-        if (!navigator.clipboard) {
-          toast('error', 'Clipboard not available');
-          return;
-        }
-        await navigator.clipboard.writeText(res.token);
+        await copyToClipboard(res.token);
         toast('success', nd.tokenRotated + ' - ' + nd.copied);
       }
       fetchDevices();
@@ -818,12 +810,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
         try {
           const res = await gwApi.deviceTokenRotate(deviceId, role, scopes) as any;
           if (res?.token) {
-            if (!navigator.clipboard) {
-              toast('error', 'Clipboard not available');
-              setConfirmDialog(null);
-              return;
-            }
-            await navigator.clipboard.writeText(res.token);
+            await copyToClipboard(res.token);
             toast('success', nd.tokenRotated + ' - ' + nd.copied);
           }
           setEventLog(prev => [`[${new Date().toLocaleTimeString()}] token.rotate → ${deviceId}:${role}`, ...prev.slice(0, 49)]);
@@ -1491,12 +1478,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                     <p className="text-[12px] text-slate-700 dark:text-white/80 font-mono truncate select-all" title={localDeviceId}>{localDeviceId}</p>
                   </div>
                   <button onClick={() => {
-                    if (!navigator.clipboard) {
-                      toast('error', 'Clipboard not available');
-                      return;
-                    }
-                    navigator.clipboard.writeText(localDeviceId);
-                    toast('success', nd.copied);
+                    copyToClipboard(localDeviceId).then(() => toast('success', nd.copied)).catch(() => {});
                   }}
                     className="h-8 px-2.5 flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg text-[10px] font-bold hover:bg-primary/20 transition-colors shrink-0">
                     <span className="material-symbols-outlined text-[14px]">content_copy</span>
