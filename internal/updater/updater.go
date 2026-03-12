@@ -432,7 +432,18 @@ func compareSemver(a, b string) int {
 
 func parseParts(v string) [3]int {
 	v = strings.TrimPrefix(v, "v")
+	// Skip leading non-digit chars (e.g. "OpenCLaw 2026.3.8 (3caab92)" → "2026.3.8 (3caab92)")
+	for len(v) > 0 && (v[0] < '0' || v[0] > '9') {
+		v = v[1:]
+	}
 	if idx := strings.IndexByte(v, '-'); idx >= 0 {
+		v = v[:idx]
+	}
+	// strip build metadata / extra info (e.g. "2026.3.8 (3caab92)" or "2026.3.8+build")
+	if idx := strings.IndexByte(v, '+'); idx >= 0 {
+		v = v[:idx]
+	}
+	if idx := strings.IndexByte(v, ' '); idx >= 0 {
 		v = v[:idx]
 	}
 	parts := strings.SplitN(v, ".", 3)
