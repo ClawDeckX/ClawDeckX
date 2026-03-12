@@ -14,6 +14,24 @@ const CACHE_KEY = 'skillhub_data_cache';
 const CACHE_EXPIRY_HOURS = 24;
 const BANNER_DISMISSED_KEY = 'skillhub_banner_dismissed';
 
+// 可展开描述组件（与 Skills.tsx 中的 ExpandableDesc 保持一致）
+const ExpandableDesc: React.FC<{ text: string; moreLabel: string }> = ({ text, moreLabel }) => {
+  const [expanded, setExpanded] = useState(false);
+  if (!text) return null;
+  const needsExpand = text.length > 80;
+  return (
+    <div className="mb-3">
+      <p className={`text-[11px] text-slate-500 dark:text-white/40 leading-relaxed ${needsExpand ? 'cursor-pointer' : ''} ${expanded ? '' : 'line-clamp-2'}`}
+        onClick={(e) => { e.stopPropagation(); needsExpand && setExpanded(!expanded); }}>
+        {text}
+      </p>
+      {needsExpand && !expanded && (
+        <button onClick={(e) => { e.stopPropagation(); setExpanded(true); }} className="text-[11px] text-primary/70 hover:text-primary font-medium mt-0.5">...{moreLabel}</button>
+      )}
+    </div>
+  );
+};
+
 interface CacheData {
   data: SkillHubData;
   timestamp: number;
@@ -692,7 +710,7 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
                     </div>
 
                     {/* Description */}
-                    <p className="text-[11px] text-slate-500 dark:text-white/40 leading-relaxed mb-3 line-clamp-2">{desc}</p>
+                    <ExpandableDesc text={desc} moreLabel={sk.expandMore || 'more'} />
 
                     {/* Tags */}
                     {skill.tags.length > 0 && (
@@ -722,6 +740,9 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
                           {skill.installs >= 1000 ? `${(skill.installs / 1000).toFixed(1)}k` : skill.installs}
                         </span>
                       )}
+                      {skill.updated_at && (
+                        <span className="shrink-0">{new Date(skill.updated_at).toLocaleDateString()}</span>
+                      )}
                       <a href={skill.homepage} target="_blank" rel="noopener noreferrer" className="ms-auto flex items-center text-primary/60 hover:text-primary transition-colors">
                         <span className="material-symbols-outlined text-[12px]">open_in_new</span>
                       </a>
@@ -730,17 +751,18 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
                     {/* Actions */}
                     <div className="flex items-center gap-1 mt-2 pt-2 border-t border-slate-100 dark:border-white/5">
                       <button onClick={(e) => { e.stopPropagation(); handleCopyPrompt(skill); }}
-                        className="flex-1 h-7 bg-primary/15 text-primary hover:bg-primary/25 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1">
+                        className={`flex-1 h-7 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${cliStatus === 'installed' ? 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/50 hover:bg-slate-200 dark:hover:bg-white/10' : 'bg-primary/15 text-primary hover:bg-primary/25'}`}>
                         <span className="material-symbols-outlined text-[12px]">content_copy</span>
                         <span className="truncate">{sk.copyPrompt || 'Copy Prompt'}</span>
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); handleRightButton(skill); }}
                         disabled={installingSlug === skill.slug}
-                        className={`h-7 px-2 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 ${installingSlug === skill.slug ? 'bg-primary/20 text-primary cursor-wait' : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/10'}`}
+                        className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 ${installingSlug === skill.slug ? 'bg-primary/20 text-primary cursor-wait' : cliStatus === 'installed' ? 'bg-primary text-white hover:bg-primary/90' : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/10'}`}
                         title={cliStatus === 'installed' ? `${sk.installSkill || 'Install'} ${skill.slug}` : `${sk.copyCLI || 'Copy'}: skillhub install ${skill.slug}`}>
                         <span className={`material-symbols-outlined text-[12px] ${installingSlug === skill.slug ? 'animate-spin' : ''}`}>
                           {installingSlug === skill.slug ? 'progress_activity' : (cliStatus === 'installed' ? 'download' : 'terminal')}
                         </span>
+                        {cliStatus === 'installed' && <span className="truncate">{sk.installSkill || 'Install'}</span>}
                       </button>
                     </div>
                   </div>
