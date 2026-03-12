@@ -965,6 +965,10 @@ if [ "$(id -u)" = "0" ]; then
         chmod 440 /etc/sudoers.d/openclaw
         echo -e "${GREEN}✓ Configured NOPASSWD sudo / 已配置免密 sudo${NC}"
         
+        # 启用 lingering，使 systemd --user 实例在无登录会话时也能运行
+        loginctl enable-linger openclaw 2>/dev/null || true
+        echo -e "${GREEN}✓ Enabled lingering for systemd user services / 已启用 systemd 用户服务持久化${NC}"
+        
         echo ""
         echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
         echo -e "${GREEN}✅ User 'openclaw' created successfully!${NC}"
@@ -976,6 +980,11 @@ if [ "$(id -u)" = "0" ]; then
         echo ""
         echo -e "  ${GREEN}su - openclaw${NC}"
         echo -e "  ${GREEN}curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh | bash${NC}"
+        echo ""
+        echo -e "${YELLOW}⚠ Note: Use \"su - openclaw\" (with dash), not \"su openclaw\"."
+        echo -e "  The dash ensures a full login session required for systemd services."
+        echo -e "⚠ 注意：请使用 \"su - openclaw\"（带短横线），不要用 \"su openclaw\"。"
+        echo -e "  短横线确保完整登录会话，这是 systemd 用户级服务正常运行所必需的。${NC}"
         echo ""
         exit 0
     fi
