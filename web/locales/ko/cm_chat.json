@@ -130,6 +130,16 @@
     "modelOverride": "모델",
     "modelPlaceholder": "예: anthropic/claude-sonnet-4-5",
     "inherit": "상속",
-    "imageCaption": "캡션 추가..."
+    "imageCaption": "캡션 추가...",
+    "tools": "도구",
+    "calls": "회 호출",
+    "unique": "종류",
+    "duration": "기간",
+    "firstMsg": "최초",
+    "lastMsg": "최근",
+    "span": "기간",
+    "models": "모델",
+    "context": "컨텍스트",
+    "session": "세션"
   }
 }

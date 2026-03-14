@@ -130,6 +130,16 @@
     "modelOverride": "मॉडल",
     "modelPlaceholder": "जैसे anthropic/claude-sonnet-4-5",
     "inherit": "इनहेरिट",
-    "imageCaption": "विवरण जोड़ें..."
+    "imageCaption": "विवरण जोड़ें...",
+    "tools": "टूल्स",
+    "calls": "कॉल",
+    "unique": "अद्वितीय",
+    "duration": "अवधि",
+    "firstMsg": "पहला",
+    "lastMsg": "अंतिम",
+    "span": "अवधि",
+    "models": "मॉडल",
+    "context": "संदर्भ",
+    "session": "सत्र"
   }
 }

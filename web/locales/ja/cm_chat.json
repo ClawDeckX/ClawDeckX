@@ -130,6 +130,16 @@
     "modelOverride": "モデル",
     "modelPlaceholder": "例: anthropic/claude-sonnet-4-5",
     "inherit": "継承",
-    "imageCaption": "キャプションを追加..."
+    "imageCaption": "キャプションを追加...",
+    "tools": "ツール",
+    "calls": "回呼出",
+    "unique": "種類",
+    "duration": "期間",
+    "firstMsg": "初回",
+    "lastMsg": "最終",
+    "span": "期間",
+    "models": "モデル",
+    "context": "コンテキスト",
+    "session": "セッション"
   }
 }

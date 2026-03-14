@@ -130,6 +130,16 @@
     "modelOverride": "模型",
     "modelPlaceholder": "如 anthropic/claude-sonnet-4-5",
     "inherit": "继承",
-    "imageCaption": "添加说明..."
+    "imageCaption": "添加说明...",
+    "tools": "工具",
+    "calls": "次调用",
+    "unique": "个不同",
+    "duration": "时长",
+    "firstMsg": "首次",
+    "lastMsg": "最近",
+    "span": "跨度",
+    "models": "模型",
+    "context": "上下文",
+    "session": "会话"
   }
 }

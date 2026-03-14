@@ -130,6 +130,16 @@
     "modelOverride": "Modell",
     "modelPlaceholder": "z. B. anthropic/claude-sonnet-4-5",
     "inherit": "Vererben",
-    "imageCaption": "Beschreibung hinzufügen..."
+    "imageCaption": "Beschreibung hinzufügen...",
+    "tools": "Werkzeuge",
+    "calls": "Aufrufe",
+    "unique": "einzigartig",
+    "duration": "Dauer",
+    "firstMsg": "Erste",
+    "lastMsg": "Letzte",
+    "span": "Zeitraum",
+    "models": "Modelle",
+    "context": "Kontext",
+    "session": "Sitzung"
   }
 }

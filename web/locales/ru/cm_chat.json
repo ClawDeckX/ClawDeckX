@@ -130,6 +130,16 @@
     "modelOverride": "Модель",
     "modelPlaceholder": "напр. anthropic/claude-sonnet-4-5",
     "inherit": "Наследовать",
-    "imageCaption": "Добавить описание..."
+    "imageCaption": "Добавить описание...",
+    "tools": "Инструменты",
+    "calls": "вызовов",
+    "unique": "уникальных",
+    "duration": "Длительность",
+    "firstMsg": "Первое",
+    "lastMsg": "Последнее",
+    "span": "Период",
+    "models": "Модели",
+    "context": "Контекст",
+    "session": "Сессия"
   }
 }

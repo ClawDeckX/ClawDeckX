@@ -130,6 +130,16 @@
     "modelOverride": "Model",
     "modelPlaceholder": "mis. anthropic/claude-sonnet-4-5",
     "inherit": "Warisi",
-    "imageCaption": "Tambah keterangan..."
+    "imageCaption": "Tambah keterangan...",
+    "tools": "Alat",
+    "calls": "panggilan",
+    "unique": "unik",
+    "duration": "Durasi",
+    "firstMsg": "Pertama",
+    "lastMsg": "Terakhir",
+    "span": "Rentang",
+    "models": "Model",
+    "context": "Konteks",
+    "session": "Sesi"
   }
 }
