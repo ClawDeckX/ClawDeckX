@@ -1125,16 +1125,16 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
       </div>
 
       {/* 日志 & 调试区 */}
-      <div className="flex-1 flex flex-col bg-slate-900 dark:bg-[#0a0f14] border-t border-slate-200 dark:border-white/10 md:mx-4 md:mb-4 md:rounded-xl overflow-hidden shadow-inner sci-card">
+      <div className="flex-1 flex flex-col bg-slate-900 dark:bg-[#0a0f14] border-t border-slate-200 dark:border-white/10 overflow-hidden sci-card">
         {/* Tab Bar + Search + Filters — 单行紧凑 */}
-        <div className="shrink-0 h-9 flex items-center gap-1.5 px-3 bg-white/5 border-b border-white/5">
+        <div className="shrink-0 min-h-9 flex items-center gap-1.5 px-3 bg-white/5 border-b border-white/5 overflow-x-auto scrollbar-none">
           {/* Tabs */}
           {(['logs', 'events', 'channels', 'service', 'debug'] as const).map(tab => {
             const icons: Record<string, string> = { logs: 'terminal', events: 'event_note', channels: 'cell_tower', service: 'settings_system_daydream', debug: 'bug_report' };
             const labels: Record<string, string> = { logs: gw.logs, events: eventsLabel, channels: gw.channels || 'Channels', service: gw.service || 'Service', debug: gw.debug };
             return (
               <button key={tab} onClick={() => { setActiveTab(tab); if (tab === 'debug') fetchDebugData(); if (tab === 'events') fetchEvents(); if (tab === 'channels') fetchChannels(true); }}
-                className={`px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider transition-all ${activeTab === tab ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'} flex items-center gap-1`}>
+                className={`px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap shrink-0 ${activeTab === tab ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/60'} flex items-center gap-1`}>
                 <span className="material-symbols-outlined text-[12px] align-middle">{icons[tab]}</span>
                 {labels[tab]}
                 {tab === 'service' && gwWsConnected !== null && (
