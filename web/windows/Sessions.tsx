@@ -606,7 +606,33 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         ...(m.provider ? { provider: m.provider } : {}),
         ...(m.stopReason ? { stopReason: m.stopReason } : {}),
       }));
-      setMessages(mapped);
+      // Preserve image data from optimistic user messages: the gateway strips
+      // image data from chat.history (sets omitted:true), so restore from prev.
+      setMessages(prev => {
+        const prevUserImages = new Map<number, any[]>();
+        prev.forEach((m, i) => {
+          if (m.role === 'user' && Array.isArray(m.content)) {
+            const imgs = m.content.filter((b: any) => b?.type === 'image' && b?.source?.data);
+            if (imgs.length > 0) prevUserImages.set(i, imgs);
+          }
+        });
+        if (prevUserImages.size === 0) return mapped;
+        return mapped.map((m: ChatMsg, i: number) => {
+          if (m.role !== 'user' || !Array.isArray(m.content)) return m;
+          const hasOmitted = m.content.some((b: any) => b?.type === 'image' && b?.omitted);
+          if (!hasOmitted) return m;
+          const prevImgs = prevUserImages.get(i);
+          if (!prevImgs) return m;
+          let imgIdx = 0;
+          const restored = m.content.map((b: any) => {
+            if (b?.type === 'image' && b?.omitted && imgIdx < prevImgs.length) {
+              return prevImgs[imgIdx++];
+            }
+            return b;
+          });
+          return { ...m, content: restored };
+        });
+      });
     } catch {
       setMessages([]);
     } finally {
@@ -893,13 +919,15 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     }
     setMessages(prev => [...prev, { role: 'user', content: contentBlocks.length === 1 && contentBlocks[0].type === 'text' ? contentBlocks : contentBlocks, timestamp: Date.now() }]);
 
-    // Build attachments for API
-    const attachments = attachments_.map(att => ({
-      type: att.isImage ? 'image' as const : 'file' as const,
-      mimeType: att.mimeType,
-      fileName: att.fileName,
-      content: att.dataUrl,
-    }));
+    // Build attachments for API — strip data URL prefix to send raw base64 (matches OpenClaw webchat protocol)
+    const attachments = attachments_.map(att => {
+      const match = /^data:([^;]+);base64,(.+)$/.exec(att.dataUrl);
+      return {
+        type: 'image' as const,
+        mimeType: match ? match[1] : att.mimeType,
+        content: match ? match[2] : att.dataUrl,
+      };
+    });
 
     setInput('');
     setPendingAttachments([]);
