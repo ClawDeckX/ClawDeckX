@@ -52,6 +52,9 @@ interface ChatMsg {
   timestamp?: number;
   usage?: { input?: number; output?: number; totalTokens?: number; inputTokens?: number; outputTokens?: number; cacheRead?: number; cost?: { total?: number } };
   cost?: { total?: number };
+  model?: string;
+  provider?: string;
+  stopReason?: string;
 }
 
 type ChatRunPhase = 'idle' | 'sending' | 'streaming' | 'error';
@@ -598,6 +601,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         timestamp: m.timestamp || m.ts,
         ...(m.usage ? { usage: m.usage } : {}),
         ...(m.cost ? { cost: m.cost } : {}),
+        ...(m.model ? { model: m.model } : {}),
+        ...(m.provider ? { provider: m.provider } : {}),
+        ...(m.stopReason ? { stopReason: m.stopReason } : {}),
       })));
     } catch {
       setMessages([]);
@@ -1959,9 +1965,33 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                           {c.resend || 'Edit'}
                         </button>
                       )}
-                      {/* Token usage + latency for assistant messages */}
+                      {/* Rich metadata badges for assistant messages */}
                       {!isUser && !isSystem && !isTool && (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Model badge — show when different from session default */}
+                          {msg.model && msg.model !== activeSession?.model && (
+                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono text-purple-400/60 dark:text-purple-400/40" title={`${msg.provider ? msg.provider + '/' : ''}${msg.model}`}>
+                              <span className="material-symbols-outlined text-[9px]">model_training</span>
+                              {msg.model.length > 20 ? msg.model.slice(0, 18) + '…' : msg.model}
+                            </span>
+                          )}
+                          {/* stopReason badge — only show non-default (end_turn is default) */}
+                          {msg.stopReason && msg.stopReason !== 'end_turn' && (() => {
+                            const sr = msg.stopReason;
+                            const meta = sr === 'max_tokens' ? { icon: 'warning', text: 'truncated', cls: 'text-amber-500/70' }
+                              : sr === 'error' ? { icon: 'error', text: 'error', cls: 'text-red-500/70' }
+                              : sr === 'aborted' ? { icon: 'cancel', text: 'aborted', cls: 'text-slate-400/60' }
+                              : sr === 'timeout' ? { icon: 'timer_off', text: 'timeout', cls: 'text-amber-500/70' }
+                              : (sr === 'tool_use' || sr === 'toolUse' || sr === 'tool_calls') ? { icon: 'build', text: 'tool', cls: 'text-purple-400/50' }
+                              : null;
+                            if (!meta) return null;
+                            return (
+                              <span className={`inline-flex items-center gap-0.5 text-[8px] font-bold ${meta.cls}`}>
+                                <span className="material-symbols-outlined text-[9px]">{meta.icon}</span>
+                                {meta.text}
+                              </span>
+                            );
+                          })()}
                           {/* Per-message token badge */}
                           {msg.usage && (() => {
                             const u = msg.usage;
