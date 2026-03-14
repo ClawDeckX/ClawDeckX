@@ -242,6 +242,13 @@ func InitDefaultConfig() (string, error) {
 		return output, nil
 	}
 
+	// Check if the error is due to Node version being too old.
+	// openclaw prints "requires Node >=X.Y.Z" when the version is insufficient.
+	errStr := err.Error()
+	if strings.Contains(errStr, "requires Node") || strings.Contains(errStr, "Upgrade Node") {
+		return "", fmt.Errorf("%s", i18n.T(i18n.MsgErrNodeVersionTooOld))
+	}
+
 	pairs := map[string]string{
 		"gateway.mode": `"local"`,
 		"gateway.bind": `"loopback"`,
@@ -250,6 +257,11 @@ func InitDefaultConfig() (string, error) {
 
 	for key, value := range pairs {
 		if setErr := ConfigSet(key, value); setErr != nil {
+			// Also check config set error for Node version issue
+			setErrStr := setErr.Error()
+			if strings.Contains(setErrStr, "requires Node") || strings.Contains(setErrStr, "Upgrade Node") {
+				return "", fmt.Errorf("%s", i18n.T(i18n.MsgErrNodeVersionTooOld))
+			}
 			return "", fmt.Errorf("%s", fmt.Sprintf(i18n.T(i18n.MsgErrConfigSetFallbackFailed), err, setErr))
 		}
 	}

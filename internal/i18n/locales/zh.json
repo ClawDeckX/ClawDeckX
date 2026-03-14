@@ -692,6 +692,7 @@
   "error.serialize_key_failed": "序列化 %s 失败: %w",
   "error.openclaw_not_installed_no_config": "openclaw 未安装，无法生成配置",
   "error.config_set_fallback_failed": "config set 降级也失败: onboard 错误: %v, config set 错误: %w",
+  "error.node_version_too_old": "Node.js 版本过低，OpenClaw 需要 Node.js >= 22.16.0。请升级 Node.js: https://nodejs.org/en/download",
   "error.parse_pairing_list_failed": "解析配对列表失败: %w",
   "error.gateway_cli_not_found": "未找到 OpenClaw gateway-cli 文件: %s",
   "error.target_fragment_not_found": "文件未找到目标片段: %s",

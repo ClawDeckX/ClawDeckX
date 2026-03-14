@@ -801,6 +801,7 @@ const (
 	MsgErrSerializeKeyFailed           = "error.serialize_key_failed"
 	MsgErrOpenclawNotInstalledNoConfig = "error.openclaw_not_installed_no_config"
 	MsgErrConfigSetFallbackFailed      = "error.config_set_fallback_failed"
+	MsgErrNodeVersionTooOld            = "error.node_version_too_old"
 	MsgErrParsePairingListFailed       = "error.parse_pairing_list_failed"
 	MsgErrGatewayCliNotFound           = "error.gateway_cli_not_found"
 	MsgErrTargetFragmentNotFound       = "error.target_fragment_not_found"

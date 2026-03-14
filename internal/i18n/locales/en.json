@@ -692,6 +692,7 @@
   "error.serialize_key_failed": "Failed to serialize %s: %w",
   "error.openclaw_not_installed_no_config": "OpenClaw is not installed, cannot generate config",
   "error.config_set_fallback_failed": "config set fallback also failed: onboard error: %v, config set error: %w",
+  "error.node_version_too_old": "Your Node.js version is too old. OpenClaw requires Node.js >= 22.16.0. Please upgrade Node.js: https://nodejs.org/en/download",
   "error.parse_pairing_list_failed": "Failed to parse pairing list: %w",
   "error.gateway_cli_not_found": "OpenClaw gateway-cli file not found: %s",
   "error.target_fragment_not_found": "Target fragment not found in file: %s",
