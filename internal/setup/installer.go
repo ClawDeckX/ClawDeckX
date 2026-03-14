@@ -66,8 +66,21 @@ func (i *Installer) newSC(phase, step string) *StreamCommand {
 	return NewStreamCommand(i.emitter, phase, step)
 }
 
+// isNodeVersionSufficient checks if the detected Node.js version meets the
+// minimum requirement (>= 22.16.0) for OpenClaw.
+func isNodeVersionSufficient(version string) bool {
+	major, minor := extractMajorMinorVersion(version)
+	if major > 22 {
+		return true
+	}
+	if major == 22 && minor >= 16 {
+		return true
+	}
+	return false
+}
+
 func (i *Installer) InstallNode(ctx context.Context) error {
-	if i.env.Tools["node"].Installed {
+	if i.env.Tools["node"].Installed && isNodeVersionSufficient(i.env.Tools["node"].Version) {
 		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNodeAlreadyInstalled))
 		return nil
 	}
@@ -1028,7 +1041,12 @@ func (i *Installer) AutoInstall(ctx context.Context, config InstallConfig) (*Ins
 
 	i.emitter.EmitPhase("install", i18n.T(i18n.MsgInstallerPhaseInstallDeps), 0)
 
-	if !i.env.Tools["node"].Installed {
+	nodeNeedsInstall := !i.env.Tools["node"].Installed ||
+		!isNodeVersionSufficient(i.env.Tools["node"].Version)
+	if nodeNeedsInstall {
+		if i.env.Tools["node"].Installed {
+			i.emitter.EmitLog(i18n.T(i18n.MsgScannerWarnNodeMinorLow, map[string]interface{}{"Version": i.env.Tools["node"].Version}))
+		}
 		if err := i.InstallNode(ctx); err != nil {
 			result.ErrorMessage = i18n.T(i18n.MsgInstallerNodeInstallFailed)
 			result.ErrorDetails = err.Error()
