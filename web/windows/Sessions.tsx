@@ -146,6 +146,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [initialDetecting, setInitialDetecting] = useState(false);
   const hasStartedInitialDetectingRef = useRef(false);
+  const hasAutoSelectedRef = useRef(false);
   const [sessionKey, setSessionKey] = useState('main');
   const sessionKeyRef = useRef(sessionKey);
   sessionKeyRef.current = sessionKey;
@@ -619,9 +620,25 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       hasStartedInitialDetectingRef.current = true;
       setInitialDetecting(true);
       // Priority: show chat history ASAP, then refresh sidebar sessions
-      loadHistory().finally(() => {
+      loadHistory().then(() => {
         setInitialDetecting(false);
-        loadSessions();
+        return loadSessions();
+      }).then(() => {
+        // Auto-select first session if current session has no messages
+        if (!hasAutoSelectedRef.current) {
+          hasAutoSelectedRef.current = true;
+          setMessages(prev => {
+            if (prev.length === 0) {
+              setSessions(sess => {
+                if (sess.length > 0 && sess[0].key !== sessionKeyRef.current) {
+                  setSessionKey(sess[0].key);
+                }
+                return sess;
+              });
+            }
+            return prev;
+          });
+        }
       });
     } else {
       loadSessions();
