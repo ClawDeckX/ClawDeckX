@@ -313,7 +313,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
   const [fixing, setFixing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [lastUpdate, setLastUpdate] = useState<string>('');
-  const [fixResult, setFixResult] = useState<string[]>([]);
+  const [fixResult, setFixResult] = useState<Array<{ id: string; name: string; status: 'success' | 'skipped' | 'failed'; message: string }>>([]);
   const [severityFilter, setSeverityFilter] = useState<'all' | 'error' | 'warn' | 'ok'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [onlyFixable, setOnlyFixable] = useState(false);
@@ -872,10 +872,23 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
 
     setFixing(true);
     try {
-      const data = await doctorApi.fix() as { fixed?: string[] };
-      const fixed = Array.isArray(data?.fixed) ? data.fixed : [];
-      setFixResult(fixed);
-      toast('success', text.fixedOk);
+      const data = await doctorApi.fix() as { fixed?: string[]; results?: Array<{ id: string; code?: string; name: string; status: string; message: string }>; selected?: number };
+      const results = Array.isArray(data?.results) ? data.results.map(r => ({
+        id: r.id || r.code || '',
+        name: r.name || r.id || '',
+        status: (r.status === 'success' || r.status === 'skipped' || r.status === 'failed' ? r.status : 'skipped') as 'success' | 'skipped' | 'failed',
+        message: r.message || '',
+      })) : [];
+      setFixResult(results);
+      const successCount = results.filter(r => r.status === 'success').length;
+      const failCount = results.filter(r => r.status === 'failed').length;
+      if (failCount > 0) {
+        toast('error', `${successCount} fixed, ${failCount} failed`);
+      } else if (successCount > 0) {
+        toast('success', text.fixedOk);
+      } else {
+        toast('info', text.noFix || 'Nothing to fix');
+      }
       await fetchAll(true);
       await loadSummary(true);
     } catch (err: any) {
@@ -2328,9 +2341,21 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                 {fixResult.length === 0 ? (
                   <p className="text-[11px] text-slate-400 dark:text-white/40">{text.noFix}</p>
                 ) : (
-                  <div className="space-y-1">
-                    {fixResult.map((line, idx) => (
-                      <p key={`${line}-${idx}`} className="text-[11px] text-emerald-600 dark:text-emerald-400">- {line}</p>
+                  <div className="space-y-1.5">
+                    {fixResult.map((r, idx) => (
+                      <div key={`${r.id}-${idx}`} className="flex items-start gap-1.5">
+                        <span className={`material-symbols-outlined text-[13px] mt-px shrink-0 ${
+                          r.status === 'success' ? 'text-emerald-500' : r.status === 'failed' ? 'text-red-500' : 'text-slate-400 dark:text-white/30'
+                        }`}>
+                          {r.status === 'success' ? 'check_circle' : r.status === 'failed' ? 'cancel' : 'remove_circle_outline'}
+                        </span>
+                        <div className="min-w-0">
+                          <span className={`text-[11px] font-bold ${
+                            r.status === 'success' ? 'text-emerald-600 dark:text-emerald-400' : r.status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-white/40'
+                          }`}>{r.name}</span>
+                          {r.message && <span className="text-[10px] text-slate-400 dark:text-white/30 ml-1.5">{r.message}</span>}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}

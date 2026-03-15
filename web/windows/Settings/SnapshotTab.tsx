@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { snapshotApi } from '../../services/api';
+import { snapshotApi, type SnapshotStatsResponse } from '../../services/api';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import CustomSelect from '../../components/CustomSelect';
@@ -57,6 +57,31 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
     return options;
   }, [snapshotScheduleTime]);
 
+  // Stats dashboard
+  const [stats, setStats] = useState<SnapshotStatsResponse | null>(null);
+  // Batch management
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchSelected, setBatchSelected] = useState<Set<string>>(new Set());
+  const [filterTrigger, setFilterTrigger] = useState<string>('all');
+  const [pruneKeepN, setPruneKeepN] = useState(5);
+  const [showPruneDialog, setShowPruneDialog] = useState(false);
+  // Verify
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [verifyPassword, setVerifyPassword] = useState('');
+  const [verifyResult, setVerifyResult] = useState<{ ok: boolean; error?: string; verified_count?: number } | null>(null);
+  const [showVerifyModal, setShowVerifyModal] = useState<string | null>(null);
+  // OpenClaw import
+  const [showOcImportModal, setShowOcImportModal] = useState(false);
+  const [ocImportFile, setOcImportFile] = useState<File | null>(null);
+  const [ocImportPassword, setOcImportPassword] = useState('');
+  const [ocImportNote, setOcImportNote] = useState('');
+  const [ocImporting, setOcImporting] = useState(false);
+  const ocImportRef = useRef<HTMLInputElement>(null);
+  // OpenClaw export
+  const [showOcExportModal, setShowOcExportModal] = useState<string | null>(null);
+  const [ocExportPassword, setOcExportPassword] = useState('');
+  const [ocExporting, setOcExporting] = useState(false);
+
   const [restoreTarget, setRestoreTarget] = useState<SnapshotSummary | null>(null);
   const [restorePassword, setRestorePassword] = useState('');
   const [restoreUnlocked, setRestoreUnlocked] = useState<SnapshotUnlockResult | null>(null);
@@ -80,19 +105,86 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
     snapshotApi.getScheduleStatus().then((st: any) => setSnapshotScheduleStatus(st || null)).catch(() => {});
   }, []);
 
-  useEffect(() => { fetchSnapshots(); fetchSnapshotSchedule(); }, [fetchSnapshots, fetchSnapshotSchedule]);
+  const fetchStats = useCallback(() => {
+    snapshotApi.stats().then(setStats).catch(() => {});
+  }, []);
+
+  useEffect(() => { fetchSnapshots(); fetchSnapshotSchedule(); fetchStats(); }, [fetchSnapshots, fetchSnapshotSchedule, fetchStats]);
+
+  const refreshAll = useCallback((force = true) => { fetchSnapshots(force); fetchStats(); }, [fetchSnapshots, fetchStats]);
+
+  // Filtered snapshot list
+  const filteredSnapshots = useMemo(() => {
+    if (filterTrigger === 'all') return snapshots;
+    return snapshots.filter(b => b.trigger === filterTrigger);
+  }, [snapshots, filterTrigger]);
+
+  // Batch management handlers
+  const toggleBatchItem = (id: string) => {
+    setBatchSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const handleBatchDelete = async () => {
+    if (batchSelected.size === 0) return;
+    const ids = Array.from(batchSelected);
+    const ok = await confirm({ title: s.snapshotBatchDelete || 'Batch Delete', message: (s.snapshotBatchDeleteConfirm || 'Delete {n} selected backups?').replace('{n}', String(ids.length)), confirmText: s.delete || 'Delete', danger: true });
+    if (!ok) return;
+    try { await snapshotApi.batchDelete(ids); toast('success', (s.snapshotBatchDeleteOk || 'Deleted {n} backups').replace('{n}', String(ids.length))); setBatchSelected(new Set()); refreshAll(); }
+    catch (err: any) { toast('error', err?.message || s.deleteFailed || 'Delete failed'); }
+  };
+  const handlePrune = async () => {
+    const ok = await confirm({ title: s.snapshotPrune || 'Cleanup Backups', message: (s.snapshotPruneConfirm || 'Keep the latest {n} backups and delete the rest?').replace('{n}', String(pruneKeepN)), confirmText: s.snapshotPrune || 'Cleanup', danger: true });
+    if (!ok) return;
+    try { const result = await snapshotApi.pruneKeepN(pruneKeepN); toast('success', (s.snapshotPruneOk || 'Deleted {n} old backups').replace('{n}', String(result.deleted?.length || 0))); setShowPruneDialog(false); refreshAll(); }
+    catch (err: any) { toast('error', err?.message || s.deleteFailed || 'Cleanup failed'); }
+  };
+
+  // Verify integrity handler
+  const handleVerify = async (snapshotID: string) => {
+    if (!verifyPassword || verifyPassword.length < 6) { toast('error', s.snapshotPasswordTooShort || s.pwdTooShort); return; }
+    setVerifyingId(snapshotID);
+    try {
+      const result = await snapshotApi.verify(snapshotID, verifyPassword);
+      setVerifyResult(result);
+    } catch (err: any) { toast('error', err?.message || 'Verify failed'); }
+    finally { setVerifyingId(null); }
+  };
+
+  // OpenClaw import handler
+  const handleOcImport = async () => {
+    if (!ocImportFile) return;
+    if (ocImportPassword.length < 6) { toast('error', s.snapshotPasswordTooShort || s.pwdTooShort); return; }
+    setOcImporting(true);
+    try {
+      const result = await snapshotApi.importOpenClaw(ocImportFile, ocImportPassword, ocImportNote.trim() || undefined);
+      toast('success', (s.snapshotOcImportOk || 'Imported OpenClaw backup: {n} resources').replace('{n}', String(result.resource_count)));
+      setShowOcImportModal(false); setOcImportFile(null); setOcImportPassword(''); setOcImportNote(''); refreshAll();
+    } catch (err: any) { toast('error', err?.message || s.snapshotImportFailed || 'Import failed'); }
+    finally { setOcImporting(false); }
+  };
+
+  // OpenClaw export handler
+  const handleOcExport = async (snapshotID: string) => {
+    if (ocExportPassword.length < 6) { toast('error', s.snapshotPasswordTooShort || s.pwdTooShort); return; }
+    setOcExporting(true);
+    try {
+      await snapshotApi.exportOpenClaw(snapshotID, ocExportPassword);
+      toast('success', s.snapshotOcExportOk || 'Exported as OpenClaw format');
+      setShowOcExportModal(null); setOcExportPassword('');
+    } catch (err: any) { toast('error', err?.message || s.snapshotExportFailed || 'Export failed'); }
+    finally { setOcExporting(false); }
+  };
 
   const handleCreateSnapshot = async () => {
     if (!snapshotPassword || snapshotPassword.length < 6) { toast('error', s.snapshotPasswordTooShort || s.pwdTooShort); return; }
     setSnapshotLoading(true);
-    try { await snapshotApi.create({ password: snapshotPassword, trigger: 'manual', note: snapshotNote.trim() || undefined }); toast('success', s.snapshotCreated || s.backupCreated); setSnapshotPassword(''); setSnapshotNote(''); fetchSnapshots(true); }
+    try { await snapshotApi.create({ password: snapshotPassword, trigger: 'manual', note: snapshotNote.trim() || undefined }); toast('success', s.snapshotCreated || s.backupCreated); setSnapshotPassword(''); setSnapshotNote(''); refreshAll(); }
     catch { toast('error', s.snapshotCreateFailed || s.backupFailed); }
     finally { setSnapshotLoading(false); }
   };
   const handleImportSnapshot = async (file: File) => {
     if (!file || !file.name.endsWith('.clawbak')) { toast('error', s.snapshotImportInvalidFile || 'Please select a .clawbak file'); return; }
     setSnapshotImporting(true);
-    try { await snapshotApi.importFile(file); toast('success', s.snapshotImportOk || 'Backup imported'); fetchSnapshots(true); }
+    try { await snapshotApi.importFile(file); toast('success', s.snapshotImportOk || 'Backup imported'); refreshAll(); }
     catch (err: any) { toast('error', err?.message || s.snapshotImportFailed || 'Import failed'); }
     finally { setSnapshotImporting(false); if (snapshotImportRef.current) snapshotImportRef.current.value = ''; }
   };
@@ -162,7 +254,7 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
   const handleDeleteSnapshot = async (id: string) => {
     const ok = await confirm({ title: s.snapshotDelete || s.deleteBackup, message: s.snapshotDeleteConfirm || 'Are you sure?', confirmText: s.snapshotDelete || s.deleteBackup, danger: true });
     if (!ok) return;
-    try { await snapshotApi.remove(id); fetchSnapshots(true); toast('success', s.deleted || s.deleteBackup); }
+    try { await snapshotApi.remove(id); refreshAll(); toast('success', s.deleted || s.deleteBackup); }
     catch (err: any) { toast('error', err?.message || s.deleteFailed); }
   };
 
@@ -307,8 +399,35 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
       <div className="space-y-5">
         <div className="flex items-start justify-between">
           <div><h2 className="text-[22px] font-bold text-slate-800 dark:text-white">{s.snapshotTitle || s.backup}</h2><p className="text-[12px] text-slate-400 dark:text-white/40 mt-0.5">{s.snapshotDesc || s.backupDesc}</p></div>
-          <div className="shrink-0"><input ref={snapshotImportRef} type="file" accept=".clawbak" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportSnapshot(f); }} /><button onClick={() => snapshotImportRef.current?.click()} disabled={snapshotImporting} className="flex items-center gap-1.5 px-3 py-[6px] rounded-lg text-[12px] font-medium border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/60 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors disabled:opacity-40" title={s.snapshotImport || 'Import Backup'}><span className={`material-symbols-outlined text-[16px] ${snapshotImporting ? 'animate-spin' : ''}`}>{snapshotImporting ? 'progress_activity' : 'upload'}</span>{s.snapshotImport || 'Import Backup'}</button></div>
+          <div className="shrink-0 flex items-center gap-2">
+            <input ref={snapshotImportRef} type="file" accept=".clawbak" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportSnapshot(f); }} />
+            <input ref={ocImportRef} type="file" accept=".tar.gz,.tgz" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setOcImportFile(f); setShowOcImportModal(true); } if (ocImportRef.current) ocImportRef.current.value = ''; }} />
+            <button onClick={() => snapshotImportRef.current?.click()} disabled={snapshotImporting} className="flex items-center gap-1.5 px-3 py-[6px] rounded-lg text-[12px] font-medium border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/60 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors disabled:opacity-40" title={s.snapshotImport || 'Import .clawbak'}><span className={`material-symbols-outlined text-[16px] ${snapshotImporting ? 'animate-spin' : ''}`}>{snapshotImporting ? 'progress_activity' : 'upload'}</span>{s.snapshotImport || 'Import'}</button>
+            <button onClick={() => ocImportRef.current?.click()} className="flex items-center gap-1.5 px-3 py-[6px] rounded-lg text-[12px] font-medium border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title={s.snapshotOcImport || 'Import OpenClaw .tar.gz'}><span className="material-symbols-outlined text-[16px]">inventory_2</span>.tar.gz</button>
+          </div>
         </div>
+
+        {/* Stats Dashboard */}
+        {stats && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className={`${rowCls} px-3 py-2.5 flex items-center gap-2.5`}>
+              <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/15 flex items-center justify-center"><span className="material-symbols-outlined text-[18px] text-blue-500">backup</span></div>
+              <div><p className="text-[18px] font-bold text-slate-800 dark:text-white leading-none">{stats.total_count}</p><p className="text-[10px] text-slate-400 dark:text-white/30 mt-0.5">{s.snapshotStatsTotal || 'Total Backups'}</p></div>
+            </div>
+            <div className={`${rowCls} px-3 py-2.5 flex items-center gap-2.5`}>
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center"><span className="material-symbols-outlined text-[18px] text-emerald-500">hard_drive</span></div>
+              <div><p className="text-[18px] font-bold text-slate-800 dark:text-white leading-none">{stats.total_size_bytes > 1048576 ? `${(stats.total_size_bytes / 1048576).toFixed(1)} MB` : `${(stats.total_size_bytes / 1024).toFixed(1)} KB`}</p><p className="text-[10px] text-slate-400 dark:text-white/30 mt-0.5">{s.snapshotStatsSize || 'Storage Used'}</p></div>
+            </div>
+            <div className={`${rowCls} px-3 py-2.5 flex items-center gap-2.5`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${stats.days_since_backup < 0 ? 'bg-red-100 dark:bg-red-500/15' : stats.days_since_backup > 7 ? 'bg-amber-100 dark:bg-amber-500/15' : 'bg-emerald-100 dark:bg-emerald-500/15'}`}><span className={`material-symbols-outlined text-[18px] ${stats.days_since_backup < 0 ? 'text-red-500' : stats.days_since_backup > 7 ? 'text-amber-500' : 'text-emerald-500'}`}>schedule</span></div>
+              <div><p className={`text-[18px] font-bold leading-none ${stats.days_since_backup < 0 ? 'text-red-500' : stats.days_since_backup > 7 ? 'text-amber-500' : 'text-slate-800 dark:text-white'}`}>{stats.days_since_backup < 0 ? '—' : stats.days_since_backup === 0 ? (s.snapshotStatsToday || 'Today') : `${stats.days_since_backup}d`}</p><p className="text-[10px] text-slate-400 dark:text-white/30 mt-0.5">{s.snapshotStatsLastBackup || 'Last Backup'}</p></div>
+            </div>
+            <div className={`${rowCls} px-3 py-2.5 flex items-center gap-2.5`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${stats.schedule_enabled ? 'bg-emerald-100 dark:bg-emerald-500/15' : 'bg-slate-100 dark:bg-white/[0.06]'}`}><span className={`material-symbols-outlined text-[18px] ${stats.schedule_enabled ? 'text-emerald-500' : 'text-slate-400 dark:text-white/30'}`}>event_repeat</span></div>
+              <div><p className={`text-[18px] font-bold leading-none ${stats.schedule_enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-white/30'}`}>{stats.schedule_enabled ? (s.on || 'ON') : (s.off || 'OFF')}</p><p className="text-[10px] text-slate-400 dark:text-white/30 mt-0.5">{s.snapshotStatsSchedule || 'Auto Backup'}</p></div>
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-white/[0.05] w-fit">
           <button type="button" onClick={() => setSnapshotModeTab('manual')} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${snapshotModeTab === 'manual' ? 'bg-white dark:bg-white/10 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-white/60 hover:text-slate-700 dark:hover:text-white/80'}`}>{s.snapshotManualTab || s.snapshotCreate || 'Manual backup'}</button>
           <button type="button" onClick={() => setSnapshotModeTab('scheduled')} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${snapshotModeTab === 'scheduled' ? 'bg-white dark:bg-white/10 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-white/60 hover:text-slate-700 dark:hover:text-white/80'}`}>{s.snapshotScheduledTab || s.snapshotScheduleTitle || 'Scheduled backup'}</button>
@@ -335,16 +454,111 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
           {snapshotScheduleStatus && (() => { const isRunning = snapshotScheduleStatus.running; const lastStatus = snapshotScheduleStatus.lastStatus; const statusIcon = isRunning ? 'sync' : lastStatus === 'success' ? 'check_circle' : lastStatus === 'failed' ? 'error' : lastStatus === 'skipped' ? 'skip_next' : 'schedule'; const statusColor = isRunning ? 'text-blue-500' : lastStatus === 'success' ? 'text-emerald-500' : lastStatus === 'failed' ? 'text-red-500' : 'text-slate-400 dark:text-white/30'; const statusText = isRunning ? s.snapshotScheduleStatusRunning : lastStatus === 'success' ? s.snapshotScheduleStatusSuccess : lastStatus === 'failed' ? s.snapshotScheduleStatusFailed : lastStatus === 'skipped' ? s.snapshotScheduleStatusSkipped : s.snapshotScheduleStatusNever; const statusBorder = isRunning ? 'border-blue-200 dark:border-blue-500/20 bg-blue-50/50 dark:bg-blue-500/5' : lastStatus === 'success' ? 'border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5' : lastStatus === 'failed' ? 'border-red-200 dark:border-red-500/20 bg-red-50/50 dark:bg-red-500/5' : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]'; return (<div className={`rounded-xl border p-3 text-[11px] space-y-2 ${statusBorder}`}><div className="flex items-center gap-2"><span className={`material-symbols-outlined text-[16px] ${statusColor} ${isRunning ? 'animate-spin' : ''}`}>{statusIcon}</span><span className={`font-semibold ${statusColor}`}>{s.snapshotScheduleStatus}: {statusText}</span></div><div className="space-y-1 text-slate-500 dark:text-white/40"><div className="flex flex-wrap gap-x-4 gap-y-1">{snapshotScheduleStatus.lastRunAt && (<div className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[12px] opacity-50">schedule</span>{s.snapshotScheduleLastRun}: {new Date(snapshotScheduleStatus.lastRunAt).toLocaleString()}</div>)}{snapshotScheduleStatus.lastSuccessAt && (<div className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[12px] opacity-50">check</span>{s.snapshotScheduleLastSuccess}: {new Date(snapshotScheduleStatus.lastSuccessAt).toLocaleString()}</div>)}</div>{snapshotScheduleStatus.lastSnapshotId && (<div className="flex items-center gap-1.5 min-w-0"><span className="material-symbols-outlined text-[12px] opacity-50 shrink-0">backup</span><span className="shrink-0">{s.snapshotScheduleLastSnapshot}:</span><span className="font-mono text-[10px] truncate">{snapshotScheduleStatus.lastSnapshotId}</span></div>)}</div>{snapshotScheduleStatus.lastError && (<div className="flex items-start gap-1.5 text-red-500 dark:text-red-400"><span className="material-symbols-outlined text-[12px] mt-0.5 shrink-0">warning</span><span>{s.snapshotScheduleLastError}: {snapshotScheduleStatus.lastError}</span></div>)}</div>); })()}
         </div></div>)}
 
+        {/* Batch management toolbar */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-1.5">
+            <select value={filterTrigger} onChange={e => setFilterTrigger(e.target.value)} className="px-2 py-1 rounded-lg text-[11px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-600 dark:text-white/60">
+              <option value="all">{s.snapshotFilterAll || 'All'}</option>
+              <option value="manual">{s.snapshotFilterManual || 'Manual'}</option>
+              <option value="scheduled">{s.snapshotFilterScheduled || 'Scheduled'}</option>
+              <option value="import">{s.snapshotFilterImport || 'Imported'}</option>
+              <option value="import_openclaw">OpenClaw</option>
+              <option value="pre_restore">{s.snapshotFilterPreRestore || 'Pre-restore'}</option>
+            </select>
+            <button type="button" onClick={() => { setBatchMode(!batchMode); setBatchSelected(new Set()); }} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${batchMode ? 'border-primary/40 bg-primary/5 text-primary' : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:bg-slate-50 dark:hover:bg-white/5'}`}><span className="material-symbols-outlined text-[14px]">checklist</span>{s.snapshotBatchMode || 'Select'}</button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {batchMode && batchSelected.size > 0 && (
+              <button onClick={handleBatchDelete} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"><span className="material-symbols-outlined text-[14px]">delete_sweep</span>{s.snapshotBatchDelete || 'Delete'} ({batchSelected.size})</button>
+            )}
+            <button onClick={() => setShowPruneDialog(true)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"><span className="material-symbols-outlined text-[14px]">auto_delete</span>{s.snapshotPrune || 'Cleanup'}</button>
+          </div>
+        </div>
+
         <div className={rowCls}>
-          {snapshots.length === 0 ? (<div className="flex flex-col items-center py-10 text-slate-300 dark:text-white/10"><span className="material-symbols-outlined text-4xl mb-2">cloud_off</span><span className="text-[12px] text-slate-400 dark:text-white/20">{s.snapshotEmpty || s.noBackups}</span></div>) : (<>
-            {snapshots.slice(0, snapshotListLimit).map((b) => { const id = b.id || b.snapshot_id; if (!id) return null; return (<div key={id} className="flex items-center justify-between px-4 py-3"><div className="flex items-center gap-3 min-w-0"><span className="material-symbols-outlined text-[18px] text-emerald-500">backup</span><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-[13px] font-medium text-slate-700 dark:text-white/70 truncate">{b.note || id}</p>{b.trigger && b.trigger !== 'manual' && (<span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium leading-none ${b.trigger === 'scheduled' ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : b.trigger === 'pre_restore' ? 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/50'}`}>{b.trigger === 'scheduled' ? (s.snapshotTriggerScheduled || 'Scheduled') : b.trigger === 'pre_restore' ? (s.snapshotTriggerPreRestore || 'Pre-restore') : b.trigger}</span>)}</div><p className="text-[10px] text-slate-400 dark:text-white/20">{b.created_at ? new Date(b.created_at).toLocaleString() : ''} {b.size_bytes ? `· ${(b.size_bytes / 1024).toFixed(1)} KB` : ''}</p>
-              {!!(b.resource_paths && b.resource_paths.length) && (() => { const isExpanded = !!expandedSnapshotFiles[id]; const total = b.resource_paths!.length; return (<div className="mt-1.5">{!isExpanded ? (<button type="button" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-white/40 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors border border-slate-200/60 dark:border-white/10" onClick={() => setExpandedSnapshotFiles(prev => ({ ...prev, [id]: true }))}><span className="material-symbols-outlined text-[12px]">folder_open</span>{total} {s.snapshotFilesCount || 'files'}<span className="material-symbols-outlined text-[10px] ms-0.5">expand_more</span></button>) : (<div className="space-y-1.5"><div className="flex flex-wrap gap-1">{b.resource_paths!.map((p, idx) => { const chip = fileChipStyle(p); return (<span key={idx} className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-md text-[10px] font-medium border ${chip.color} transition-colors`} title={p}><span className="material-symbols-outlined text-[11px]">{chip.icon}</span>{shortName(p)}</span>); })}</div><button type="button" className="text-[10px] text-primary hover:underline" onClick={() => setExpandedSnapshotFiles(prev => ({ ...prev, [id]: false }))}>{s.snapshotShowLessFiles || 'Collapse'}</button></div>)}</div>); })()}
-            </div></div><div className="flex items-center gap-0.5 shrink-0"><button onClick={async () => { try { const resp = await fetch(snapshotApi.exportUrl(id), { method: 'POST', credentials: 'include' }); if (!resp.ok) { const errText = await resp.text().catch(() => ''); throw new Error(`HTTP ${resp.status}: ${errText || resp.statusText}`); } const disp = resp.headers.get('content-disposition') || ''; const fnMatch = disp.match(/filename="?([^";\s]+)"?/); const filename = fnMatch?.[1] || `backup-${new Date().toISOString().replace(/[T:]/g, '_').slice(0, 19)}.clawbak`; const blob = await resp.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); } catch (err: any) { toast('error', err?.message || s.snapshotExportFailed || 'Export failed'); } }} className="p-1.5 text-slate-400 hover:text-blue-500 rounded-lg transition-colors" title={s.snapshotExport || 'Export'}><span className="material-symbols-outlined text-[16px]">download</span></button><button onClick={() => openRestoreWizard(b)} className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors" title={s.snapshotRestore || s.restore}><span className="material-symbols-outlined text-[16px]">settings_backup_restore</span></button><button onClick={() => handleDeleteSnapshot(id)} className="p-1.5 text-slate-400 hover:text-mac-red rounded-lg transition-colors" title={s.snapshotDelete || s.deleteBackup}><span className="material-symbols-outlined text-[16px]">delete</span></button></div></div>); })}
-            {snapshots.length > snapshotListLimit && (<div className="flex justify-center py-2"><button className="text-[11px] text-primary hover:underline" onClick={() => setSnapshotListLimit(prev => prev + 20)}>{s.snapshotShowMore || 'Show more'} ({snapshots.length - snapshotListLimit} {s.snapshotRemaining || 'remaining'})</button></div>)}
+          {filteredSnapshots.length === 0 ? (<div className="flex flex-col items-center py-10 text-slate-300 dark:text-white/10"><span className="material-symbols-outlined text-4xl mb-2">cloud_off</span><span className="text-[12px] text-slate-400 dark:text-white/20">{s.snapshotEmpty || s.noBackups}</span></div>) : (<>
+            {filteredSnapshots.slice(0, snapshotListLimit).map((b) => { const id = b.id || b.snapshot_id; if (!id) return null; return (<div key={id} className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {batchMode && (<input type="checkbox" checked={batchSelected.has(id)} onChange={() => toggleBatchItem(id)} className="accent-primary shrink-0" />)}
+                <span className="material-symbols-outlined text-[18px] text-emerald-500">backup</span>
+                <div className="min-w-0"><div className="flex items-center gap-2"><p className="text-[13px] font-medium text-slate-700 dark:text-white/70 truncate">{b.note || id}</p>{b.trigger && b.trigger !== 'manual' && (<span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium leading-none ${b.trigger === 'scheduled' ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' : b.trigger === 'pre_restore' ? 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' : b.trigger === 'import_openclaw' ? 'bg-cyan-100 text-cyan-600 dark:bg-cyan-500/20 dark:text-cyan-400' : b.trigger === 'import' ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-white/50'}`}>{b.trigger === 'scheduled' ? (s.snapshotTriggerScheduled || 'Scheduled') : b.trigger === 'pre_restore' ? (s.snapshotTriggerPreRestore || 'Pre-restore') : b.trigger === 'import_openclaw' ? 'OpenClaw' : b.trigger === 'import' ? (s.snapshotTriggerImport || 'Imported') : b.trigger}</span>)}</div><p className="text-[10px] text-slate-400 dark:text-white/20">{b.created_at ? new Date(b.created_at).toLocaleString() : ''} {b.size_bytes ? `· ${(b.size_bytes / 1024).toFixed(1)} KB` : ''}</p>
+                  {!!(b.resource_paths && b.resource_paths.length) && (() => { const isExpanded = !!expandedSnapshotFiles[id]; const total = b.resource_paths!.length; return (<div className="mt-1.5">{!isExpanded ? (<button type="button" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-white/40 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors border border-slate-200/60 dark:border-white/10" onClick={() => setExpandedSnapshotFiles(prev => ({ ...prev, [id]: true }))}><span className="material-symbols-outlined text-[12px]">folder_open</span>{total} {s.snapshotFilesCount || 'files'}<span className="material-symbols-outlined text-[10px] ms-0.5">expand_more</span></button>) : (<div className="space-y-1.5"><div className="flex flex-wrap gap-1">{b.resource_paths!.map((p, idx) => { const chip = fileChipStyle(p); return (<span key={idx} className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-md text-[10px] font-medium border ${chip.color} transition-colors`} title={p}><span className="material-symbols-outlined text-[11px]">{chip.icon}</span>{shortName(p)}</span>); })}</div><button type="button" className="text-[10px] text-primary hover:underline" onClick={() => setExpandedSnapshotFiles(prev => ({ ...prev, [id]: false }))}>{s.snapshotShowLessFiles || 'Collapse'}</button></div>)}</div>); })()}
+                </div>
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button onClick={() => { setShowVerifyModal(id); setVerifyPassword(''); setVerifyResult(null); }} className="p-1.5 text-slate-400 hover:text-emerald-500 rounded-lg transition-colors" title={s.snapshotVerify || 'Verify'}><span className="material-symbols-outlined text-[16px]">verified</span></button>
+                <button onClick={async () => { try { const resp = await fetch(snapshotApi.exportUrl(id), { method: 'POST', credentials: 'include' }); if (!resp.ok) { const errText = await resp.text().catch(() => ''); throw new Error(`HTTP ${resp.status}: ${errText || resp.statusText}`); } const disp = resp.headers.get('content-disposition') || ''; const fnMatch = disp.match(/filename="?([^";\s]+)"?/); const filename = fnMatch?.[1] || `backup-${new Date().toISOString().replace(/[T:]/g, '_').slice(0, 19)}.clawbak`; const blob = await resp.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); } catch (err: any) { toast('error', err?.message || s.snapshotExportFailed || 'Export failed'); } }} className="p-1.5 text-slate-400 hover:text-blue-500 rounded-lg transition-colors" title={s.snapshotExport || 'Export .clawbak'}><span className="material-symbols-outlined text-[16px]">download</span></button>
+                <button onClick={() => { setShowOcExportModal(id); setOcExportPassword(''); }} className="p-1.5 text-slate-400 hover:text-cyan-500 rounded-lg transition-colors" title={s.snapshotOcExport || 'Export .tar.gz'}><span className="material-symbols-outlined text-[16px]">inventory_2</span></button>
+                <button onClick={() => openRestoreWizard(b)} className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors" title={s.snapshotRestore || s.restore}><span className="material-symbols-outlined text-[16px]">settings_backup_restore</span></button>
+                <button onClick={() => handleDeleteSnapshot(id)} className="p-1.5 text-slate-400 hover:text-mac-red rounded-lg transition-colors" title={s.snapshotDelete || s.deleteBackup}><span className="material-symbols-outlined text-[16px]">delete</span></button>
+              </div>
+            </div>); })}
+            {filteredSnapshots.length > snapshotListLimit && (<div className="flex justify-center py-2"><button className="text-[11px] text-primary hover:underline" onClick={() => setSnapshotListLimit(prev => prev + 20)}>{s.snapshotShowMore || 'Show more'} ({filteredSnapshots.length - snapshotListLimit} {s.snapshotRemaining || 'remaining'})</button></div>)}
           </>)}
         </div>
       </div>
       {renderRestoreWizard()}
+
+      {/* OpenClaw Import Modal */}
+      {showOcImportModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowOcImportModal(false); setOcImportFile(null); }} />
+          <div className="relative mac-glass rounded-2xl shadow-2xl overflow-hidden animate-scale-in w-[400px] p-5 space-y-4">
+            <div className="flex items-center justify-between"><p className="text-[14px] font-bold text-slate-800 dark:text-white flex items-center gap-2"><span className="material-symbols-outlined text-[18px] text-cyan-500">inventory_2</span>{s.snapshotOcImportTitle || 'Import OpenClaw Backup'}</p><button onClick={() => { setShowOcImportModal(false); setOcImportFile(null); }} className="w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center"><span className="material-symbols-outlined text-[16px] text-slate-400">close</span></button></div>
+            <div className="text-[11px] text-slate-500 dark:text-white/40 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]"><span className="material-symbols-outlined text-[14px]">draft</span>{ocImportFile?.name || '—'}<span className="text-slate-400 dark:text-white/20 ms-auto">{ocImportFile ? `${(ocImportFile.size / 1024).toFixed(1)} KB` : ''}</span></div>
+            <input type="text" value={ocImportNote} onChange={e => setOcImportNote(e.target.value)} placeholder={s.snapshotNotePlaceholder || 'Note (optional)'} className={inputCls} />
+            <input type="password" value={ocImportPassword} onChange={e => setOcImportPassword(e.target.value)} placeholder={s.snapshotOcImportPwdHint || 'Set password for encrypted storage (min 6 chars)'} className={inputCls} />
+            <p className="text-[10px] text-amber-600 dark:text-amber-400/80">{s.snapshotOcImportNote || 'The .tar.gz backup will be re-encrypted with your password and stored securely.'}</p>
+            <div className="flex justify-end"><button onClick={handleOcImport} disabled={ocImporting || !ocImportFile || ocImportPassword.length < 6} className="flex items-center gap-1.5 px-4 py-[7px] bg-primary text-white rounded-lg text-[12px] font-medium transition-all disabled:opacity-40 hover:opacity-90"><span className={`material-symbols-outlined text-[16px] ${ocImporting ? 'animate-spin' : ''}`}>{ocImporting ? 'progress_activity' : 'upload'}</span>{s.snapshotOcImportBtn || 'Import & Encrypt'}</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* OpenClaw Export Modal */}
+      {showOcExportModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowOcExportModal(null)} />
+          <div className="relative mac-glass rounded-2xl shadow-2xl overflow-hidden animate-scale-in w-[380px] p-5 space-y-4">
+            <div className="flex items-center justify-between"><p className="text-[14px] font-bold text-slate-800 dark:text-white flex items-center gap-2"><span className="material-symbols-outlined text-[18px] text-cyan-500">inventory_2</span>{s.snapshotOcExportTitle || 'Export as OpenClaw Format'}</p><button onClick={() => setShowOcExportModal(null)} className="w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center"><span className="material-symbols-outlined text-[16px] text-slate-400">close</span></button></div>
+            <p className="text-[11px] text-slate-500 dark:text-white/40">{s.snapshotOcExportDesc || 'Decrypt and export as a standard .tar.gz archive with manifest.json, compatible with OpenClaw CLI.'}</p>
+            <input type="password" value={ocExportPassword} onChange={e => setOcExportPassword(e.target.value)} placeholder={s.snapshotPasswordPlaceholder || 'Enter backup password'} className={inputCls} />
+            <div className="flex justify-end"><button onClick={() => handleOcExport(showOcExportModal)} disabled={ocExporting || ocExportPassword.length < 6} className="flex items-center gap-1.5 px-4 py-[7px] bg-primary text-white rounded-lg text-[12px] font-medium transition-all disabled:opacity-40 hover:opacity-90"><span className={`material-symbols-outlined text-[16px] ${ocExporting ? 'animate-spin' : ''}`}>{ocExporting ? 'progress_activity' : 'download'}</span>{s.snapshotOcExportBtn || 'Export .tar.gz'}</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Verify Integrity Modal */}
+      {showVerifyModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowVerifyModal(null)} />
+          <div className="relative mac-glass rounded-2xl shadow-2xl overflow-hidden animate-scale-in w-[380px] p-5 space-y-4">
+            <div className="flex items-center justify-between"><p className="text-[14px] font-bold text-slate-800 dark:text-white flex items-center gap-2"><span className="material-symbols-outlined text-[18px] text-emerald-500">verified</span>{s.snapshotVerifyTitle || 'Verify Backup Integrity'}</p><button onClick={() => setShowVerifyModal(null)} className="w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center"><span className="material-symbols-outlined text-[16px] text-slate-400">close</span></button></div>
+            <input type="password" value={verifyPassword} onChange={e => setVerifyPassword(e.target.value)} placeholder={s.snapshotPasswordPlaceholder || 'Enter backup password'} className={inputCls} onKeyDown={e => { if (e.key === 'Enter' && verifyPassword.length >= 6) handleVerify(showVerifyModal); }} />
+            {verifyResult && (
+              <div className={`rounded-lg border p-3 text-[11px] space-y-1 ${verifyResult.ok ? 'border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5' : 'border-red-200 dark:border-red-500/20 bg-red-50/50 dark:bg-red-500/5'}`}>
+                <p className={`font-semibold flex items-center gap-1 ${verifyResult.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}><span className="material-symbols-outlined text-[14px]">{verifyResult.ok ? 'check_circle' : 'error'}</span>{verifyResult.ok ? (s.snapshotVerifyOk || 'Integrity check passed') : (s.snapshotVerifyFail || 'Integrity check failed')}</p>
+                {verifyResult.ok && <p className="text-emerald-600 dark:text-emerald-400/80">{verifyResult.verified_count} {s.snapshotVerifyFiles || 'files verified (SHA256)'}</p>}
+                {verifyResult.error && <p className="text-red-600 dark:text-red-400/80">{verifyResult.error}</p>}
+              </div>
+            )}
+            <div className="flex justify-end"><button onClick={() => handleVerify(showVerifyModal)} disabled={!!verifyingId || verifyPassword.length < 6} className="flex items-center gap-1.5 px-4 py-[7px] bg-primary text-white rounded-lg text-[12px] font-medium transition-all disabled:opacity-40 hover:opacity-90"><span className={`material-symbols-outlined text-[16px] ${verifyingId ? 'animate-spin' : ''}`}>{verifyingId ? 'progress_activity' : 'verified'}</span>{s.snapshotVerifyBtn || 'Verify'}</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Prune / Cleanup Dialog */}
+      {showPruneDialog && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowPruneDialog(false)} />
+          <div className="relative mac-glass rounded-2xl shadow-2xl overflow-hidden animate-scale-in w-[380px] p-5 space-y-4">
+            <div className="flex items-center justify-between"><p className="text-[14px] font-bold text-slate-800 dark:text-white flex items-center gap-2"><span className="material-symbols-outlined text-[18px] text-amber-500">auto_delete</span>{s.snapshotPruneTitle || 'Cleanup Old Backups'}</p><button onClick={() => setShowPruneDialog(false)} className="w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center"><span className="material-symbols-outlined text-[16px] text-slate-400">close</span></button></div>
+            <p className="text-[11px] text-slate-500 dark:text-white/40">{s.snapshotPruneDesc || 'Keep the most recent N backups and delete all older ones.'}</p>
+            <div className="flex items-center gap-3"><label className="text-[12px] font-medium text-slate-600 dark:text-white/60 shrink-0">{s.snapshotPruneKeep || 'Keep latest'}</label><NumberStepper min={1} max={100} step={1} value={pruneKeepN} onChange={(v) => { const n = Number(v); if (!Number.isNaN(n)) setPruneKeepN(Math.max(1, Math.min(100, Math.round(n)))); }} className={`${inputCls} h-9 flex-1`} inputClassName="font-mono text-[12px]" /></div>
+            {snapshots.length > pruneKeepN && <p className="text-[11px] text-amber-600 dark:text-amber-400/80 flex items-center gap-1"><span className="material-symbols-outlined text-[13px]">warning</span>{(s.snapshotPruneWarn || '{n} backups will be deleted').replace('{n}', String(snapshots.length - pruneKeepN))}</p>}
+            <div className="flex justify-end"><button onClick={handlePrune} disabled={snapshots.length <= pruneKeepN} className="flex items-center gap-1.5 px-4 py-[7px] bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[12px] font-medium transition-all disabled:opacity-40"><span className="material-symbols-outlined text-[16px]">auto_delete</span>{s.snapshotPruneBtn || 'Cleanup Now'}</button></div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

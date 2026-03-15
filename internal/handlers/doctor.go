@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -971,6 +973,7 @@ func (h *DoctorHandler) checkGateway() CheckItem {
 		Status:     "warn",
 		Detail:     "gateway not running",
 		Suggestion: "start gateway from Gateway monitor",
+		Fixable:    true,
 	}
 }
 
@@ -1105,8 +1108,133 @@ func (h *DoctorHandler) collectChecks() []CheckItem {
 		h.checkOpenClawService(),
 		h.checkClawDeckXService(),
 	}
+	items = append(items, h.checkConfigValues()...)
 	items = append(items, h.gatewayDiagnoseChecks()...)
 	items = append(items, h.securityAuditChecks()...)
+	return items
+}
+
+// checkConfigValues inspects the config JSON for common misconfigurations
+// and returns fixable CheckItems for each issue found.
+func (h *DoctorHandler) checkConfigValues() []CheckItem {
+	home, _ := os.UserHomeDir()
+	configPath := filepath.Join(home, ".openclaw", "openclaw.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+
+	gw, _ := raw["gateway"].(map[string]any)
+	if gw == nil {
+		gw = map[string]any{}
+	}
+	auth, _ := gw["auth"].(map[string]any)
+	if auth == nil {
+		auth = map[string]any{}
+	}
+
+	var items []CheckItem
+
+	mode := strings.TrimSpace(fmt.Sprint(gw["mode"]))
+	if mode == "" || mode == "<nil>" {
+		items = append(items, CheckItem{
+			ID:         "config.mode",
+			Code:       "config.mode",
+			Name:       "Gateway Mode",
+			Category:   "config",
+			Severity:   "error",
+			Status:     "error",
+			Detail:     "gateway.mode is not set, gateway cannot start",
+			Suggestion: "set gateway.mode to local or remote",
+			Fixable:    true,
+		})
+	} else {
+		items = append(items, CheckItem{
+			ID:       "config.mode",
+			Code:     "config.mode",
+			Name:     "Gateway Mode",
+			Category: "config",
+			Severity: "info",
+			Status:   "ok",
+			Detail:   "mode: " + mode,
+		})
+	}
+
+	bind := strings.TrimSpace(fmt.Sprint(gw["bind"]))
+	if bind == "" || bind == "<nil>" {
+		items = append(items, CheckItem{
+			ID:         "config.bind",
+			Code:       "config.bind",
+			Name:       "Gateway Bind",
+			Category:   "config",
+			Severity:   "error",
+			Status:     "error",
+			Detail:     "gateway.bind is not set",
+			Suggestion: "set gateway.bind to loopback (recommended) or a specific address",
+			Fixable:    true,
+		})
+	} else {
+		items = append(items, CheckItem{
+			ID:       "config.bind",
+			Code:     "config.bind",
+			Name:     "Gateway Bind",
+			Category: "config",
+			Severity: "info",
+			Status:   "ok",
+			Detail:   "bind: " + bind,
+		})
+	}
+
+	authMode := strings.TrimSpace(fmt.Sprint(auth["mode"]))
+	authToken := strings.TrimSpace(fmt.Sprint(auth["token"]))
+	if authMode == "token" && (authToken == "" || authToken == "<nil>") {
+		items = append(items, CheckItem{
+			ID:         "config.auth_token",
+			Code:       "config.auth_token",
+			Name:       "Gateway Auth Token",
+			Category:   "config",
+			Severity:   "error",
+			Status:     "error",
+			Detail:     "gateway.auth.mode is token but token is empty",
+			Suggestion: "generate a gateway auth token",
+			Fixable:    true,
+		})
+	}
+
+	if _, exists := auth["enabled"]; exists {
+		items = append(items, CheckItem{
+			ID:         "config.deprecated_auth",
+			Code:       "config.deprecated_auth",
+			Name:       "Deprecated Auth Config",
+			Category:   "config",
+			Severity:   "warn",
+			Status:     "warn",
+			Detail:     "gateway.auth.enabled is deprecated, use gateway.auth.mode instead",
+			Suggestion: "remove deprecated auth.enabled key",
+			Fixable:    true,
+		})
+	}
+
+	// Check for missing backup directory
+	backupDir := filepath.Join(home, ".openclaw", "backups")
+	if _, err := os.Stat(backupDir); err != nil {
+		items = append(items, CheckItem{
+			ID:         "config.backup_dir",
+			Code:       "config.backup_dir",
+			Name:       "Backup Directory",
+			Category:   "config",
+			Severity:   "info",
+			Status:     "warn",
+			Detail:     "backup directory does not exist",
+			Suggestion: "create backup directory for config snapshots",
+			Fixable:    true,
+		})
+	}
+
 	return items
 }
 
@@ -1364,9 +1492,194 @@ func (h *DoctorHandler) runFix(item CheckItem) fixItemResult {
 			return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "failed", Message: err.Error()}
 		}
 		return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "success", Message: "fixed config file permissions to 600"}
+	case "gateway.status":
+		st := h.svc.Status()
+		if st.Running {
+			return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "skipped", Message: "gateway already running"}
+		}
+		if err := h.svc.Start(); err != nil {
+			return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "failed", Message: "failed to start gateway: " + err.Error()}
+		}
+		return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "success", Message: "gateway started"}
+	case "config.mode":
+		return h.fixConfigKey(home, "gateway", "mode", "local", "set gateway.mode to local")
+	case "config.bind":
+		return h.fixConfigKey(home, "gateway", "bind", "loopback", "set gateway.bind to loopback")
+	case "config.auth_token":
+		token := generateFixToken(32)
+		if token == "" {
+			return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "failed", Message: "failed to generate random token"}
+		}
+		return h.fixConfigAuthToken(home, token)
+	case "config.deprecated_auth":
+		return h.fixConfigRemoveKey(home, []string{"gateway", "auth"}, "enabled", "removed deprecated auth.enabled key")
+	case "config.backup_dir":
+		backupDir := filepath.Join(home, ".openclaw", "backups")
+		if err := os.MkdirAll(backupDir, 0o755); err != nil {
+			return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "failed", Message: err.Error()}
+		}
+		return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "success", Message: "created backup directory"}
 	default:
 		return fixItemResult{ID: item.ID, Code: item.Code, Name: item.Name, Status: "skipped", Message: "no fixer available"}
 	}
+}
+
+// generateFixToken generates a random hex token of n bytes.
+func generateFixToken(n int) string {
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(buf)
+}
+
+// fixConfigKey reads openclaw.json, sets a top-level gateway key, backs up, and writes.
+func (h *DoctorHandler) fixConfigKey(home, section, key, value, msg string) fixItemResult {
+	id := section + "." + key
+	res := fixItemResult{ID: "config." + key, Code: "config." + key, Name: "Config " + key}
+	configPath := filepath.Join(home, ".openclaw", "openclaw.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		res.Status = "failed"
+		res.Message = "cannot read config: " + err.Error()
+		return res
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		res.Status = "failed"
+		res.Message = "cannot parse config: " + err.Error()
+		return res
+	}
+
+	sec, _ := raw[section].(map[string]any)
+	if sec == nil {
+		sec = map[string]any{}
+		raw[section] = sec
+	}
+	existing := strings.TrimSpace(fmt.Sprint(sec[key]))
+	if existing != "" && existing != "<nil>" {
+		res.Status = "skipped"
+		res.Message = id + " already set to " + existing
+		return res
+	}
+	sec[key] = value
+
+	if err := backupAndWriteConfig(configPath, raw); err != nil {
+		res.Status = "failed"
+		res.Message = err.Error()
+		return res
+	}
+	res.Status = "success"
+	res.Message = msg
+	return res
+}
+
+// fixConfigAuthToken sets gateway.auth.token in openclaw.json.
+func (h *DoctorHandler) fixConfigAuthToken(home, token string) fixItemResult {
+	res := fixItemResult{ID: "config.auth_token", Code: "config.auth_token", Name: "Gateway Auth Token"}
+	configPath := filepath.Join(home, ".openclaw", "openclaw.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		res.Status = "failed"
+		res.Message = "cannot read config: " + err.Error()
+		return res
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		res.Status = "failed"
+		res.Message = "cannot parse config: " + err.Error()
+		return res
+	}
+
+	gw, _ := raw["gateway"].(map[string]any)
+	if gw == nil {
+		gw = map[string]any{}
+		raw["gateway"] = gw
+	}
+	auth, _ := gw["auth"].(map[string]any)
+	if auth == nil {
+		auth = map[string]any{}
+		gw["auth"] = auth
+	}
+	auth["token"] = token
+	if strings.TrimSpace(fmt.Sprint(auth["mode"])) == "" || fmt.Sprint(auth["mode"]) == "<nil>" {
+		auth["mode"] = "token"
+	}
+
+	if err := backupAndWriteConfig(configPath, raw); err != nil {
+		res.Status = "failed"
+		res.Message = err.Error()
+		return res
+	}
+	res.Status = "success"
+	res.Message = "generated and configured gateway auth token"
+	return res
+}
+
+// fixConfigRemoveKey removes a key from a nested config section.
+func (h *DoctorHandler) fixConfigRemoveKey(home string, path []string, key, msg string) fixItemResult {
+	res := fixItemResult{ID: "config.deprecated_auth", Code: "config.deprecated_auth", Name: "Deprecated Auth Config"}
+	configPath := filepath.Join(home, ".openclaw", "openclaw.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		res.Status = "failed"
+		res.Message = "cannot read config: " + err.Error()
+		return res
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		res.Status = "failed"
+		res.Message = "cannot parse config: " + err.Error()
+		return res
+	}
+
+	// Navigate to the target section
+	current := raw
+	for _, p := range path {
+		next, _ := current[p].(map[string]any)
+		if next == nil {
+			res.Status = "skipped"
+			res.Message = "config path not found"
+			return res
+		}
+		current = next
+	}
+	if _, exists := current[key]; !exists {
+		res.Status = "skipped"
+		res.Message = "key not present"
+		return res
+	}
+	delete(current, key)
+
+	if err := backupAndWriteConfig(configPath, raw); err != nil {
+		res.Status = "failed"
+		res.Message = err.Error()
+		return res
+	}
+	res.Status = "success"
+	res.Message = msg
+	return res
+}
+
+// backupAndWriteConfig creates a timestamped backup of the config and writes the updated config.
+func backupAndWriteConfig(configPath string, raw map[string]any) error {
+	// Backup existing config
+	existingData, err := os.ReadFile(configPath)
+	if err == nil && len(existingData) > 0 {
+		backupDir := filepath.Join(filepath.Dir(configPath), "backups")
+		_ = os.MkdirAll(backupDir, 0o755)
+		backupPath := filepath.Join(backupDir, fmt.Sprintf("openclaw.json.%s.bak", time.Now().Format("20060102-150405")))
+		_ = os.WriteFile(backupPath, existingData, 0o600)
+	}
+
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cannot marshal config: %w", err)
+	}
+	if err := os.WriteFile(configPath, append(out, '\n'), 0o600); err != nil {
+		return fmt.Errorf("cannot write config: %w", err)
+	}
+	return nil
 }
 
 func (h *DoctorHandler) collectSessionErrors() summarySessionErrors {

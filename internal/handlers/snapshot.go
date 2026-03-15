@@ -128,6 +128,14 @@ func (h *SnapshotHandler) Action(w http.ResponseWriter, r *http.Request) {
 		h.Restore(w, r)
 	case strings.HasSuffix(path, "/export"):
 		h.Export(w, r)
+	case strings.HasSuffix(path, "/export-openclaw"):
+		h.ExportOpenClaw(w, r)
+	case strings.HasSuffix(path, "/verify"):
+		h.Verify(w, r)
+	case strings.HasSuffix(path, "/preview-file"):
+		h.PreviewFile(w, r)
+	case strings.HasSuffix(path, "/diff-file"):
+		h.DiffFile(w, r)
 	default:
 		web.FailErr(w, r, web.ErrInvalidParam)
 	}
@@ -356,4 +364,172 @@ func (h *SnapshotHandler) Export(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf)
 	w.Write(header)
 	w.Write(rec.Ciphertext)
+}
+
+func (h *SnapshotHandler) ImportOpenClaw(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(200 << 20); err != nil {
+		web.FailErr(w, r, web.ErrSnapshotImportFailed, "file too large or invalid multipart form")
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		web.FailErr(w, r, web.ErrSnapshotImportFailed, "missing file field")
+		return
+	}
+	defer file.Close()
+
+	password := r.FormValue("password")
+	note := r.FormValue("note")
+
+	data, err := io.ReadAll(io.LimitReader(file, 200<<20+1))
+	if err != nil || int64(len(data)) > 200<<20 {
+		web.FailErr(w, r, web.ErrSnapshotImportFailed, "file too large")
+		return
+	}
+
+	result, err := h.svc.ImportFromTarGz(data, password, note)
+	if err != nil {
+		web.FailErr(w, r, web.ErrSnapshotImportFailed, err.Error())
+		return
+	}
+	h.auditRepo.Create(&database.AuditLog{UserID: web.GetUserID(r), Username: web.GetUsername(r), Action: constants.ActionSnapshotImport, Result: "success", Detail: result.SnapshotID + " (openclaw)", IP: r.RemoteAddr})
+	web.OK(w, r, result)
+}
+
+func (h *SnapshotHandler) ExportOpenClaw(w http.ResponseWriter, r *http.Request) {
+	snapshotID := strings.TrimPrefix(r.URL.Path, "/api/v1/snapshots/")
+	snapshotID = strings.TrimSuffix(snapshotID, "/export-openclaw")
+	if snapshotID == "" || snapshotID == r.URL.Path {
+		web.FailErr(w, r, web.ErrInvalidParam)
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+	data, exportName, err := h.svc.ExportAsOpenClawTarGz(snapshotID, req.Password)
+	if err != nil {
+		web.FailErr(w, r, web.ErrSnapshotExportFailed, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+exportName+"\"")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	w.Write(data)
+}
+
+func (h *SnapshotHandler) Verify(w http.ResponseWriter, r *http.Request) {
+	snapshotID := strings.TrimPrefix(r.URL.Path, "/api/v1/snapshots/")
+	snapshotID = strings.TrimSuffix(snapshotID, "/verify")
+	if snapshotID == "" || snapshotID == r.URL.Path {
+		web.FailErr(w, r, web.ErrInvalidParam)
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+	result, err := h.svc.VerifyIntegrity(snapshotID, req.Password)
+	if err != nil {
+		web.FailErr(w, r, web.ErrDBQuery, err.Error())
+		return
+	}
+	web.OK(w, r, result)
+}
+
+func (h *SnapshotHandler) PreviewFile(w http.ResponseWriter, r *http.Request) {
+	snapshotID := strings.TrimPrefix(r.URL.Path, "/api/v1/snapshots/")
+	snapshotID = strings.TrimSuffix(snapshotID, "/preview-file")
+	_ = snapshotID // snapshot ID extracted but not needed; token carries the context
+	var req struct {
+		PreviewToken string `json:"previewToken"`
+		LogicalPath  string `json:"logicalPath"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+	content, err := h.svc.PreviewFileContent(req.PreviewToken, req.LogicalPath)
+	if err != nil {
+		web.FailErr(w, r, web.ErrInvalidParam, err.Error())
+		return
+	}
+	web.OK(w, r, map[string]any{"logical_path": req.LogicalPath, "content": string(content), "size": len(content)})
+}
+
+func (h *SnapshotHandler) DiffFile(w http.ResponseWriter, r *http.Request) {
+	snapshotID := strings.TrimPrefix(r.URL.Path, "/api/v1/snapshots/")
+	snapshotID = strings.TrimSuffix(snapshotID, "/diff-file")
+	_ = snapshotID
+	var req struct {
+		PreviewToken string `json:"previewToken"`
+		LogicalPath  string `json:"logicalPath"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+	diff, err := h.svc.DiffFileContent(req.PreviewToken, req.LogicalPath)
+	if err != nil {
+		web.FailErr(w, r, web.ErrInvalidParam, err.Error())
+		return
+	}
+	web.OK(w, r, diff)
+}
+
+func (h *SnapshotHandler) Stats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.svc.Stats()
+	if err != nil {
+		web.FailErr(w, r, web.ErrDBQuery, err.Error())
+		return
+	}
+	// Attach schedule enabled status
+	if cfg, err := h.scheduler.GetConfig(); err == nil {
+		stats.ScheduleEnabled = cfg.Enabled
+	}
+	web.OK(w, r, stats)
+}
+
+func (h *SnapshotHandler) BatchDelete(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+	if len(req.IDs) == 0 {
+		web.FailErr(w, r, web.ErrInvalidParam, "no snapshot IDs provided")
+		return
+	}
+	deleted, errs := h.svc.BatchDelete(req.IDs)
+	if len(deleted) > 0 {
+		h.auditRepo.Create(&database.AuditLog{UserID: web.GetUserID(r), Username: web.GetUsername(r), Action: constants.ActionSnapshotDelete, Result: "success", Detail: fmt.Sprintf("batch delete %d snapshots", len(deleted)), IP: r.RemoteAddr})
+	}
+	web.OK(w, r, map[string]any{"deleted": deleted, "errors": errs})
+}
+
+func (h *SnapshotHandler) PruneKeepN(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		KeepN int `json:"keepN"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+	deleted, err := h.svc.PruneKeepN(req.KeepN)
+	if err != nil {
+		web.FailErr(w, r, web.ErrSnapshotDeleteFailed, err.Error())
+		return
+	}
+	if len(deleted) > 0 {
+		h.auditRepo.Create(&database.AuditLog{UserID: web.GetUserID(r), Username: web.GetUsername(r), Action: constants.ActionSnapshotDelete, Result: "success", Detail: fmt.Sprintf("pruned %d, kept %d", len(deleted), req.KeepN), IP: r.RemoteAddr})
+	}
+	web.OK(w, r, map[string]any{"deleted": deleted, "kept": req.KeepN})
 }

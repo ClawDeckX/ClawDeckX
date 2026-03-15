@@ -334,6 +334,43 @@ export interface SnapshotScheduleStatus {
   running: boolean;
 }
 
+export interface SnapshotStatsResponse {
+  total_count: number;
+  total_size_bytes: number;
+  latest_backup_at: string | null;
+  oldest_backup_at: string | null;
+  manual_count: number;
+  scheduled_count: number;
+  import_count: number;
+  days_since_backup: number;
+  schedule_enabled: boolean;
+}
+
+export interface OpenClawImportResult {
+  snapshot_id: string;
+  resource_count: number;
+  size_bytes: number;
+  platform?: string;
+  runtime_version?: string;
+  created_at?: string;
+}
+
+export interface VerifyIntegrityResult {
+  ok: boolean;
+  resource_count: number;
+  verified_count: number;
+  total_size_bytes: number;
+  error?: string;
+}
+
+export interface FileDiffResult {
+  logical_path: string;
+  backup_content: string;
+  current_content: string;
+  backup_exists: boolean;
+  current_exists: boolean;
+}
+
 export const snapshotApi = {
   list: () => get<any[]>('/api/v1/snapshots'),
   listCached: (ttlMs = 10000, force = false) => getCached<any[]>('/api/v1/snapshots', ttlMs, force),
@@ -416,6 +453,45 @@ export const snapshotApi = {
     put('/api/v1/snapshots/schedule', data),
   getScheduleStatus: () => get<SnapshotScheduleStatus>('/api/v1/snapshots/schedule/status'),
   scheduleRunNow: () => post<{ snapshotId: string }>('/api/v1/snapshots/schedule/run-now', {}),
+  stats: () => get<SnapshotStatsResponse>('/api/v1/snapshots/stats'),
+  importOpenClaw: async (file: File, password: string, note?: string): Promise<OpenClawImportResult> => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('password', password);
+    if (note) form.append('note', note);
+    const res = await fetch('/api/v1/snapshots/import-openclaw', { method: 'POST', body: form, credentials: 'include' });
+    const json = await res.json();
+    if (!json.success) {
+      const code = json.error_code || 'SNAPSHOT_IMPORT_FAILED';
+      const msg = translateApiError(code, json.message || 'Import failed');
+      throw new ApiError(code, msg, res.status);
+    }
+    return json.data;
+  },
+  exportOpenClaw: async (id: string, password: string): Promise<void> => {
+    const res = await fetch(`/api/v1/snapshots/${id}/export-openclaw`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new ApiError(json.error_code || 'SNAPSHOT_EXPORT_FAILED', json.message || 'Export failed', res.status);
+    }
+    const disp = res.headers.get('content-disposition') || '';
+    const fnMatch = disp.match(/filename="?([^";\s]+)"?/);
+    const filename = fnMatch?.[1] || `openclaw-backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  },
+  verify: (id: string, password: string) => post<VerifyIntegrityResult>(`/api/v1/snapshots/${id}/verify`, { password }),
+  previewFile: (id: string, previewToken: string, logicalPath: string) =>
+    post<{ logical_path: string; content: string; size: number }>(`/api/v1/snapshots/${id}/preview-file`, { previewToken, logicalPath }),
+  diffFile: (id: string, previewToken: string, logicalPath: string) =>
+    post<FileDiffResult>(`/api/v1/snapshots/${id}/diff-file`, { previewToken, logicalPath }),
+  batchDelete: (ids: string[]) => post<{ deleted: string[]; errors: string[] }>('/api/v1/snapshots/batch-delete', { ids }),
+  pruneKeepN: (keepN: number) => post<{ deleted: string[]; kept: number }>('/api/v1/snapshots/prune', { keepN }),
 };
 
 // ==================== 诊断修复 ====================

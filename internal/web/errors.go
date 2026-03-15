@@ -167,6 +167,7 @@ var (
 var (
 	ErrSnapshotCreateFailed  = &AppError{"SNAPSHOT_CREATE_FAILED", "backup creation failed", 500, nil}
 	ErrSnapshotImportFailed  = &AppError{"SNAPSHOT_IMPORT_FAILED", "backup import failed", 400, nil}
+	ErrSnapshotExportFailed  = &AppError{"SNAPSHOT_EXPORT_FAILED", "backup export failed", 500, nil}
 	ErrSnapshotUnlockFailed  = &AppError{"SNAPSHOT_UNLOCK_FAILED", "backup unlock failed", 401, nil}
 	ErrSnapshotPlanFailed    = &AppError{"SNAPSHOT_PLAN_FAILED", "backup restore plan failed", 500, nil}
 	ErrSnapshotRestoreFailed = &AppError{"SNAPSHOT_RESTORE_FAILED", "backup restore failed", 500, nil}
