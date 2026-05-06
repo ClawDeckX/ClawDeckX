@@ -11,6 +11,7 @@ import { usePromptDialog } from '../../../components/PromptDialog';
 import { useConfirm } from '../../../components/ConfirmDialog';
 import { useToast } from '../../../components/Toast';
 import CustomSelect from '../../../components/CustomSelect';
+import { stripSilentSentinel } from '../../../utils/content-blocks';
 
 // v0.9.1 新增：一键复制消息到剪贴板。
 // 复用浏览器 Clipboard API；老环境退化到 document.execCommand('copy')（WebView 里的兼容路径）。
@@ -622,7 +623,7 @@ const MessageBubbleInner: React.FC<Props> = ({
                   ? <MarkdownView content={s} />
                   : <div className="whitespace-pre-wrap">{renderMentions(s, members)}</div>
               )}>
-                {message.content}
+                {stripSilentSentinel(message.content)}
               </LongTextCollapse>
             )}
             {message.streaming && <span className="inline-block w-1.5 h-3.5 -mb-0.5 ms-0.5 bg-cyan-400 animate-cursor-blink" />}

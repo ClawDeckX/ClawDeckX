@@ -15,7 +15,7 @@ import { ImageGallery } from '../components/ImageGallery';
 import { ThinkingBlock } from '../components/ThinkingBlock';
 import { ToolCallCard } from '../components/ToolCallCard';
 import { UsagePanel } from '../components/UsagePanel';
-import { extractImages, extractThinking, hasImages, hasThinking } from '../utils/content-blocks';
+import { extractImages, extractThinking, hasImages, hasThinking, stripSilentSentinel } from '../utils/content-blocks';
 import { groupMessages, isFirstInGroup, isLastInGroup } from '../utils/message-grouping';
 import { resolveEffectivePolicy } from '../utils/exec-policy';
 
@@ -3449,7 +3449,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               </div>
             )}
             {renderedMessages.map((msg, idx) => {
-              const text = extractText(msg.content);
+              const text = stripSilentSentinel(extractText(msg.content));
               const tools = extractToolCalls(msg.content);
               const images = extractImages(msg.content);
               const thinkingBlocks = extractThinking(msg.content);
@@ -3808,7 +3808,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 <div className="max-w-[90%] md:max-w-[90%]">
                   <div className="p-3.5 md:p-4 rounded-2xl rounded-ss-sm shadow-sm border bg-white dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.06]">
                     {stream ? (
-                      <MarkdownMessageBoundary content={stream} streaming copyCodeLabel={c.copyCode} />
+                      <MarkdownMessageBoundary content={stripSilentSentinel(stream)} streaming copyCodeLabel={c.copyCode} />
                     ) : (
                       <div className="flex items-center gap-1.5 py-1">
                         {[0, 1, 2].map(i => (

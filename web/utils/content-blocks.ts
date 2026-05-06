@@ -45,6 +45,18 @@ function stripDirectiveTags(text: string): string {
   return text.replace(DIRECTIVE_TAG_RE, '').replace(/^\s*\n/, '');
 }
 
+/**
+ * Strip OpenClaw's internal NO_REPLY sentinel that agents sometimes leak into
+ * visible message text.  Handles: standalone "NO_REPLY", trailing "NO_REPLY"
+ * glued to another word (e.g. "allow-onceNO_REPLY"), standalone JSON
+ * {"action":"NO_REPLY"}, and full-line occurrences.
+ */
+const _NO_REPLY_JSON_RE = /(?:^|\n)\s*\{\s*"action"\s*:\s*"NO_REPLY"\s*\}\s*(?:\n|$)/g;
+const _NO_REPLY_BARE_RE = /(?<=\S)NO_REPLY(?=\s|$)|(?:^|\n)\s*NO_REPLY\s*(?:\n|$)/g;
+export function stripSilentSentinel(text: string): string {
+  return text.replace(_NO_REPLY_JSON_RE, '\n').replace(_NO_REPLY_BARE_RE, '').trim();
+}
+
 /** Extract concatenated text from content (string or block array) */
 export function extractText(content: unknown): string {
   if (typeof content === 'string') return stripDirectiveTags(content);
