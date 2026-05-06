@@ -88,7 +88,7 @@ func (r *remoteGatewayRPC) call(method string, params any) (json.RawMessage, err
 		}
 		if !resp.OK {
 			if resp.Error != nil {
-				return nil, fmt.Errorf(resp.Error.Message)
+				return nil, fmt.Errorf("%s", resp.Error.Message)
 			}
 			return nil, fmt.Errorf("remote gateway rpc failed")
 		}
