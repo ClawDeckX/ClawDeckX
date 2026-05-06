@@ -167,6 +167,17 @@ func TestConnectParams(t *testing.T) {
 	assert.Contains(t, params.Scopes, "read")
 }
 
+func TestDefaultOperatorScopes(t *testing.T) {
+	scopes := cloneDefaultOperatorScopes()
+
+	assert.Contains(t, scopes, "operator.admin")
+	assert.Contains(t, scopes, "operator.read")
+	assert.Contains(t, scopes, "operator.write")
+	assert.Contains(t, scopes, "operator.approvals")
+	assert.Contains(t, scopes, "operator.pairing")
+	assert.Contains(t, scopes, "operator.talk.secrets")
+}
+
 func TestGWClientConfig(t *testing.T) {
 	cfg := GWClientConfig{
 		Host:  "localhost",

@@ -91,6 +91,21 @@ type ConnectParams struct {
 	Permissions map[string]interface{} `json:"permissions,omitempty"`
 }
 
+var defaultOperatorScopes = []string{
+	"operator.admin",
+	"operator.read",
+	"operator.write",
+	"operator.approvals",
+	"operator.pairing",
+	"operator.talk.secrets",
+}
+
+func cloneDefaultOperatorScopes() []string {
+	scopes := make([]string, len(defaultOperatorScopes))
+	copy(scopes, defaultOperatorScopes)
+	return scopes
+}
+
 type ConnectDevice struct {
 	ID        string `json:"id"`
 	PublicKey string `json:"publicKey"`
@@ -1291,7 +1306,7 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 			Mode:        "backend",
 		},
 		Role:   "operator",
-		Scopes: []string{"operator.admin"},
+		Scopes: cloneDefaultOperatorScopes(),
 		Caps:   []string{},
 	}
 
