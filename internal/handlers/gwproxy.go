@@ -795,6 +795,30 @@ func isConfigConflictError(err error) bool {
 		strings.Contains(msg, "INVALID_REQUEST")
 }
 
+func configRateLimitDelay(err error) (time.Duration, bool) {
+	if err == nil {
+		return 0, false
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "rate limit exceeded") || !strings.Contains(msg, "retry after ") {
+		return 0, false
+	}
+	after := msg[strings.Index(msg, "retry after ")+len("retry after "):]
+	fields := strings.Fields(after)
+	if len(fields) == 0 {
+		return 10 * time.Second, true
+	}
+	value := strings.TrimSuffix(fields[0], "s")
+	seconds, convErr := strconv.Atoi(value)
+	if convErr != nil || seconds <= 0 {
+		return 10 * time.Second, true
+	}
+	if seconds > 65 {
+		seconds = 65
+	}
+	return time.Duration(seconds)*time.Second + 250*time.Millisecond, true
+}
+
 // fetchFreshBaseHash fetches a fresh config snapshot from Gateway and returns its hash.
 func (h *GWProxyHandler) fetchFreshBaseHash() string {
 	data, err := h.client.RequestWithTimeout("config.get", map[string]interface{}{}, 10*time.Second)
@@ -876,20 +900,22 @@ func (h *GWProxyHandler) GenericProxy(w http.ResponseWriter, r *http.Request) {
 // proxyConfigMutating handles config.patch / config.apply with automatic retry
 // on optimistic concurrency conflict.
 func (h *GWProxyHandler) proxyConfigMutating(w http.ResponseWriter, r *http.Request, method string, params interface{}, timeout time.Duration) {
-	const maxRetries = 3
+	const maxRetries = 6
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		rpcParams := toMapParams(params)
 
-		// On retry, refresh baseHash from Gateway
-		if attempt > 0 {
-			freshHash := h.fetchFreshBaseHash()
-			if freshHash != "" {
-				rpcParams["baseHash"] = freshHash
-			}
+		freshHash := h.fetchFreshBaseHash()
+		if freshHash != "" {
+			rpcParams["baseHash"] = freshHash
 		}
 
 		data, err := h.client.RequestWithTimeout(method, rpcParams, timeout)
 		if err != nil {
+			if delay, ok := configRateLimitDelay(err); ok && attempt < maxRetries-1 {
+				logger.Config.Warn().Str("method", method).Int("attempt", attempt+1).Dur("delay", delay).Msg("config write rate-limited, retrying after gateway delay")
+				time.Sleep(delay)
+				continue
+			}
 			if isConfigConflictError(err) && attempt < maxRetries-1 {
 				logger.Config.Warn().Str("method", method).Int("attempt", attempt+1).Msg("config conflict, retrying with fresh baseHash")
 				time.Sleep(200 * time.Millisecond)

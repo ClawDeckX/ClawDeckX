@@ -20,6 +20,15 @@ export OPENCLAW_STATE_DIR
 export OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG"
 export OCD_RUNTIME_DIR="$RUNTIME_DIR"
 
+if [ -d /opt/openclaw ]; then
+    for OPENCLAW_PLUGIN_NODE_MODULES in "$NPM_CONFIG_PREFIX/lib/node_modules" "$NPM_CONFIG_PREFIX/node_modules"; do
+        mkdir -p "$OPENCLAW_PLUGIN_NODE_MODULES"
+        if [ ! -e "$OPENCLAW_PLUGIN_NODE_MODULES/openclaw" ]; then
+            ln -s /opt/openclaw "$OPENCLAW_PLUGIN_NODE_MODULES/openclaw" || true
+        fi
+    done
+fi
+
 # ── Runtime overlay: write image version stamps on first boot ──
 if [ ! -f /app/.image-version ]; then
     /app/clawdeckx version 2>/dev/null | head -1 > /app/.image-version || echo "unknown" > /app/.image-version

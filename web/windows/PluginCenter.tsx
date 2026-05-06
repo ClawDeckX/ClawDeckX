@@ -350,7 +350,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
     if (!willEnable) { const ok = await confirm({ title: skRef.current.pluginDisableBtn, message: `${skRef.current.pluginDisableBtn} "${plugin.name}"?`, danger: true, confirmText: skRef.current.pluginDisableBtn }); if (!ok) return; }
     setTogglingId(plugin.id);
     try {
-      await gwApi.proxy('config.patch', { raw: JSON.stringify({ plugins: { entries: { [plugin.id]: { enabled: willEnable } } } }) });
+      await gwApi.configSafePatch({ plugins: { entries: { [plugin.id]: { enabled: willEnable } } } });
       toast('success', skRef.current.pluginToggleOk); fetchPlugins();
     } catch (err: any) { toast('error', `${skRef.current.pluginToggleFail}: ${err?.message || ''}`); }
     setTogglingId(null);

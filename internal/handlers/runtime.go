@@ -251,11 +251,14 @@ func (h *RuntimeHandler) Restart(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Exit after a short delay so the HTTP response is flushed.
-	// Docker's restart policy (unless-stopped / always) will bring the container back.
+	// Docker's restart policy (unless-stopped / always / on-failure) will bring the container back.
 	go func() {
 		time.Sleep(2 * time.Second)
-		logger.Log.Info().Msg("Exiting process for Docker container restart")
-		os.Exit(0)
+		logger.Log.Info().Msg("Terminating container init process for Docker container restart")
+		if terminateContainerInit() {
+			return
+		}
+		os.Exit(1)
 	}()
 }
 
