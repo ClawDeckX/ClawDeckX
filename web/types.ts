@@ -59,6 +59,8 @@ export interface OpenWindowDetail {
   highlight?: string;
   /** Element to focus after navigation */
   focus?: string;
+  /** Snapshot ID to auto-open restore wizard in Settings → Snapshot tab */
+  snapshotId?: string;
 }
 
 /** Type-safe dispatcher for cross-window navigation */

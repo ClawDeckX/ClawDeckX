@@ -26,7 +26,7 @@ function getTopLevelConfigPath(path: string): string {
   return m?.[0] || path;
 }
 
-export interface SnapshotTabProps { s: any; inputCls: string; labelCls: string; rowCls: string; }
+export interface SnapshotTabProps { s: any; inputCls: string; labelCls: string; rowCls: string; pendingSnapshotId?: string | null; onSnapshotConsumed?: () => void; }
 
 function formatBytes(size: number): string {
   if (!Number.isFinite(size) || size <= 0) return '0 B';
@@ -41,7 +41,7 @@ function getAgentNameFromLogicalPath(logicalPath: string): string | null {
   return match?.[1] || null;
 }
 
-const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls }) => {
+const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls, pendingSnapshotId, onSnapshotConsumed }) => {
   const { toast } = useToast();
   const { confirm } = useConfirm();
 
@@ -245,6 +245,17 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
   useEffect(() => { fetchSnapshots(); fetchSnapshotSchedule(); fetchStats(); fetchOcArchives(); fetchBackupConfig(); }, [fetchSnapshots, fetchSnapshotSchedule, fetchStats, fetchOcArchives, fetchBackupConfig]);
   useEffect(() => { if (backupMethod === 'clawdeckx') fetchSnapshotScan(manualSnapshotScope); }, [backupMethod, manualSnapshotScope, fetchSnapshotScan]);
   useEffect(() => { if (snapshotModeTab === 'scheduled') fetchScheduledSnapshotScan(snapshotScheduleScope); }, [snapshotModeTab, snapshotScheduleScope, fetchScheduledSnapshotScan]);
+
+  const pendingSnapshotConsumedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingSnapshotId || snapshots.length === 0 || pendingSnapshotConsumedRef.current === pendingSnapshotId) return;
+    const target = snapshots.find(sn => (sn.id || sn.snapshot_id) === pendingSnapshotId);
+    if (target) {
+      pendingSnapshotConsumedRef.current = pendingSnapshotId;
+      openRestoreWizard(target);
+      onSnapshotConsumed?.();
+    }
+  }, [pendingSnapshotId, snapshots, onSnapshotConsumed]);
 
   const refreshAll = useCallback((force = true) => { fetchSnapshots(force); fetchStats(); fetchOcArchives(); }, [fetchSnapshots, fetchStats, fetchOcArchives]);
 

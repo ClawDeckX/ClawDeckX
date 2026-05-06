@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SectionProps } from '../sectionTypes';
-import { migrateApi, type MigratePlan, type MigrateApplyResult, type MigrateDetectResult, type MigrateProvider, type MigrateItem } from '../../../services/api';
+import { migrateApi, snapshotApi, type MigratePlan, type MigrateApplyResult, type MigrateDetectResult, type MigrateProvider, type MigrateItem, type RemoteOpenClawImportRequest, type RemoteOpenClawImportResult } from '../../../services/api';
 import { getTranslation } from '../../../locales';
 import { useToast } from '../../../components/Toast';
+import { dispatchOpenWindow } from '../../../types';
 
 // Claude / Hermes -> OpenClaw 一键导入向导。样式参考 HermesDeckX/web/windows/Editor/sections/MigrationSection.tsx
 // （反方向：HermesDeckX 是 OpenClaw->Hermes，这里是 Claude/Hermes->OpenClaw）。
@@ -328,11 +329,257 @@ const Step5: React.FC<{ result: MigrateApplyResult; ok: boolean; onRestart: () =
   );
 };
 
+// ==================== Remote OpenClaw Migration Panel ====================
+type RemoteMode = 'clawdeckx' | 'gateway' | 'file';
+
+const RemoteOpenClawPanel: React.FC<{ m: any; rm: any }> = ({ m, rm }) => {
+  const { toast } = useToast();
+  const [mode, setMode] = useState<RemoteMode | null>(null);
+  const [baseUrl, setBaseUrl] = useState('');
+  const [username, setUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [host, setHost] = useState('');
+  const [port, setPort] = useState('18789');
+  const [token, setToken] = useState('');
+  const [password, setPassword] = useState('');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [result, setResult] = useState<RemoteOpenClawImportResult | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const canSubmit = useMemo(() => {
+    if (!mode || loading) return false;
+    if (mode === 'file') return !!selectedFile;
+    if (password.length < 6) return false;
+    if (mode === 'clawdeckx') return baseUrl.trim().length > 0;
+    return host.trim().length > 0;
+  }, [mode, password, loading, baseUrl, host, selectedFile]);
+
+  const doImport = useCallback(async () => {
+    setLoading(true); setErrorMsg(''); setResult(null);
+    try {
+      if (mode === 'file') {
+        if (!selectedFile) return;
+        const res = await snapshotApi.importFile(selectedFile);
+        setResult(res);
+        toast('success', rm.fileImportOk || 'Backup file imported — go to Snapshots to restore');
+        return;
+      }
+      const req: RemoteOpenClawImportRequest = {
+        mode: mode as 'clawdeckx' | 'gateway',
+        password,
+        note: note.trim() || undefined,
+      };
+      if (mode === 'clawdeckx') {
+        req.baseUrl = baseUrl.trim();
+        if (username.trim()) req.username = username.trim();
+        if (loginPassword) req.loginPassword = loginPassword;
+      } else {
+        req.host = host.trim();
+        req.port = parseInt(port) || 18789;
+        req.token = token.trim() || undefined;
+      }
+      const res = await migrateApi.importRemoteOpenClaw(req);
+      setResult(res);
+      toast('success', rm.importOk || 'Remote import succeeded — go to Snapshots to restore');
+    } catch (e: any) {
+      setErrorMsg(e?.message || String(e));
+      toast('error', rm.importFailed || 'Remote import failed');
+    } finally { setLoading(false); }
+  }, [mode, baseUrl, username, loginPassword, host, port, token, password, note, selectedFile, toast, rm]);
+
+  const reset = useCallback(() => {
+    setMode(null); setBaseUrl(''); setUsername(''); setLoginPassword('');
+    setHost(''); setPort('18789'); setToken('');
+    setPassword(''); setNote(''); setErrorMsg(''); setResult(null);
+    setSelectedFile(null);
+  }, []);
+
+  const navigateToRestore = useCallback((snapshotId: string) => {
+    dispatchOpenWindow({ id: 'settings', tab: 'snapshot', snapshotId });
+  }, []);
+
+  if (result) {
+    return (
+      <div className="space-y-4">
+        <div className="sci-card rounded-xl p-5">
+          <div className="flex items-center gap-2 font-bold text-emerald-500 mb-3">
+            <span className="material-symbols-outlined">check_circle</span>
+            <span>{rm.importOk || 'Import completed'}</span>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3 text-xs">
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+              <div className="text-[10px] font-bold text-emerald-500 mb-0.5">{rm.snapshotId || 'Snapshot ID'}</div>
+              <div className="font-mono theme-text truncate" title={result.snapshotId}>{result.snapshotId}</div>
+            </div>
+            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+              <div className="text-[10px] font-bold text-cyan-500 mb-0.5">{rm.resourceCount || 'Resources'}</div>
+              <div className="text-xl font-bold theme-text font-mono">{result.resourceCount}</div>
+            </div>
+            <div className="rounded-lg border border-slate-500/20 bg-slate-500/5 p-3">
+              <div className="text-[10px] font-bold theme-text-muted mb-0.5">{rm.sizeBytes || 'Size'}</div>
+              <div className="text-xl font-bold theme-text font-mono">{(result.sizeBytes / 1024).toFixed(1)} KB</div>
+            </div>
+          </div>
+          <p className="text-xs theme-text-muted mt-3">{rm.importOkHint || 'The remote config has been imported as a local snapshot. Go to the Snapshots tab to preview and selectively restore.'}</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => navigateToRestore(result.snapshotId)}
+            className="px-4 py-2 rounded-lg text-sm bg-emerald-500 text-white hover:bg-emerald-600 font-bold">
+            <span className="material-symbols-outlined text-[14px] align-middle me-1">settings_backup_restore</span>
+            {rm.goToRestore || 'Go to Restore'}
+          </button>
+          <button onClick={reset} className="px-4 py-2 rounded-lg text-sm bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10">
+            <span className="material-symbols-outlined text-[14px] align-middle me-1">restart_alt</span>
+            {rm.importAnother || 'Import another'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Mode selection */}
+      {!mode && (
+        <div className="grid md:grid-cols-3 gap-4">
+          <button type="button" onClick={() => setMode('clawdeckx')}
+            className="sci-card text-start p-5 rounded-xl hover:border-cyan-400/50 transition-all">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-cyan-400 text-[28px]">dns</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold theme-text">{rm.modeClawDeckX || 'Remote ClawDeckX'}</div>
+                <div className="text-xs theme-text-muted mt-1">{rm.modeClawDeckXDesc || 'Connect to another ClawDeckX instance and import its OpenClaw snapshot.'}</div>
+              </div>
+            </div>
+          </button>
+          <button type="button" onClick={() => setMode('gateway')}
+            className="sci-card text-start p-5 rounded-xl hover:border-violet-400/50 transition-all">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-violet-400 text-[28px]">router</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold theme-text">{rm.modeGateway || 'Remote OpenClaw Gateway'}</div>
+                <div className="text-xs theme-text-muted mt-1">{rm.modeGatewayDesc || 'Connect directly to a remote OpenClaw Gateway via WebSocket and import config + agent files.'}</div>
+              </div>
+            </div>
+          </button>
+          <button type="button" onClick={() => setMode('file')}
+            className="sci-card text-start p-5 rounded-xl hover:border-emerald-400/50 transition-all">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-emerald-400 text-[28px]">upload_file</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold theme-text">{rm.modeFile || 'Import .clawbak File'}</div>
+                <div className="text-xs theme-text-muted mt-1">{rm.modeFileDesc || 'Directly import a .clawbak backup file exported from another ClawDeckX instance.'}</div>
+              </div>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Form */}
+      {mode && (
+        <div className="sci-card p-5 rounded-xl space-y-4 max-w-2xl">
+          <div className="flex items-center gap-2 text-xs theme-text-muted">
+            <span className="material-symbols-outlined text-[14px]">{mode === 'clawdeckx' ? 'dns' : mode === 'gateway' ? 'router' : 'upload_file'}</span>
+            <span className="font-bold theme-text">{mode === 'clawdeckx' ? (rm.modeClawDeckX || 'Remote ClawDeckX') : mode === 'gateway' ? (rm.modeGateway || 'Remote Gateway') : (rm.modeFile || 'Import .clawbak')}</span>
+            <button onClick={() => { setMode(null); setErrorMsg(''); setSelectedFile(null); }} className="ms-auto text-[11px] text-cyan-500 hover:underline">{rm.changeMode || 'Change'}</button>
+          </div>
+
+          {mode === 'file' && (
+            <>
+              <Field label={rm.fileLabel || 'Backup File (.clawbak)'} hint={rm.fileHint || 'Select a .clawbak file exported from another ClawDeckX'}>
+                <input ref={fileInputRef} type="file" accept=".clawbak" className="hidden" onChange={e => { setSelectedFile(e.target.files?.[0] || null); }} />
+                <button onClick={() => fileInputRef.current?.click()}
+                  className="sci-input w-full px-3 py-2 rounded-lg text-sm text-start flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[16px] theme-text-muted">attach_file</span>
+                  <span className={selectedFile ? 'theme-text font-mono' : 'theme-text-muted'}>
+                    {selectedFile ? selectedFile.name : (rm.filePlaceholder || 'Click to select .clawbak file...')}
+                  </span>
+                </button>
+              </Field>
+              {selectedFile && (
+                <div className="text-[11px] theme-text-muted">
+                  {(selectedFile.size / 1024).toFixed(1)} KB
+                </div>
+              )}
+            </>
+          )}
+
+          {mode === 'clawdeckx' && (
+            <>
+              <Field label={rm.remoteUrl || 'Remote ClawDeckX URL'} hint={rm.remoteUrlHint || 'e.g. http://192.168.1.100:18088'}>
+                <input className="sci-input w-full px-3 py-2 rounded-lg text-sm font-mono" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="http://192.168.1.100:18088" />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={rm.loginUser || 'Username'} hint={rm.loginUserHint || 'ClawDeckX login username'}>
+                  <input className="sci-input w-full px-3 py-2 rounded-lg text-sm" value={username} onChange={e => setUsername(e.target.value)} placeholder="admin" />
+                </Field>
+                <Field label={rm.loginPass || 'Login Password'} hint={rm.loginPassHint || 'ClawDeckX login password'}>
+                  <input type="password" className="sci-input w-full px-3 py-2 rounded-lg text-sm" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="••••••" />
+                </Field>
+              </div>
+            </>
+          )}
+          {mode === 'gateway' && (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <Field label={rm.gwHost || 'Gateway Host'} hint={rm.gwHostHint || 'IP or hostname of remote OpenClaw gateway'}>
+                    <input className="sci-input w-full px-3 py-2 rounded-lg text-sm font-mono" value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.1.100" />
+                  </Field>
+                </div>
+                <Field label={rm.gwPort || 'Port'}>
+                  <input className="sci-input w-full px-3 py-2 rounded-lg text-sm font-mono" value={port} onChange={e => setPort(e.target.value)} placeholder="18789" />
+                </Field>
+              </div>
+              <Field label={rm.gwToken || 'Gateway Token'} hint={rm.gwTokenHint || 'Authentication token (if required)'}>
+                <input type="password" className="sci-input w-full px-3 py-2 rounded-lg text-sm font-mono" value={token} onChange={e => setToken(e.target.value)} placeholder="..." />
+              </Field>
+            </>
+          )}
+
+          {mode !== 'file' && (
+            <>
+              <Field label={rm.password || 'Snapshot Password'} hint={rm.passwordHint || 'Min 6 characters. Used to encrypt the imported snapshot.'}>
+                <input type="password" className="sci-input w-full px-3 py-2 rounded-lg text-sm font-mono" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" />
+              </Field>
+              <Field label={rm.note || 'Note'} hint={rm.noteHint || 'Optional label for the imported snapshot'}>
+                <input className="sci-input w-full px-3 py-2 rounded-lg text-sm" value={note} onChange={e => setNote(e.target.value)} placeholder={rm.notePlaceholder || 'Remote migration from ...'} />
+              </Field>
+            </>
+          )}
+
+          {errorMsg && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-500 dark:text-red-400 whitespace-pre-wrap break-words">{errorMsg}</div>
+          )}
+
+          <div className="flex items-center gap-2 pt-2">
+            <button onClick={() => { setMode(null); setErrorMsg(''); }} className="px-4 py-2 rounded-lg text-sm bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10">{m.back || 'Back'}</button>
+            <button onClick={doImport} disabled={!canSubmit}
+              className="px-4 py-2 rounded-lg text-sm bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading
+                ? <><span className="material-symbols-outlined text-[14px] animate-spin align-middle me-1">progress_activity</span>{rm.importing || 'Importing...'}</>
+                : <><span className="material-symbols-outlined text-[14px] align-middle me-1">cloud_download</span>{rm.importBtn || 'Import'}</>}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== Main Section ====================
+type MigrationTab = 'local' | 'remote';
+
 export const MigrationSection: React.FC<SectionProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const m = useMemo(() => ((t as any).es && (t as any).es.migration) || {}, [t]);
+  const rm = useMemo(() => ((t as any).es && (t as any).es.remoteMigration) || {}, [t]);
   const { toast } = useToast();
 
+  const [tab, setTab] = useState<MigrationTab>('local');
   const [step, setStep] = useState<Step>(1);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -410,37 +657,66 @@ export const MigrationSection: React.FC<SectionProps> = ({ language }) => {
         </p>
       </header>
 
-      <StepIndicator step={step} labels={[
-        m.stepProvider || '选择来源',
-        m.stepConfigure || '配置选项',
-        m.stepPreview || '预览',
-        m.stepApply || '执行',
-        m.stepReport || '报告',
-      ]} />
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 mb-5 border-b border-slate-200 dark:border-white/10">
+        <button onClick={() => setTab('local')}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+            tab === 'local' ? 'border-cyan-500 text-cyan-500' : 'border-transparent theme-text-muted hover:theme-text'
+          }`}>
+          <span className="material-symbols-outlined text-[14px] align-middle me-1">folder_open</span>
+          {rm.tabLocal || 'Local Import'}
+        </button>
+        <button onClick={() => setTab('remote')}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+            tab === 'remote' ? 'border-violet-500 text-violet-500' : 'border-transparent theme-text-muted hover:theme-text'
+          }`}>
+          <span className="material-symbols-outlined text-[14px] align-middle me-1">cloud_download</span>
+          {rm.tabRemote || 'Remote OpenClaw'}
+        </button>
+      </div>
 
-      {errorMsg && (
-        <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-500 dark:text-red-400 whitespace-pre-wrap break-words">
-          {errorMsg}
-        </div>
+      {tab === 'local' && (
+        <>
+          <StepIndicator step={step} labels={[
+            m.stepProvider || '选择来源',
+            m.stepConfigure || '配置选项',
+            m.stepPreview || '预览',
+            m.stepApply || '执行',
+            m.stepReport || '报告',
+          ]} />
+
+          {errorMsg && (
+            <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-500 dark:text-red-400 whitespace-pre-wrap break-words">
+              {errorMsg}
+            </div>
+          )}
+
+          <div className="mt-6">
+            {step === 1 && <Step1 providers={providers} detect={detect} loading={loading} onChoose={chooseProvider} onRefresh={refreshProviders} m={m} />}
+            {step === 2 && (
+              <Step2
+                provider={provider} from={from} setFrom={setFrom}
+                includeSecrets={includeSecrets} setIncludeSecrets={setIncludeSecrets}
+                overwrite={overwrite} setOverwrite={setOverwrite}
+                noBackup={noBackup} setNoBackup={setNoBackup}
+                force={force} setForce={setForce}
+                loading={loading} detect={detect[provider]}
+                onBack={() => setStep(1)} onNext={doPlan} m={m}
+              />
+            )}
+            {step === 3 && plan && <Step3 plan={plan} onBack={() => setStep(2)} onApply={doApply} m={m} />}
+            {step === 4 && <Step4 m={m} />}
+            {step === 5 && applyResult && <Step5 result={applyResult} ok={applyOk} onRestart={restart} m={m} />}
+          </div>
+        </>
       )}
 
-      <div className="mt-6">
-        {step === 1 && <Step1 providers={providers} detect={detect} loading={loading} onChoose={chooseProvider} onRefresh={refreshProviders} m={m} />}
-        {step === 2 && (
-          <Step2
-            provider={provider} from={from} setFrom={setFrom}
-            includeSecrets={includeSecrets} setIncludeSecrets={setIncludeSecrets}
-            overwrite={overwrite} setOverwrite={setOverwrite}
-            noBackup={noBackup} setNoBackup={setNoBackup}
-            force={force} setForce={setForce}
-            loading={loading} detect={detect[provider]}
-            onBack={() => setStep(1)} onNext={doPlan} m={m}
-          />
-        )}
-        {step === 3 && plan && <Step3 plan={plan} onBack={() => setStep(2)} onApply={doApply} m={m} />}
-        {step === 4 && <Step4 m={m} />}
-        {step === 5 && applyResult && <Step5 result={applyResult} ok={applyOk} onRestart={restart} m={m} />}
-      </div>
+      {tab === 'remote' && (
+        <div className="mt-2">
+          <p className="text-xs theme-text-muted mb-4">{rm.subtitle || 'Import OpenClaw config and agent files from a remote instance.'}</p>
+          <RemoteOpenClawPanel m={m} rm={rm} />
+        </div>
+      )}
     </div>
   );
 };

@@ -627,6 +627,9 @@ func (s *Service) Scan(scope string) (*SnapshotScanResult, error) {
 		scope = BackupScopeBoth
 	}
 	registry := registryByScope(scope)
+	if scope == BackupScopeOpenClaw || scope == BackupScopeBoth || scope == "" {
+		registry = s.extendOpenClawRegistryFromGateway(registry)
+	}
 	groups := map[string][]SnapshotScanResource{}
 	order := make([]string, 0)
 	summary := SnapshotScanSummary{TotalResources: len(registry)}
@@ -778,6 +781,9 @@ func (s *Service) collectResourcesByScope(resourceIDs []string, scope string) ([
 	}
 	items := make([]ResourceContent, 0)
 	registry := registryByScope(scope)
+	if scope == BackupScopeOpenClaw || scope == BackupScopeBoth || scope == "" {
+		registry = s.extendOpenClawRegistryFromGateway(registry)
+	}
 	for _, def := range registry {
 		if len(allow) > 0 {
 			if _, ok := allow[def.ID]; !ok {
@@ -797,6 +803,28 @@ func (s *Service) collectResourcesByScope(resourceIDs []string, scope string) ([
 		return nil, errors.New("no resources to backup")
 	}
 	return items, nil
+}
+
+func (s *Service) extendOpenClawRegistryFromGateway(registry []ResourceDefinition) []ResourceDefinition {
+	if s.gwClient == nil || !s.gwClient.IsConnected() {
+		return registry
+	}
+	cfg, err := s.getGatewayConfig()
+	if err != nil {
+		return registry
+	}
+	seen := map[string]struct{}{}
+	for _, def := range registry {
+		seen[def.LogicalPath] = struct{}{}
+	}
+	for _, def := range gatewayDiscoveredAgentResources(cfg) {
+		if _, ok := seen[def.LogicalPath]; ok {
+			continue
+		}
+		registry = append(registry, def)
+		seen[def.LogicalPath] = struct{}{}
+	}
+	return registry
 }
 
 func (s *Service) getToken(token string) (unlockedBundle, error) {

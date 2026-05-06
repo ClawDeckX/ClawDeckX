@@ -7,7 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"ClawDeckX/internal/constants"
+	"ClawDeckX/internal/database"
 	"ClawDeckX/internal/openclaw"
+	"ClawDeckX/internal/snapshots"
 	"ClawDeckX/internal/web"
 )
 
@@ -17,6 +20,22 @@ import (
 type MigrateHandler struct{}
 
 func NewMigrateHandler() *MigrateHandler { return &MigrateHandler{} }
+
+type remoteOpenClawRequest struct {
+	Mode          string   `json:"mode"`
+	BaseURL       string   `json:"baseUrl"`
+	Username      string   `json:"username"`
+	LoginPassword string   `json:"loginPassword"`
+	Host          string   `json:"host"`
+	Port          int      `json:"port"`
+	Token         string   `json:"token"`
+	Cookie        string   `json:"cookie"`
+	GatewayPath   string   `json:"gatewayPath"`
+	Password      string   `json:"password"`
+	Note          string   `json:"note"`
+	Scope         string   `json:"scope"`
+	ResourceIDs   []string `json:"resourceIds"`
+}
 
 func (h *MigrateHandler) requireCLI(w http.ResponseWriter, r *http.Request) bool {
 	if openclaw.IsOpenClawInstalled() {
@@ -143,4 +162,32 @@ func (h *MigrateHandler) Apply(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"result": result,
 	})
+}
+
+func (h *MigrateHandler) ImportRemoteOpenClaw(w http.ResponseWriter, r *http.Request) {
+	var req remoteOpenClawRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		web.FailErr(w, r, web.ErrInvalidBody)
+		return
+	}
+	if len(req.Password) < 6 {
+		web.Fail(w, r, "INVALID_REMOTE_OPENCLAW", "password is required", http.StatusBadRequest)
+		return
+	}
+	if req.Scope == "" {
+		req.Scope = snapshots.BackupScopeOpenClaw
+	}
+	var rec *database.SnapshotRecord
+	var err error
+	if strings.EqualFold(req.Mode, "gateway") || strings.EqualFold(req.Mode, "openclaw-gateway") {
+		rec, err = h.importFromRemoteGateway(r.Context(), req)
+	} else {
+		rec, err = h.importFromRemoteClawDeckX(r.Context(), req)
+	}
+	if err != nil {
+		web.Fail(w, r, "REMOTE_OPENCLAW_IMPORT_FAILED", err.Error(), http.StatusBadGateway)
+		return
+	}
+	database.NewAuditLogRepo().Create(&database.AuditLog{UserID: web.GetUserID(r), Username: web.GetUsername(r), Action: constants.ActionSnapshotImport, Result: "success", Detail: rec.SnapshotID + " (remote-openclaw)", IP: r.RemoteAddr})
+	web.OK(w, r, map[string]any{"snapshotId": rec.SnapshotID, "resourceCount": rec.ResourceCount, "sizeBytes": rec.SizeBytes})
 }

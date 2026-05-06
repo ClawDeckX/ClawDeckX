@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MiniDonut, MiniBarChart, MiniSparkline } from './MiniChart';
 import { SecurityPolicyBadges } from './SecurityPolicyBadges';
-import type { ExecAsk, ExecSecurity, AskFallback } from '../utils/exec-policy';
+import type { ExecAsk, ExecHost, ExecSecurity, AskFallback } from '../utils/exec-policy';
 
 /* ── In-memory cache for usage data (avoids re-fetch on session switch) ── */
 const CACHE_TTL = 30_000;
@@ -226,7 +226,7 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loa
             policy={{
               toolProfile: sec.toolProfile || 'full',
               execSecurity: (sec.execSecurity || '') as ExecSecurity,
-              execHost: sec.execHost || 'sandbox',
+              execHost: (sec.execHost || 'sandbox') as ExecHost,
               execAsk: (sec.execAsk || 'off') as ExecAsk,
               askFallback: '' as AskFallback,
               sandboxMode: sec.sandboxMode || 'Off',

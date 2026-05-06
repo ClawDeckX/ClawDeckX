@@ -22,12 +22,13 @@ interface SettingsProps {
   language: Language;
   onLogout?: () => void | Promise<void>;
   pendingTab?: string | null;
+  pendingSnapshotId?: string | null;
   onTabConsumed?: () => void;
   onPrefsChange?: (prefs: Preferences) => void;
   badges?: Record<string, number>;
 }
 
-const Settings: React.FC<SettingsProps> = ({ language, onLogout, pendingTab, onTabConsumed, onPrefsChange, badges = {} }) => {
+const Settings: React.FC<SettingsProps> = ({ language, onLogout, pendingTab, pendingSnapshotId, onTabConsumed, onPrefsChange, badges = {} }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const s = t.set;
   const { toast } = useToast();
@@ -47,9 +48,9 @@ const Settings: React.FC<SettingsProps> = ({ language, onLogout, pendingTab, onT
   useEffect(() => {
     if (pendingTab && VALID_TABS.includes(pendingTab as SettingsTab)) {
       setActiveTab(pendingTab as SettingsTab);
-      onTabConsumed?.();
+      if (!pendingSnapshotId) onTabConsumed?.();
     }
-  }, [pendingTab, onTabConsumed, VALID_TABS]);
+  }, [pendingTab, pendingSnapshotId, onTabConsumed, VALID_TABS]);
   // Tab switching from clawdeck:open-window is handled centrally via pendingTab prop from App.tsx
 
   const handleTabSelect = (tab: SettingsTab) => {
@@ -722,7 +723,7 @@ const Settings: React.FC<SettingsProps> = ({ language, onLogout, pendingTab, onT
 
           {/* 配置快照 */}
           {activeTab === 'snapshot' && (
-            <SnapshotTab s={s} inputCls={inputCls} labelCls={labelCls} rowCls={rowCls} />
+            <SnapshotTab s={s} inputCls={inputCls} labelCls={labelCls} rowCls={rowCls} pendingSnapshotId={pendingSnapshotId ?? null} onSnapshotConsumed={onTabConsumed} />
           )}
 
           {/* 功能设置 */}

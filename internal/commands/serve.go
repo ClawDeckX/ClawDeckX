@@ -631,6 +631,7 @@ func RunServe(args []string) int {
 	router.GET("/api/v1/migrate/detect", migrateHandler.Detect)
 	router.POST("/api/v1/migrate/plan", migrateHandler.Plan)
 	router.POST("/api/v1/migrate/apply", web.RequireAdmin(migrateHandler.Apply))
+	router.POST("/api/v1/migrate/remote-openclaw/import", web.RequireAdmin(migrateHandler.ImportRemoteOpenClaw))
 
 	observabilityHandler := handlers.NewObservabilityHandler(gwClient, svc)
 	router.GET("/api/v1/observability/metrics", observabilityHandler.Metrics)

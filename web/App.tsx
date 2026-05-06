@@ -509,7 +509,7 @@ const App: React.FC = () => {
                     {w.id === 'agents' && <Agents language={language} />}
                     {w.id === 'maintenance' && <Doctor language={language} />}
                     {w.id === 'scheduler' && <Scheduler language={language} />}
-                    {w.id === 'settings' && <Settings language={language} onLogout={logout} pendingTab={detailFor('settings')?.tab ?? null} onTabConsumed={consumeDetail} onPrefsChange={handlePrefsChange} badges={badges} />}
+                    {w.id === 'settings' && <Settings language={language} onLogout={logout} pendingTab={detailFor('settings')?.tab ?? null} pendingSnapshotId={detailFor('settings')?.snapshotId ?? null} onTabConsumed={consumeDetail} onPrefsChange={handlePrefsChange} badges={badges} />}
                     {w.id === 'nodes' && <Nodes language={language} />}
                     {w.id === 'knowledge' && <Knowledge language={language} pendingExpandItem={detailFor('knowledge')?.expandItem ?? null} onExpandItemConsumed={consumeDetail} />}
                     {w.id === 'terminal' && <TerminalPage language={language} />}

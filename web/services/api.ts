@@ -877,12 +877,34 @@ export interface MigrateApplyRequest extends MigratePlanRequest {
   force?: boolean;
   backupOutput?: string;
 }
+export interface RemoteOpenClawImportRequest {
+  mode: 'clawdeckx' | 'gateway';
+  baseUrl?: string;
+  username?: string;
+  loginPassword?: string;
+  host?: string;
+  port?: number;
+  token?: string;
+  cookie?: string;
+  gatewayPath?: string;
+  password: string;
+  note?: string;
+  scope?: string;
+  resourceIds?: string[];
+}
+export interface RemoteOpenClawImportResult {
+  snapshotId: string;
+  resourceCount: number;
+  sizeBytes: number;
+}
 export const migrateApi = {
   list: () => get<{ providers: MigrateProvider[] }>('/api/v1/migrate/list'),
   detect: () => get<{ results: MigrateDetectResult[] }>('/api/v1/migrate/detect'),
   plan: (data: MigratePlanRequest) => post<MigratePlan>('/api/v1/migrate/plan', data),
   apply: (data: MigrateApplyRequest) =>
     post<{ ok: boolean; error?: string; result: MigrateApplyResult }>('/api/v1/migrate/apply', data),
+  importRemoteOpenClaw: (data: RemoteOpenClawImportRequest) =>
+    post<RemoteOpenClawImportResult>('/api/v1/migrate/remote-openclaw/import', data),
 };
 
 // ==================== Prometheus 可观测 ====================
