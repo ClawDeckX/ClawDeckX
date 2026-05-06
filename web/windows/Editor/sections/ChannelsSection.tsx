@@ -279,7 +279,7 @@ const PairingSection: React.FC<{ channel: string; es: any; cw: any; toast: (type
 };
 
 // ============================================================================
-export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setField, getField, deleteField, language, save, reload }) => {
+export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setField, getField, deleteField, language, reload }) => {
   const { toast } = useToast();
   const { confirm } = useConfirm();
   const es = useMemo(() => (getTranslation(language) as any).es || {}, [language]);
@@ -807,6 +807,27 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     return false;
   }, []);
 
+  const saveWizardChannelConfig = useCallback(async (chId: string, acctKey: string): Promise<boolean> => {
+    const chCfg = channels[chId] || {};
+    const acctCfg = chCfg?.accounts?.[acctKey] || {};
+    const patch: Record<string, any> = {
+      channels: {
+        [chId]: {
+          accounts: {
+            [acctKey]: acctCfg,
+          },
+        },
+      },
+    };
+    const defaultAccount = getField(['channels', chId, 'defaultAccount']);
+    if (defaultAccount) {
+      patch.channels[chId].defaultAccount = defaultAccount;
+    }
+    await gwApi.configSafePatch(patch);
+    if (reload) await reload();
+    return true;
+  }, [channels, getField, reload]);
+
   const handleFinishWizard = useCallback(async (chId: string) => {
     const acctKey = wizardAccount || 'default';
     const acctCfg = channels[chId]?.accounts?.[acctKey] || {};
@@ -819,15 +840,13 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     const dmPolicy = getField(['channels', chId, 'accounts', acctKey, 'dmPolicy']) || 'pairing';
     const requiresPairing = chId !== 'yuanbao' && dmPolicy === 'pairing';
     setRestarting(true);
+    let completed = false;
     try {
-      // First save the configuration
-      if (save) {
-        const saved = await save();
-        if (!saved) {
-          console.error('Failed to save config before restart');
-        }
+      const saved = await saveWizardChannelConfig(chId, acctKey);
+      if (!saved) {
+        console.error('Failed to save channel config before restart');
+        throw new Error(cw.saveFailed || 'Failed to save channel config');
       }
-      // Then restart the gateway
       await gatewayApi.restart();
       // Wait for WS to reconnect + health probe to succeed before exposing
       // QR / pairing UI. Otherwise the user clicks "Generate QR" before the
@@ -836,10 +855,13 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
       if (!ready) {
         toast('error', cw.gatewayRestartTimeout || 'Gateway restart timeout — please retry');
       }
+      completed = true;
     } catch (err) {
       console.error('Failed to finish wizard:', err);
+      toast('error', err instanceof Error ? err.message : (cw.saveFailed || 'Failed to save channel config'));
     }
     setRestarting(false);
+    if (!completed) return;
     const isQrChannel = chId === 'whatsapp' || chId === 'openclaw-weixin';
     if (isQrChannel) {
       setShowWebLogin(true);
@@ -848,7 +870,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     } else {
       resetWizard();
     }
-  }, [getField, resetWizard, save, channels, es, toast, wizardAccount, waitGatewayReady, cw]);
+  }, [getField, resetWizard, saveWizardChannelConfig, channels, es, toast, wizardAccount, waitGatewayReady, cw]);
 
   const handleApprovePairing = useCallback(async (chId: string) => {
     if (!pairingCode.trim()) return;

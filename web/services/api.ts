@@ -1321,6 +1321,17 @@ const isConfigConflictError = (e: any): boolean => {
     || msg.includes('fix before patching');
 };
 
+let configWriteQueue: Promise<unknown> = Promise.resolve();
+
+const withConfigWriteQueue = async <T>(run: () => Promise<T>): Promise<T> => {
+  const task = configWriteQueue.then(run, run);
+  configWriteQueue = task.then(
+    () => undefined,
+    () => undefined,
+  );
+  return task;
+};
+
 const rpc = async <T = any>(method: string, params?: any): Promise<T> => {
   let lastErr: any;
   for (let attempt = 0; attempt <= GW_RETRY_COUNT; attempt++) {
@@ -1437,13 +1448,13 @@ export const gwApi = {
     obj[parts[parts.length - 1]] = value;
     return gwApi.configSafePatch(patch);
   },
-  configSetAll: async (config: Record<string, any>): Promise<any> => {
+  configSetAll: async (config: Record<string, any>): Promise<any> => withConfigWriteQueue(async () => {
     const fetchHash = async () => {
       const res: any = await rpc('config.get');
       return res?.hash || res?.baseHash || '';
     };
     const raw = JSON.stringify(config, null, 2);
-    const maxRetries = 2;
+    const maxRetries = 5;
     let lastErr: any;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -1456,7 +1467,7 @@ export const gwApi = {
       }
     }
     throw lastErr;
-  },
+  }),
   configReload: () => Promise.resolve({ ok: true }),
   configApply: (raw: string, baseHash: string) =>
     rpc('config.apply', { raw, baseHash }),
@@ -1468,13 +1479,13 @@ export const gwApi = {
    * @param patch - config patch object (will be JSON.stringify'd)
    * @returns fresh config from configGet after successful patch
    */
-  configSafePatch: async (patch: Record<string, any>): Promise<any> => {
+  configSafePatch: async (patch: Record<string, any>): Promise<any> => withConfigWriteQueue(async () => {
     const fetchHash = async () => {
       const res: any = await rpc('config.get');
       return res?.hash || res?.baseHash || '';
     };
     const raw = JSON.stringify(patch);
-    const maxRetries = 2;
+    const maxRetries = 5;
     let lastErr: any;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -1488,19 +1499,19 @@ export const gwApi = {
       }
     }
     throw lastErr;
-  },
+  }),
   /**
    * Safe config apply: auto-fetches current hash, applies full config, and returns result.
    * Retries up to 2 times on config conflict (hash mismatch, invalid config, stale state).
    * @param raw - full config JSON string
    * @returns result from configApply
    */
-  configSafeApply: async (raw: string): Promise<any> => {
+  configSafeApply: async (raw: string): Promise<any> => withConfigWriteQueue(async () => {
     const fetchHash = async () => {
       const res: any = await rpc('config.get');
       return res?.hash || res?.baseHash || '';
     };
-    const maxRetries = 2;
+    const maxRetries = 5;
     let lastErr: any;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -1513,7 +1524,7 @@ export const gwApi = {
       }
     }
     throw lastErr;
-  },
+  }),
   configSchema: () => rpc('config.schema'),
   configSchemaLookup: (path: string) => rpc('config.schema.lookup', { path }),
   secretsReload: () => rpc('secrets.reload'),
