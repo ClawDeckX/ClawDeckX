@@ -21,12 +21,15 @@ export OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG"
 export OCD_RUNTIME_DIR="$RUNTIME_DIR"
 
 if [ -d /opt/openclaw ]; then
-    for OPENCLAW_PLUGIN_NODE_MODULES in "$NPM_CONFIG_PREFIX/lib/node_modules" "$NPM_CONFIG_PREFIX/node_modules"; do
-        mkdir -p "$OPENCLAW_PLUGIN_NODE_MODULES"
-        if [ ! -e "$OPENCLAW_PLUGIN_NODE_MODULES/openclaw" ]; then
-            ln -s /opt/openclaw "$OPENCLAW_PLUGIN_NODE_MODULES/openclaw" || true
-        fi
-    done
+    # OpenClaw's plugin install safety scan only permits the exact
+    # node_modules/openclaw peer symlink shape. Do not create
+    # lib/node_modules/openclaw, and clean up older containers that did.
+    rm -f "$NPM_CONFIG_PREFIX/lib/node_modules/openclaw" 2>/dev/null || true
+    OPENCLAW_PLUGIN_NODE_MODULES="$NPM_CONFIG_PREFIX/node_modules"
+    mkdir -p "$OPENCLAW_PLUGIN_NODE_MODULES"
+    if [ ! -e "$OPENCLAW_PLUGIN_NODE_MODULES/openclaw" ]; then
+        ln -s /opt/openclaw "$OPENCLAW_PLUGIN_NODE_MODULES/openclaw" || true
+    fi
 fi
 
 # ── Runtime overlay: write image version stamps on first boot ──
