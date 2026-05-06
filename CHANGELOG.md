@@ -10,6 +10,7 @@ _2026-05-06_
 
 ### 🐛 Bug Fixes / 修复
 
+- request default operator scopes
 - non-constant format string in Errorf flagged by go vet
 - repair OpenClaw rollback and exec host patch
 - stabilize readiness and OpenClaw version picker
@@ -1722,6 +1723,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 
