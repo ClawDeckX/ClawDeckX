@@ -1405,11 +1405,13 @@ func (h *MultiAgentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if baseHash != "" {
 		setParams["baseHash"] = baseHash
 	}
+	cfgBudget.waitForSlot()
 	_, err = h.client.Request("config.set", setParams)
 	if err != nil {
 		web.Fail(w, r, "UPDATE_CONFIG_FAILED", err.Error(), http.StatusBadGateway)
 		return
 	}
+	cfgBudget.recordWrite()
 
 	web.OK(w, r, map[string]interface{}{
 		"removed": removed,
@@ -1648,11 +1650,12 @@ func (h *MultiAgentHandler) updateOpenClawConfig(template MultiAgentTemplate, pr
 	if baseHash != "" {
 		setParams["baseHash"] = baseHash
 	}
+	cfgBudget.waitForSlot()
 	_, err = h.client.RequestWithTimeout("config.set", setParams, 15*time.Second)
-
 	if err != nil {
 		return err
 	}
+	cfgBudget.recordWrite()
 
 	// Note: agents.reload is not a valid gateway RPC method.
 	// config.set already triggers automatic reload in the gateway.

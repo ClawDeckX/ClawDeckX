@@ -333,11 +333,13 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 		setParams["baseHash"] = baseHash
 	}
 
+	cfgBudget.waitForSlot()
 	_, err = h.gwClient.RequestWithTimeout("config.set", setParams, 15*time.Second)
 	if err != nil {
 		web.Fail(w, r, "CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
 		return
 	}
+	cfgBudget.recordWrite()
 
 	logger.Log.Info().Msg("auto-enabled diagnostics-prometheus plugin via observability handler")
 	web.OK(w, r, map[string]interface{}{"enabled": true})

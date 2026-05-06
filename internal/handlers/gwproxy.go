@@ -8,12 +8,68 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/openclaw"
 	"ClawDeckX/internal/web"
 )
+
+// configWriteBudget tracks control-plane write timestamps to proactively
+// wait for budget before sending, instead of hitting OpenClaw's 3-per-60s limit.
+type configWriteBudget struct {
+	mu         sync.Mutex
+	timestamps []time.Time
+}
+
+const (
+	cwbMaxWrites = 3
+	cwbWindow    = 60 * time.Second
+	cwbMargin    = 500 * time.Millisecond
+)
+
+// waitForSlot blocks until a write slot is available.
+func (b *configWriteBudget) waitForSlot() {
+	b.mu.Lock()
+	for {
+		now := time.Now()
+		cutoff := now.Add(-cwbWindow)
+		j := 0
+		for _, t := range b.timestamps {
+			if t.After(cutoff) {
+				b.timestamps[j] = t
+				j++
+			}
+		}
+		b.timestamps = b.timestamps[:j]
+
+		if len(b.timestamps) < cwbMaxWrites {
+			b.mu.Unlock()
+			return
+		}
+
+		wait := b.timestamps[0].Add(cwbWindow + cwbMargin).Sub(now)
+		if wait <= 0 {
+			continue
+		}
+		b.mu.Unlock()
+		logger.Config.Info().Dur("wait", wait).Int("queued", j).Msg("proactive config write budget wait")
+		time.Sleep(wait)
+		b.mu.Lock()
+	}
+}
+
+func (b *configWriteBudget) recordWrite() {
+	b.mu.Lock()
+	b.timestamps = append(b.timestamps, time.Now())
+	b.mu.Unlock()
+}
+
+// cfgBudget is a package-level singleton shared by all handlers so that
+// GWProxyHandler, PluginInstallHandler, ObservabilityHandler, MultiAgentHandler
+// etc. all compete for the same 3-per-60s write budget.
+var cfgBudget configWriteBudget
 
 // GWProxyHandler proxies Gateway WebSocket methods as REST APIs.
 type GWProxyHandler struct {
@@ -318,50 +374,28 @@ func (h *GWProxyHandler) ConfigSetRemote(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		rpcParams := make(map[string]interface{})
-		for k, v := range body {
-			rpcParams[k] = v
-		}
-
-		// On retry, refresh baseHash from Gateway
-		if attempt > 0 {
-			freshHash := h.fetchFreshBaseHash()
-			if freshHash != "" {
-				rpcParams["baseHash"] = freshHash
+	rpcParams := make(map[string]interface{})
+	for k, v := range body {
+		rpcParams[k] = v
+	}
+	// If caller sent { config }, serialize to raw JSON string
+	if _, hasRaw := rpcParams["raw"]; !hasRaw {
+		if cfg, hasConfig := rpcParams["config"]; hasConfig {
+			cfgJSON, jsonErr := json.Marshal(cfg)
+			if jsonErr != nil {
+				web.Fail(w, r, "CONFIG_SERIALIZE_FAILED", jsonErr.Error(), http.StatusInternalServerError)
+				return
 			}
+			rpcParams = map[string]interface{}{"raw": string(cfgJSON)}
 		}
+	}
 
-		// If caller sent { config }, serialize to raw JSON string
-		if _, hasRaw := rpcParams["raw"]; !hasRaw {
-			if cfg, hasConfig := rpcParams["config"]; hasConfig {
-				cfgJSON, jsonErr := json.Marshal(cfg)
-				if jsonErr != nil {
-					web.Fail(w, r, "CONFIG_SERIALIZE_FAILED", jsonErr.Error(), http.StatusInternalServerError)
-					return
-				}
-				bh := rpcParams["baseHash"]
-				rpcParams = map[string]interface{}{"raw": string(cfgJSON)}
-				if bh != nil {
-					rpcParams["baseHash"] = bh
-				}
-			}
-		}
-
-		data, err := h.client.RequestWithTimeout("config.set", rpcParams, 15*time.Second)
-		if err != nil {
-			if isConfigConflictError(err) && attempt < maxRetries-1 {
-				logger.Config.Warn().Int("attempt", attempt+1).Msg("config.set conflict, retrying with fresh baseHash")
-				time.Sleep(200 * time.Millisecond)
-				continue
-			}
-			web.Fail(w, r, "GW_CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
-			return
-		}
-		web.OKRaw(w, r, data)
+	data, err := h.configWriteWithBudget("config.set", rpcParams, 15*time.Second)
+	if err != nil {
+		web.Fail(w, r, "GW_CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
 		return
 	}
+	web.OKRaw(w, r, data)
 }
 
 // ConfigReload triggers remote config hot-reload.
@@ -654,11 +688,6 @@ func (h *GWProxyHandler) SkillsConfigure(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		var baseHash string
-		if h, ok := wrapper["hash"].(string); ok {
-			baseHash = h
-		}
-
 		var currentCfg map[string]interface{}
 		if parsed, ok := wrapper["parsed"]; ok {
 			if m, ok := parsed.(map[string]interface{}); ok {
@@ -716,7 +745,7 @@ func (h *GWProxyHandler) SkillsConfigure(w http.ResponseWriter, r *http.Request)
 		}
 		entries[params.SkillKey] = entry
 
-		// save config with baseHash for optimistic concurrency
+		// save config via centralised budget-aware writer
 		cfgJSON, jsonErr := json.Marshal(currentCfg)
 		if jsonErr != nil {
 			web.Fail(w, r, "CONFIG_SERIALIZE_FAILED", jsonErr.Error(), http.StatusInternalServerError)
@@ -725,14 +754,10 @@ func (h *GWProxyHandler) SkillsConfigure(w http.ResponseWriter, r *http.Request)
 		setParams := map[string]interface{}{
 			"raw": string(cfgJSON),
 		}
-		if baseHash != "" {
-			setParams["baseHash"] = baseHash
-		}
-		saveData, err := h.client.RequestWithTimeout("config.set", setParams, 15*time.Second)
+		saveData, err := h.configWriteWithBudget("config.set", setParams, 15*time.Second)
 		if err != nil {
 			if isConfigConflictError(err) && attempt < maxRetries-1 {
-				logger.Config.Warn().Int("attempt", attempt+1).Str("skillKey", params.SkillKey).Msg("skills.configure config.set conflict, retrying")
-				time.Sleep(200 * time.Millisecond)
+				logger.Config.Warn().Int("attempt", attempt+1).Str("skillKey", params.SkillKey).Msg("skills.configure config.set conflict, retrying read-modify-write")
 				continue
 			}
 			web.Fail(w, r, "GW_CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
@@ -897,19 +922,20 @@ func (h *GWProxyHandler) GenericProxy(w http.ResponseWriter, r *http.Request) {
 	web.OKRaw(w, r, data)
 }
 
-// proxyConfigMutating handles config.patch / config.apply with automatic retry
-// on optimistic concurrency conflict.
-func (h *GWProxyHandler) proxyConfigMutating(w http.ResponseWriter, r *http.Request, method string, params interface{}, timeout time.Duration) {
-	const maxRetries = 6
+// configWriteWithBudget is the centralised config write helper.
+// All config-mutating calls (proxy, ConfigSetAll, SkillsConfigure, etc.)
+// should go through this to honour the proactive write budget.
+func (h *GWProxyHandler) configWriteWithBudget(method string, params map[string]interface{}, timeout time.Duration) (json.RawMessage, error) {
+	const maxRetries = 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		rpcParams := toMapParams(params)
+		cfgBudget.waitForSlot()
 
 		freshHash := h.fetchFreshBaseHash()
 		if freshHash != "" {
-			rpcParams["baseHash"] = freshHash
+			params["baseHash"] = freshHash
 		}
 
-		data, err := h.client.RequestWithTimeout(method, rpcParams, timeout)
+		data, err := h.client.RequestWithTimeout(method, params, timeout)
 		if err != nil {
 			if delay, ok := configRateLimitDelay(err); ok && attempt < maxRetries-1 {
 				logger.Config.Warn().Str("method", method).Int("attempt", attempt+1).Dur("delay", delay).Msg("config write rate-limited, retrying after gateway delay")
@@ -921,16 +947,27 @@ func (h *GWProxyHandler) proxyConfigMutating(w http.ResponseWriter, r *http.Requ
 				time.Sleep(200 * time.Millisecond)
 				continue
 			}
-			if openclaw.IsGatewayRPCError(err) {
-				web.Fail(w, r, "GW_RPC_ERROR", err.Error(), http.StatusUnprocessableEntity)
-			} else {
-				web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
-			}
-			return
+			return nil, err
 		}
-		web.OKRaw(w, r, data)
+		cfgBudget.recordWrite()
+		return data, nil
+	}
+	return nil, fmt.Errorf("config write %s failed after %d retries", method, maxRetries)
+}
+
+// proxyConfigMutating handles config.patch / config.apply / config.set from
+// the generic proxy endpoint, with proactive budget wait and conflict retry.
+func (h *GWProxyHandler) proxyConfigMutating(w http.ResponseWriter, r *http.Request, method string, params interface{}, timeout time.Duration) {
+	data, err := h.configWriteWithBudget(method, toMapParams(params), timeout)
+	if err != nil {
+		if openclaw.IsGatewayRPCError(err) {
+			web.Fail(w, r, "GW_RPC_ERROR", err.Error(), http.StatusUnprocessableEntity)
+		} else {
+			web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
+		}
 		return
 	}
+	web.OKRaw(w, r, data)
 }
 
 func (h *GWProxyHandler) rewriteSessionKeyParam(params interface{}) interface{} {

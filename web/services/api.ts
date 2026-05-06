@@ -1310,16 +1310,11 @@ const isGatewayTransientError = (e: any): boolean => {
   return e?.status === 502 || e?.code === 'GW_PROXY_FAILED' || /gateway.*not.*connect/i.test(e?.message || '');
 };
 
-const isConfigConflictError = (e: any): boolean => {
-  const msg = (e?.message || '').toLowerCase();
-  const code = e?.code || e?.errorCode || '';
-  return code === 'HASH_MISMATCH'
-    || code === 'INVALID_REQUEST'
-    || msg.includes('hash')
-    || msg.includes('invalid config')
-    || msg.includes('config changed since last load')
-    || msg.includes('fix before patching');
-};
+// --- Config write serialisation & patch coalescing ---
+// All config writes are serialised through a single queue. configSafePatch
+// additionally coalesces rapid patches arriving within COALESCE_WINDOW_MS into
+// a single config.patch call, drastically reducing write count against
+// OpenClaw's 3-per-60s control-plane rate limit.
 
 let configWriteQueue: Promise<unknown> = Promise.resolve();
 
@@ -1331,6 +1326,54 @@ const withConfigWriteQueue = async <T>(run: () => Promise<T>): Promise<T> => {
   );
   return task;
 };
+
+const COALESCE_WINDOW_MS = 150;
+
+function deepMergePatch(a: Record<string, any>, b: Record<string, any>): Record<string, any> {
+  const result = { ...a };
+  for (const key of Object.keys(b)) {
+    if (
+      b[key] && typeof b[key] === 'object' && !Array.isArray(b[key])
+      && result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])
+    ) {
+      result[key] = deepMergePatch(result[key], b[key]);
+    } else {
+      result[key] = b[key];
+    }
+  }
+  return result;
+}
+
+let _pendingPatch: Record<string, any> | null = null;
+let _patchResolvers: Array<{ resolve: (v: any) => void; reject: (e: any) => void }> = [];
+let _patchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function _flushPatches() {
+  _patchTimer = null;
+  const patch = _pendingPatch;
+  const resolvers = _patchResolvers;
+  _pendingPatch = null;
+  _patchResolvers = [];
+  if (!patch || resolvers.length === 0) return;
+  withConfigWriteQueue(async () => {
+    const raw = JSON.stringify(patch);
+    await rpc('config.patch', { raw });
+    return rpc('config.get');
+  }).then(
+    res => resolvers.forEach(r => r.resolve(res)),
+    err => resolvers.forEach(r => r.reject(err)),
+  );
+}
+
+function coalescedPatch(patch: Record<string, any>): Promise<any> {
+  return new Promise((resolve, reject) => {
+    _pendingPatch = _pendingPatch ? deepMergePatch(_pendingPatch, patch) : { ...patch };
+    _patchResolvers.push({ resolve, reject });
+    if (!_patchTimer) {
+      _patchTimer = setTimeout(_flushPatches, COALESCE_WINDOW_MS);
+    }
+  });
+}
 
 const rpc = async <T = any>(method: string, params?: any): Promise<T> => {
   let lastErr: any;
@@ -1449,24 +1492,8 @@ export const gwApi = {
     return gwApi.configSafePatch(patch);
   },
   configSetAll: async (config: Record<string, any>): Promise<any> => withConfigWriteQueue(async () => {
-    const fetchHash = async () => {
-      const res: any = await rpc('config.get');
-      return res?.hash || res?.baseHash || '';
-    };
     const raw = JSON.stringify(config, null, 2);
-    const maxRetries = 5;
-    let lastErr: any;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const hash = await fetchHash();
-        return await rpc('config.set', { raw, ...(hash ? { baseHash: hash } : {}) });
-      } catch (err: any) {
-        lastErr = err;
-        if (!isConfigConflictError(err) || attempt === maxRetries) throw err;
-        await new Promise(r => setTimeout(r, 300));
-      }
-    }
-    throw lastErr;
+    return rpc('config.set', { raw });
   }),
   configReload: () => Promise.resolve({ ok: true }),
   configApply: (raw: string, baseHash: string) =>
@@ -1474,56 +1501,17 @@ export const gwApi = {
   configPatch: (raw: string, baseHash: string) =>
     rpc('config.patch', { raw, baseHash }),
   /**
-   * Safe config patch: auto-fetches current hash, patches, and returns fresh config.
-   * Retries up to 2 times on config conflict (hash mismatch, invalid config, stale state).
-   * @param patch - config patch object (will be JSON.stringify'd)
-   * @returns fresh config from configGet after successful patch
+   * Safe config patch with 150ms coalescing window.
+   * Rapid successive patches are merged into one config.patch write.
+   * Go backend handles baseHash refresh, conflict retry, and rate-limit wait.
    */
-  configSafePatch: async (patch: Record<string, any>): Promise<any> => withConfigWriteQueue(async () => {
-    const fetchHash = async () => {
-      const res: any = await rpc('config.get');
-      return res?.hash || res?.baseHash || '';
-    };
-    const raw = JSON.stringify(patch);
-    const maxRetries = 5;
-    let lastErr: any;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const hash = await fetchHash();
-        await rpc('config.patch', { raw, baseHash: hash });
-        return rpc('config.get');
-      } catch (err: any) {
-        lastErr = err;
-        if (!isConfigConflictError(err) || attempt === maxRetries) throw err;
-        await new Promise(r => setTimeout(r, 300));
-      }
-    }
-    throw lastErr;
-  }),
+  configSafePatch: (patch: Record<string, any>): Promise<any> => coalescedPatch(patch),
   /**
-   * Safe config apply: auto-fetches current hash, applies full config, and returns result.
-   * Retries up to 2 times on config conflict (hash mismatch, invalid config, stale state).
-   * @param raw - full config JSON string
-   * @returns result from configApply
+   * Safe config apply: sends full config JSON.
+   * Go backend handles baseHash refresh, conflict retry, and rate-limit wait.
    */
-  configSafeApply: async (raw: string): Promise<any> => withConfigWriteQueue(async () => {
-    const fetchHash = async () => {
-      const res: any = await rpc('config.get');
-      return res?.hash || res?.baseHash || '';
-    };
-    const maxRetries = 5;
-    let lastErr: any;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const hash = await fetchHash();
-        return await rpc('config.apply', { raw, baseHash: hash });
-      } catch (err: any) {
-        lastErr = err;
-        if (!isConfigConflictError(err) || attempt === maxRetries) throw err;
-        await new Promise(r => setTimeout(r, 300));
-      }
-    }
-    throw lastErr;
+  configSafeApply: (raw: string): Promise<any> => withConfigWriteQueue(async () => {
+    return rpc('config.apply', { raw });
   }),
   configSchema: () => rpc('config.schema'),
   configSchemaLookup: (path: string) => rpc('config.schema.lookup', { path }),

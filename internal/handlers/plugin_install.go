@@ -1092,10 +1092,12 @@ func (h *PluginInstallHandler) ensurePluginAllowed(pluginId string) error {
 	if baseHash != "" {
 		setParams["baseHash"] = baseHash
 	}
+	cfgBudget.waitForSlot()
 	_, err = h.gwClient.RequestWithTimeout("config.set", setParams, 10*time.Second)
 	if err != nil {
 		return err
 	}
+	cfgBudget.recordWrite()
 
 	logger.Log.Info().Str("pluginId", pluginId).Msg("auto-added plugin to plugins.allow")
 	return nil
@@ -1234,10 +1236,12 @@ func (h *PluginInstallHandler) removePluginAllowed(pluginId string) error {
 	if baseHash != "" {
 		setParams["baseHash"] = baseHash
 	}
+	cfgBudget.waitForSlot()
 	_, err = h.gwClient.RequestWithTimeout("config.set", setParams, 10*time.Second)
 	if err != nil {
 		return err
 	}
+	cfgBudget.recordWrite()
 
 	logger.Log.Info().Str("pluginId", pluginId).Msg("auto-removed plugin from plugins.allow")
 	return nil

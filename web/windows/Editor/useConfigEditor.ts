@@ -92,6 +92,10 @@ const MAX_HISTORY = 50;
 
 type JsonPatch = { path: string[]; prev: any; next: any }[];
 
+function stableConfigJSON(config: Record<string, any>): string {
+  return JSON.stringify(config, null, 2);
+}
+
 function computePatch(prev: any, next: any, path: string[] = []): JsonPatch {
   const ops: JsonPatch = [];
   if (prev === next) return ops;
@@ -142,6 +146,8 @@ export function useConfigEditor(): UseConfigEditorReturn {
   const [loadError, setLoadError] = useState('');
   const [loadErrorCode, setLoadErrorCode] = useState('');
   const baseHashRef = useRef<string | null>(null);
+  const savingRef = useRef(false);
+  const savedRawRef = useRef<string | null>(null);
 
   // undo/redo history — stores patches (diffs) instead of full snapshots
   const patchHistoryRef = useRef<JsonPatch[]>([]);
@@ -222,6 +228,7 @@ export function useConfigEditor(): UseConfigEditorReturn {
       const cfg = extractConfig(data);
       if (cfg) {
         setConfig(cfg);
+        savedRawRef.current = stableConfigJSON(cfg);
         setDirty(false);
         setErrors([]);
         patchHistoryRef.current = [];
@@ -242,6 +249,13 @@ export function useConfigEditor(): UseConfigEditorReturn {
 
   const save = useCallback(async (): Promise<boolean> => {
     if (!config) return false;
+    if (savingRef.current) return false;
+    const raw = stableConfigJSON(config);
+    if (savedRawRef.current === raw) {
+      setDirty(false);
+      return true;
+    }
+    savingRef.current = true;
     setSaving(true);
     setSaveError('');
     // Refresh baseHashRef from gateway (with optional delay for post-save reload)
@@ -251,18 +265,23 @@ export function useConfigEditor(): UseConfigEditorReturn {
       if (freshData?.hash) baseHashRef.current = freshData.hash;
     };
     try {
-      const raw = JSON.stringify(config, null, 2);
       // 统一优先走 WebSocket 保存（本地/远程网关均适用）
       if (baseHashRef.current) {
         // 有 hash → 用 configSafeApply（自动刷新 hash + 重试）
         const res: any = await gwApi.configSafeApply(raw);
-        if (res?.config) setConfig(res.config);
+        if (res?.config) {
+          setConfig(res.config);
+          savedRawRef.current = stableConfigJSON(res.config);
+        } else {
+          savedRawRef.current = raw;
+        }
         // Refresh hash after gateway reload settles
         await refreshHash(1000);
       } else {
         // 无 hash → 尝试 configSetAll + reload，失败时降级本地写入
         try {
           await gwApi.configSetAll(config);
+          savedRawRef.current = raw;
           await gwApi.configReload().catch(() => {});
           // 刷新 hash 以便后续保存走 configSafeApply
           await refreshHash(1000);
@@ -270,6 +289,7 @@ export function useConfigEditor(): UseConfigEditorReturn {
           // WS 不可用，降级本地写入
           if (mode === 'local') {
             await configApi.update(config);
+            savedRawRef.current = raw;
             await gwApi.configReload().catch(() => {});
           } else {
             throw new Error('Gateway not connected');
@@ -297,6 +317,7 @@ export function useConfigEditor(): UseConfigEditorReturn {
       }
       return false;
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }, [config, mode]);
@@ -309,6 +330,7 @@ export function useConfigEditor(): UseConfigEditorReturn {
     setConfig(prev => {
       if (!prev) return prev;
       const next = updater(deepClone(prev));
+      if (stableConfigJSON(next) === stableConfigJSON(prev)) return prev;
       setDirty(true);
       pushHistory(next);
       setFieldErrors({});
