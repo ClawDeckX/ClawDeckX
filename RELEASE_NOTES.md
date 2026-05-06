@@ -2,21 +2,15 @@
 
 ### ✨ New Features / 新功能
 
-- add daily digest reports
-- observability state endpoint, dashboard/editor/plugin-center polish
-- support volces ClawHub mirror + enriched detail modal
-- edit button on local gateway card + selectable update logs
+- remote OpenClaw migration with auth, .clawbak import and restore deep-link
 
 ### 🐛 Bug Fixes / 修复
 
-- adjust digest time select width
-- optimize wizard apply timeout fallback to direct file write
-
-### 🌐 Internationalization / 国际化
-
-- sync dashboard/gateway/extension-store/channels keys across 5 locales
+- non-constant format string in Errorf flagged by go vet
+- repair OpenClaw rollback and exec host patch
+- stabilize readiness and OpenClaw version picker
 
 ---
-**Full Changelog**: [v0.2.9...v0.2.10](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.9...v0.2.10)
+**Full Changelog**: [v0.2.10...v0.2.11](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.10...v0.2.11)
 
 
