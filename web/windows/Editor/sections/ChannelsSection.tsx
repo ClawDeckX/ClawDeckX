@@ -824,9 +824,8 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
       patch.channels[chId].defaultAccount = defaultAccount;
     }
     await gwApi.configSafePatch(patch);
-    if (reload) await reload();
     return true;
-  }, [channels, getField, reload]);
+  }, [channels, getField]);
 
   const handleFinishWizard = useCallback(async (chId: string) => {
     const acctKey = wizardAccount || 'default';
@@ -848,6 +847,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
         throw new Error(cw.saveFailed || 'Failed to save channel config');
       }
       await gatewayApi.restart();
+      await new Promise(r => setTimeout(r, 2000));
       // Wait for WS to reconnect + health probe to succeed before exposing
       // QR / pairing UI. Otherwise the user clicks "Generate QR" before the
       // plugin has finished loading and hits a transient failure.
@@ -855,6 +855,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
       if (!ready) {
         toast('error', cw.gatewayRestartTimeout || 'Gateway restart timeout — please retry');
       }
+      if (reload) await reload();
       completed = true;
     } catch (err) {
       console.error('Failed to finish wizard:', err);
@@ -870,7 +871,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     } else {
       resetWizard();
     }
-  }, [getField, resetWizard, saveWizardChannelConfig, channels, es, toast, wizardAccount, waitGatewayReady, cw]);
+  }, [getField, resetWizard, saveWizardChannelConfig, channels, es, toast, wizardAccount, waitGatewayReady, cw, reload]);
 
   const handleApprovePairing = useCallback(async (chId: string) => {
     if (!pairingCode.trim()) return;
@@ -2703,7 +2704,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
                       <button onClick={() => handleFinishWizard(chId)} disabled={restarting}
                         className="px-5 py-1.5 bg-green-500 hover:bg-green-600 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50">
                         {restarting ? <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span> : <span className="material-symbols-outlined text-[14px]">check</span>}
-                        {cw.finish || es.done}
+                        {restarting ? (cw.restartingGateway || 'Restarting gateway...') : (cw.finish || es.done)}
                       </button>
                     ) : (
                       <button onClick={resetWizard}
