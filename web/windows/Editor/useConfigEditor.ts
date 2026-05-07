@@ -96,6 +96,26 @@ function stableConfigJSON(config: Record<string, any>): string {
   return JSON.stringify(config, null, 2);
 }
 
+function buildMergePatch(prev: any, next: any): any {
+  if (JSON.stringify(prev) === JSON.stringify(next)) return undefined;
+  if (prev == null || next == null || typeof prev !== 'object' || typeof next !== 'object' || Array.isArray(prev) || Array.isArray(next)) {
+    return structuredClone(next);
+  }
+  const patch: Record<string, any> = {};
+  const allKeys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  for (const key of allKeys) {
+    if (!(key in next)) {
+      patch[key] = null;
+      continue;
+    }
+    const childPatch = buildMergePatch(prev[key], next[key]);
+    if (childPatch !== undefined) {
+      patch[key] = childPatch;
+    }
+  }
+  return Object.keys(patch).length > 0 ? patch : undefined;
+}
+
 function computePatch(prev: any, next: any, path: string[] = []): JsonPatch {
   const ops: JsonPatch = [];
   if (prev === next) return ops;
@@ -267,8 +287,9 @@ export function useConfigEditor(): UseConfigEditorReturn {
     try {
       // 统一优先走 WebSocket 保存（本地/远程网关均适用）
       if (baseHashRef.current) {
-        // 有 hash → 用 configSafeApply（自动刷新 hash + 重试）
-        const res: any = await gwApi.configSafeApply(raw);
+        const previousConfig = savedRawRef.current ? JSON.parse(savedRawRef.current) : null;
+        const mergePatch = previousConfig ? buildMergePatch(previousConfig, config) : null;
+        const res: any = mergePatch ? await gwApi.configSafePatch(mergePatch) : await gwApi.configSafeApply(raw);
         if (res?.config) {
           setConfig(res.config);
           savedRawRef.current = stableConfigJSON(res.config);
