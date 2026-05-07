@@ -1344,6 +1344,36 @@ function deepMergePatch(a: Record<string, any>, b: Record<string, any>): Record<
   return result;
 }
 
+function buildMergePatch(prev: any, next: any): any {
+  if (JSON.stringify(prev) === JSON.stringify(next)) return undefined;
+  if (prev == null || next == null || typeof prev !== 'object' || typeof next !== 'object' || Array.isArray(prev) || Array.isArray(next)) {
+    return next;
+  }
+  const patch: Record<string, any> = {};
+  const allKeys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  for (const key of allKeys) {
+    if (!(key in next)) {
+      patch[key] = null;
+      continue;
+    }
+    const childPatch = buildMergePatch(prev[key], next[key]);
+    if (childPatch !== undefined) {
+      patch[key] = childPatch;
+    }
+  }
+  return Object.keys(patch).length > 0 ? patch : undefined;
+}
+
+async function applyRawViaPatch(raw: string): Promise<any> {
+  const next = JSON.parse(raw);
+  const current = await rpc<any>('config.get');
+  const prev = current?.parsed || current?.config || current;
+  const patch = buildMergePatch(prev, next);
+  if (!patch) return current;
+  await rpc('config.patch', { raw: JSON.stringify(patch) });
+  return rpc('config.get');
+}
+
 let _pendingPatch: Record<string, any> | null = null;
 let _patchResolvers: Array<{ resolve: (v: any) => void; reject: (e: any) => void }> = [];
 let _patchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1511,7 +1541,11 @@ export const gwApi = {
    * Go backend handles baseHash refresh, conflict retry, and rate-limit wait.
    */
   configSafeApply: (raw: string): Promise<any> => withConfigWriteQueue(async () => {
-    return rpc('config.apply', { raw });
+    try {
+      return await applyRawViaPatch(raw);
+    } catch {
+      return rpc('config.apply', { raw });
+    }
   }),
   configSchema: () => rpc('config.schema'),
   configSchemaLookup: (path: string) => rpc('config.schema.lookup', { path }),
