@@ -123,10 +123,11 @@ func (h *SettingsHandler) UpdateGatewayConfig(w http.ResponseWriter, r *http.Req
 		h.gwService.GatewayToken = req.Token
 	}
 
-	// reconnect GWClient
+	// reconnect GWClient (preserve path from current config)
 	newCfg := openclaw.GWClientConfig{
 		Host:  req.Host,
 		Port:  req.Port,
+		Path:  h.gwClient.GetConfig().Path,
 		Token: req.Token,
 	}
 	h.gwClient.Reconnect(newCfg)

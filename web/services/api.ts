@@ -267,13 +267,13 @@ export const gatewayApi = {
 export const gatewayProfileApi = {
   list: () => get<any[]>('/api/v1/gateway/profiles'),
   listCached: (ttlMs = 15000, force = false) => getCached<any[]>('/api/v1/gateway/profiles', ttlMs, force),
-  create: (data: { name: string; host: string; port: number; token: string }) =>
+  create: (data: { name: string; host: string; port: number; path?: string; token: string }) =>
     post('/api/v1/gateway/profiles', data),
-  update: (id: number, data: { name?: string; host?: string; port?: number; token?: string }) =>
+  update: (id: number, data: { name?: string; host?: string; port?: number; path?: string; token?: string }) =>
     put(`/api/v1/gateway/profiles?id=${id}`, data),
   remove: (id: number) => del(`/api/v1/gateway/profiles?id=${id}`),
   activate: (id: number) => post(`/api/v1/gateway/profiles/activate?id=${id}`),
-  testConnection: (data: { host: string; port: number; token: string }) =>
+  testConnection: (data: { host: string; port: number; path?: string; token: string }) =>
     post('/api/v1/gateway/profiles/test', data),
 };
 

@@ -1282,8 +1282,14 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                       const fsWsOnly = draft.fsWsOnly ?? liveFsWsOnly;
                       const PROFILES = ['minimal', 'coding', 'messaging', 'full'];
                       const PROFILE_LABELS: Record<string, string> = { minimal: a.toolProfileMinimal || 'Minimal', coding: a.toolProfileCoding || 'Coding', messaging: a.toolProfileMessaging || 'Messaging', full: a.toolProfileFull || 'Full' };
+                      const liveElevated = {
+                        enabled: agentTools.elevated?.enabled ?? globalTools.elevated?.enabled ?? false,
+                        allowFrom: { ...(globalTools.elevated?.allowFrom || {}), ...(agentTools.elevated?.allowFrom || {}) },
+                      };
+                      const elevatedEnabled = draft.elevatedEnabled ?? liveElevated.enabled;
+                      const elevatedAllowFrom: Record<string, any> = draft.elevatedAllowFrom ?? liveElevated.allowFrom;
                       const toolDirty = toolDraft !== null;
-                      const initDraft = () => toolDraft || { profile: liveProfile, allow: [...liveAllow], deny: [...liveDeny], alsoAllow: [...liveAlsoAllow], execHost: liveExec.host, execSecurity: liveExec.security, execAsk: liveExec.ask, execAskFallback: liveExec.askFallback, fsWsOnly: liveFsWsOnly };
+                      const initDraft = () => toolDraft || { profile: liveProfile, allow: [...liveAllow], deny: [...liveDeny], alsoAllow: [...liveAlsoAllow], execHost: liveExec.host, execSecurity: liveExec.security, execAsk: liveExec.ask, execAskFallback: liveExec.askFallback, fsWsOnly: liveFsWsOnly, elevatedEnabled: liveElevated.enabled, elevatedAllowFrom: { ...liveElevated.allowFrom } };
 
                       const saveSecConfig = async () => {
                         if (!toolDraft) return;
@@ -1297,6 +1303,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                           const normalizedExecHost = normalizeExecHost(toolDraft.execHost);
                           toolsPatch.exec = { host: normalizedExecHost || undefined, security: normalizedExecSecurity || undefined, ask: toolDraft.execAsk || undefined };
                           toolsPatch.fs = { workspaceOnly: toolDraft.fsWsOnly || undefined };
+                          if (toolDraft.elevatedEnabled !== undefined) {
+                            toolsPatch.elevated = { enabled: toolDraft.elevatedEnabled, allowFrom: toolDraft.elevatedAllowFrom || {} };
+                          }
                           const fresh = await gwApi.configSafePatch({ agents: { list: [{ id: selected.id, tools: toolsPatch }] } });
                           setConfig(fresh);
                           setToolDraft(null);
@@ -1396,6 +1405,59 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                                 <span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{a.toolFsWorkspaceOnly || 'WS Only'}</span>
                               </label>
                             </div>
+                          </div>
+
+                          {/* Elevated Tools — inline in exec security card */}
+                          <div className="mt-3 pt-3 border-t border-slate-200/40 dark:border-white/[0.06]">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px] text-amber-500">admin_panel_settings</span>
+                                <span className="text-[10px] font-bold text-slate-600 dark:text-white/60 uppercase">{a.elevatedTools || 'Elevated Tools'}</span>
+                              </div>
+                              <button type="button" role="switch" aria-checked={elevatedEnabled} disabled={toolSaving}
+                                onClick={() => { const d = initDraft(); setToolDraft({ ...d, elevatedEnabled: !elevatedEnabled }); }}
+                                className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${elevatedEnabled ? 'bg-amber-500' : 'bg-slate-300 dark:bg-white/15'}`}>
+                                <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition duration-200 ${elevatedEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                              </button>
+                            </div>
+                            {elevatedEnabled && (() => {
+                              const configProviders = config?.models?.providers || config?.parsed?.models?.providers || config?.config?.models?.providers || {};
+                              const allProviderNames = Object.keys(configProviders);
+                              return (
+                                <div className="space-y-2 ps-6">
+                                  <p className="text-[9px] text-amber-600 dark:text-amber-400/70 leading-relaxed">
+                                    <span className="material-symbols-outlined text-[10px] align-text-bottom me-0.5">warning</span>
+                                    {a.elevatedDesc || 'Elevated tools allow agents to run commands with root/sudo privileges. Enable with caution.'}
+                                  </p>
+                                  {allProviderNames.length > 0 ? (
+                                    <>
+                                      <p className="text-[9px] font-bold text-slate-400 dark:text-white/25 uppercase">{a.elevatedAllowFrom || 'Allow From (Provider)'}</p>
+                                      {allProviderNames.map(provider => {
+                                        const cur = elevatedAllowFrom[provider];
+                                        const isOn = Array.isArray(cur) ? cur.length > 0 : !!cur;
+                                        const pCfg = configProviders[provider] as any;
+                                        const modelCount = Array.isArray(pCfg?.models) ? pCfg.models.length : 0;
+                                        return (
+                                          <div key={provider} className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                              <span className="material-symbols-outlined text-[11px] text-primary/50">cloud</span>
+                                              <code className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-white/50 font-mono truncate">{provider}</code>
+                                              {modelCount > 0 && <span className="text-[8px] text-slate-400 dark:text-white/20">{modelCount}</span>}
+                                            </div>
+                                            <button onClick={() => { const d = initDraft(); const af = { ...(d.elevatedAllowFrom || elevatedAllowFrom) }; if (isOn) { delete af[provider]; } else { af[provider] = ['*']; } setToolDraft({ ...d, elevatedAllowFrom: af }); }}
+                                              className={`w-8 h-4 rounded-full transition-colors relative shrink-0 ${isOn ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-white/20'}`}>
+                                              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all ${isOn ? 'start-[14px]' : 'start-0.5'}`} />
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
+                                    </>
+                                  ) : (
+                                    <p className="text-[8px] text-slate-400 dark:text-white/20 italic">{a.elevatedNoProviders || 'No providers configured in gateway'}</p>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           {/* Policy Preview (before save) */}
@@ -1838,7 +1900,11 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                     ask: agentTools.exec?.ask ?? globalTools.exec?.ask ?? false,
                   };
                   const liveFsWsOnly = agentTools.fs?.workspaceOnly ?? globalTools.fs?.workspaceOnly ?? false;
-                  return { profile: liveProfile, allow: [...liveAllow], deny: [...liveDeny], alsoAllow: [...liveAlsoAllow], execHost: liveExec.host, execSecurity: liveExec.security, execAsk: liveExec.ask, fsWsOnly: liveFsWsOnly };
+                  const liveElevated = {
+                    enabled: agentTools.elevated?.enabled ?? globalTools.elevated?.enabled ?? false,
+                    allowFrom: { ...(globalTools.elevated?.allowFrom || {}), ...(agentTools.elevated?.allowFrom || {}) },
+                  };
+                  return { profile: liveProfile, allow: [...liveAllow], deny: [...liveDeny], alsoAllow: [...liveAlsoAllow], execHost: liveExec.host, execSecurity: liveExec.security, execAsk: liveExec.ask, fsWsOnly: liveFsWsOnly, elevatedEnabled: liveElevated.enabled, elevatedAllowFrom: liveElevated.allowFrom };
                 };
 
                 const saveToolConfig = async () => {
@@ -1853,6 +1919,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                     const normalizedExecHost = normalizeExecHost(toolDraft.execHost);
                     toolsPatch.exec = { host: normalizedExecHost || undefined, security: normalizedExecSecurity || undefined, ask: toolDraft.execAsk || undefined };
                     toolsPatch.fs = { workspaceOnly: toolDraft.fsWsOnly || undefined };
+                    if (toolDraft.elevatedEnabled !== undefined) {
+                      toolsPatch.elevated = { enabled: toolDraft.elevatedEnabled, allowFrom: toolDraft.elevatedAllowFrom || {} };
+                    }
                     const fresh = await gwApi.configSafePatch({ agents: { list: [{ id: selected.id, tools: toolsPatch }] } });
                     setConfig(fresh);
                     setToolDraft(null);

@@ -131,6 +131,7 @@ type ConnectAuth struct {
 type GWClientConfig struct {
 	Host  string // Gateway address
 	Port  int    // Gateway port
+	Path  string // WebSocket path
 	Token string // auth token
 }
 
@@ -1159,10 +1160,17 @@ func (c *GWClient) connectLoop() {
 }
 
 func (c *GWClient) dial() error {
+	wsPath := c.cfg.Path
+	if wsPath == "" {
+		wsPath = "/"
+	}
+	if !strings.HasPrefix(wsPath, "/") {
+		wsPath = "/" + wsPath
+	}
 	u := url.URL{
 		Scheme: "ws",
 		Host:   fmt.Sprintf("%s:%d", c.cfg.Host, c.cfg.Port),
-		Path:   "/",
+		Path:   wsPath,
 	}
 
 	dialer := websocket.Dialer{

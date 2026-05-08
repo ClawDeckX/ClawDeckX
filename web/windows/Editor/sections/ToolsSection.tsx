@@ -144,7 +144,10 @@ export const ToolsSection: React.FC<SectionProps> = ({ config, schema, setField,
       <ConfigSection title={es.elevatedTools} icon="admin_panel_settings" iconColor="text-amber-500" defaultOpen={false}>
         <SwitchField label={es.elevatedEnabled} desc={es.elevatedEnabledDesc} tooltip={tip('tools.elevated.enabled')} value={g(['elevated', 'enabled']) === true} onChange={v => s(['elevated', 'enabled'], v)} />
         <ArrayField label={es.allowedElevated} tooltip={tip('tools.elevated.allow')} value={g(['elevated', 'allow']) || []} onChange={v => s(['elevated', 'allow'], v)} placeholder={es.phToolName} />
-        <KeyValueField label={es.elevatedAllowFrom} desc={es.elevatedAllowFromDesc} tooltip={tip('tools.elevated.allowFrom')} value={g(['elevated', 'allowFrom']) || {}} onChange={v => s(['elevated', 'allowFrom'], v)} />
+        <KeyValueField label={es.elevatedAllowFrom} desc={es.elevatedAllowFromDesc || 'Per-provider allowlist. Use * to allow all tools.'} tooltip={tip('tools.elevated.allowFrom')}
+          value={Object.fromEntries(Object.entries(g(['elevated', 'allowFrom']) || {}).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v ?? '*')]))}
+          onChange={v => s(['elevated', 'allowFrom'], Object.fromEntries(Object.entries(v).map(([k, val]) => [k, val.split(',').map((s: string) => s.trim()).filter(Boolean)])) as any)}
+          valuePlaceholder="* (all tools)" />
       </ConfigSection>
 
       <ConfigSection title={es.agentToAgent} icon="swap_horiz" iconColor="text-violet-500" defaultOpen={false}>

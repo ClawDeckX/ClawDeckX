@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -49,13 +50,45 @@ func (h *GatewayProfileHandler) SetGWService(svc *openclaw.Service) {
 	h.gwService = svc
 }
 
-// sanitizeHost strips http:// or https:// prefixes and trailing slashes from a gateway host.
-func sanitizeHost(host string) string {
-	h := strings.TrimSpace(host)
+// parseGatewayAddress parses a gateway address that may be a full URL
+// (ws://host:port/path or http://host:port/path) or a plain host.
+// It returns the normalized host, port (0 if not specified), and path.
+func parseGatewayAddress(raw string, defaultPort int) (host string, port int, path string) {
+	h := strings.TrimSpace(raw)
+	port = defaultPort
+	path = "/"
+
+	// If it looks like a URL (has scheme), parse it properly
+	if strings.Contains(h, "://") {
+		// Normalize scheme for url.Parse
+		normalized := h
+		normalized = strings.Replace(normalized, "wss://", "https://", 1)
+		normalized = strings.Replace(normalized, "ws://", "http://", 1)
+		if !strings.HasPrefix(normalized, "http://") && !strings.HasPrefix(normalized, "https://") {
+			normalized = "http://" + normalized
+		}
+		if u, err := url.Parse(normalized); err == nil && u.Host != "" {
+			host = u.Hostname()
+			if pStr := u.Port(); pStr != "" {
+				if pInt, err := strconv.Atoi(pStr); err == nil && pInt > 0 {
+					port = pInt
+				}
+			}
+			if u.Path != "" && u.Path != "/" {
+				path = u.Path
+			}
+			return
+		}
+	}
+
+	// Strip leftover scheme prefixes for plain host inputs
 	h = strings.TrimPrefix(h, "https://")
 	h = strings.TrimPrefix(h, "http://")
+	h = strings.TrimPrefix(h, "wss://")
+	h = strings.TrimPrefix(h, "ws://")
 	h = strings.TrimRight(h, "/")
-	return h
+	host = h
+	return
 }
 
 // List returns all gateway profiles.
@@ -74,25 +107,33 @@ func (h *GatewayProfileHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 		Host  string `json:"host"`
 		Port  int    `json:"port"`
+		Path  string `json:"path"`
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		web.FailErr(w, r, web.ErrInvalidBody)
 		return
 	}
-	req.Host = sanitizeHost(req.Host)
+	defaultPort := req.Port
+	if defaultPort <= 0 {
+		defaultPort = 18789
+	}
+	parsedHost, parsedPort, parsedPath := parseGatewayAddress(req.Host, defaultPort)
+	if req.Path != "" {
+		parsedPath = req.Path
+	}
+	req.Host = parsedHost
+	req.Port = parsedPort
 	if req.Name == "" || req.Host == "" {
 		web.FailErr(w, r, web.ErrInvalidParam)
 		return
-	}
-	if req.Port <= 0 {
-		req.Port = 18789
 	}
 
 	profile := &database.GatewayProfile{
 		Name:  req.Name,
 		Host:  req.Host,
 		Port:  req.Port,
+		Path:  parsedPath,
 		Token: req.Token,
 	}
 	if err := h.repo.Create(profile); err != nil {
@@ -132,6 +173,7 @@ func (h *GatewayProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 		Host  string `json:"host"`
 		Port  int    `json:"port"`
+		Path  string `json:"path"`
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -139,15 +181,29 @@ func (h *GatewayProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Host = sanitizeHost(req.Host)
+	if req.Host != "" {
+		defaultPort := req.Port
+		if defaultPort <= 0 {
+			defaultPort = profile.Port
+		}
+		parsedHost, parsedPort, parsedPath := parseGatewayAddress(req.Host, defaultPort)
+		profile.Host = parsedHost
+		profile.Port = parsedPort
+		if req.Path != "" {
+			profile.Path = req.Path
+		} else if parsedPath != "/" {
+			profile.Path = parsedPath
+		}
+	} else {
+		if req.Port > 0 {
+			profile.Port = req.Port
+		}
+		if req.Path != "" {
+			profile.Path = req.Path
+		}
+	}
 	if req.Name != "" {
 		profile.Name = req.Name
-	}
-	if req.Host != "" {
-		profile.Host = req.Host
-	}
-	if req.Port > 0 {
-		profile.Port = req.Port
 	}
 	if req.Token != "" {
 		profile.Token = req.Token
@@ -280,23 +336,28 @@ func (h *GatewayProfileHandler) TestConnection(w http.ResponseWriter, r *http.Re
 	var req struct {
 		Host  string `json:"host"`
 		Port  int    `json:"port"`
+		Path  string `json:"path"`
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		web.FailErr(w, r, web.ErrInvalidBody)
 		return
 	}
-	req.Host = sanitizeHost(req.Host)
-	if req.Host == "" {
+	defaultPort := req.Port
+	if defaultPort <= 0 {
+		defaultPort = 18789
+	}
+	parsedHost, parsedPort, parsedPath := parseGatewayAddress(req.Host, defaultPort)
+	if req.Path != "" {
+		parsedPath = req.Path
+	}
+	if parsedHost == "" {
 		web.FailErr(w, r, web.ErrInvalidParam)
 		return
 	}
-	if req.Port <= 0 {
-		req.Port = 18789
-	}
 
 	// Step 1: TCP reachability
-	addr := fmt.Sprintf("%s:%d", req.Host, req.Port)
+	addr := fmt.Sprintf("%s:%d", parsedHost, parsedPort)
 	tcpConn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
 		logger.Config.Warn().Err(err).Str("addr", addr).Msg("gateway test: TCP unreachable")
@@ -305,8 +366,12 @@ func (h *GatewayProfileHandler) TestConnection(w http.ResponseWriter, r *http.Re
 	}
 	tcpConn.Close()
 
-	// Step 2: HTTP /health endpoint
-	testURL := fmt.Sprintf("http://%s/health", addr)
+	// Step 2: HTTP /health endpoint (use path prefix if specified)
+	healthPath := "/health"
+	if parsedPath != "/" {
+		healthPath = strings.TrimRight(parsedPath, "/") + "/health"
+	}
+	testURL := fmt.Sprintf("http://%s%s", addr, healthPath)
 	client := &http.Client{Timeout: 6 * time.Second}
 	httpReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, testURL, nil)
 	if err != nil {
@@ -326,9 +391,13 @@ func (h *GatewayProfileHandler) TestConnection(w http.ResponseWriter, r *http.Re
 		httpOk = resp.StatusCode >= 200 && resp.StatusCode < 400
 	}
 
-	// Step 3: WebSocket connectivity test
+	// Step 3: WebSocket connectivity test (use path if specified)
 	wsOk := false
-	wsURL := fmt.Sprintf("ws://%s/", addr)
+	wsPath := "/"
+	if parsedPath != "/" {
+		wsPath = parsedPath
+	}
+	wsURL := fmt.Sprintf("ws://%s%s", addr, wsPath)
 	wsDialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
 	wsConn, _, wsErr := wsDialer.Dial(wsURL, nil)
 	if wsErr == nil {
@@ -364,6 +433,7 @@ func (h *GatewayProfileHandler) applyProfile(p *database.GatewayProfile) {
 		h.gwClient.Reconnect(openclaw.GWClientConfig{
 			Host:  p.Host,
 			Port:  p.Port,
+			Path:  p.Path,
 			Token: p.Token,
 		})
 	}

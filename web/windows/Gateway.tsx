@@ -23,6 +23,7 @@ interface GatewayProfile {
   name: string;
   host: string;
   port: number;
+  path: string;
   token: string;
   is_active: boolean;
 }
@@ -144,7 +145,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   const [profilesLoading, setProfilesLoading] = useState(false);
   const [showProfilePanel, setShowProfilePanel] = useState(false);
   const [editingProfile, setEditingProfile] = useState<GatewayProfile | null>(null);
-  const [formData, setFormData] = useState({ name: '', host: '127.0.0.1', port: 18789, token: '' });
+  const [formData, setFormData] = useState({ name: '', host: '127.0.0.1', port: 18789, path: '/', token: '' });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -563,7 +564,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
       }
       fetchProfiles(true);
       setEditingProfile(null);
-      setFormData({ name: '', host: '127.0.0.1', port: 18789, token: '' });
+      setFormData({ name: '', host: '127.0.0.1', port: 18789, path: '/', token: '' });
       setFormErrors({});
       setShowProfilePanel(false);
       toast('success', gw.profileSaved);
@@ -599,7 +600,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   const handleTestConnection = useCallback(async () => {
     setTestingConnection(true);
     try {
-      const res = await gatewayProfileApi.testConnection({ host: formData.host, port: formData.port, token: formData.token }) as any;
+      const res = await gatewayProfileApi.testConnection({ host: formData.host, port: formData.port, path: formData.path, token: formData.token }) as any;
       const data = res?.data || res;
       if (data?.http && data?.ws) {
         toast('success', gw.connectionOk || 'Connection OK');
@@ -616,14 +617,14 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
 
   const openEditForm = (p: GatewayProfile) => {
     setEditingProfile(p);
-    setFormData({ name: p.name, host: p.host, port: p.port, token: p.token });
+    setFormData({ name: p.name, host: p.host, port: p.port, path: p.path || '/', token: p.token });
     setFormErrors({});
     setShowProfilePanel(true);
   };
 
   const openAddForm = () => {
     setEditingProfile(null);
-    setFormData({ name: '', host: '127.0.0.1', port: 18789, token: '' });
+    setFormData({ name: '', host: '127.0.0.1', port: 18789, path: '/', token: '' });
     setFormErrors({});
     setShowProfilePanel(true);
   };
@@ -1099,10 +1100,22 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
                     value={formData.host}
                     onChange={e => {
                       let v = e.target.value;
-                      v = v.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+                      // Auto-parse full URLs: ws://host:port/path or http://host:port/path
+                      const urlMatch = v.match(/^(?:wss?|https?):\/\/([^/:]+)(?::(\d+))?(\/.*)?$/i);
+                      if (urlMatch) {
+                        const [, h, p, pathPart] = urlMatch;
+                        setFormData(f => ({
+                          ...f,
+                          host: h,
+                          port: p ? Math.max(1, Math.min(65535, Number(p))) : f.port,
+                          path: pathPart && pathPart !== '/' ? pathPart : f.path,
+                        }));
+                        return;
+                      }
+                      v = v.replace(/^https?:\/\//i, '').replace(/^wss?:\/\//i, '');
                       setFormData(f => ({ ...f, host: v }));
                     }}
-                    placeholder={gw.hostPlaceholder}
+                    placeholder={gw.hostPlaceholder || '192.168.1.100 or ws://host:port/path'}
                     className={`w-full h-9 px-3 theme-field rounded-lg text-sm font-mono placeholder:text-slate-400 dark:placeholder:text-white/20 focus:ring-1 focus:ring-primary outline-none transition-all sci-input ${formErrors.host ? 'border-mac-red' : ''}`}
                   />
                   {formErrors.host && <p className="text-[10px] text-mac-red mt-0.5">{formErrors.host}</p>}
@@ -1124,6 +1137,16 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
                   />
                   {formErrors.port && <p className="text-[10px] text-mac-red mt-0.5">{formErrors.port}</p>}
                 </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider mb-1 block">{gw.gwPath || 'PATH'}</label>
+                <input
+                  value={formData.path}
+                  onChange={e => setFormData(f => ({ ...f, path: e.target.value }))}
+                  placeholder={gw.pathPlaceholder || '/ (default) or /hg3x47'}
+                  className="w-full h-9 px-3 theme-field rounded-lg text-sm font-mono placeholder:text-slate-400 dark:placeholder:text-white/20 focus:ring-1 focus:ring-primary outline-none transition-all sci-input"
+                />
+                <p className="text-[9px] theme-text-muted mt-0.5">{gw.pathHint || 'WebSocket path suffix, e.g. /hg3x47. Leave as / for standard connections.'}</p>
               </div>
               <div>
                 <label className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider mb-1 block">{gw.gwToken}</label>

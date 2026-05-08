@@ -234,9 +234,12 @@ export class GatewayWSClient {
  * 从网关配置构建 WebSocket URL
  * http -> ws, https -> wss
  */
-export function buildGatewayWsUrl(host: string, port: number): string {
+export function buildGatewayWsUrl(host: string, port: number, path?: string): string {
   const isSecure = window.location.protocol === 'https:';
   const scheme = isSecure ? 'wss' : 'ws';
   const h = host === '0.0.0.0' ? '127.0.0.1' : host;
-  return `${scheme}://${h}:${port}`;
+  let wsPath = path || '/';
+  if (wsPath !== '/' && !wsPath.startsWith('/')) wsPath = '/' + wsPath;
+  if (wsPath === '/') return `${scheme}://${h}:${port}`;
+  return `${scheme}://${h}:${port}${wsPath}`;
 }

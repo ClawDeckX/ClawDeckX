@@ -137,6 +137,7 @@ func RunServe(args []string) int {
 
 	gwHost := "127.0.0.1"
 	gwPort := cfg.OpenClaw.GatewayPort
+	gwPath := "/"
 	gwToken := cfg.OpenClaw.GatewayToken
 	profileRepo := database.NewGatewayProfileRepo()
 	{
@@ -148,6 +149,9 @@ func RunServe(args []string) int {
 		if localProfile := selectLocalGatewayProfile(profileRepo); localProfile != nil {
 			gwHost = localProfile.Host
 			gwPort = localProfile.Port
+			if localProfile.Path != "" {
+				gwPath = localProfile.Path
+			}
 			gwToken = localProfile.Token
 			logger.Log.Info().
 				Str("name", localProfile.Name).
@@ -212,6 +216,7 @@ func RunServe(args []string) int {
 	gwClient := openclaw.NewGWClient(openclaw.GWClientConfig{
 		Host:  gwHost,
 		Port:  gwPort,
+		Path:  gwPath,
 		Token: gwToken,
 	})
 	svc.SetGWClient(gwClient)
@@ -223,6 +228,7 @@ func RunServe(args []string) int {
 			gwClient.Reconnect(openclaw.GWClientConfig{
 				Host:  svc.GatewayHost,
 				Port:  svc.GatewayPort,
+				Path:  gwClient.GetConfig().Path,
 				Token: svc.GatewayToken,
 			})
 			return nil
@@ -314,6 +320,7 @@ func RunServe(args []string) int {
 		gwClient.Reconnect(openclaw.GWClientConfig{
 			Host:  localProfile.Host,
 			Port:  localProfile.Port,
+			Path:  localProfile.Path,
 			Token: localProfile.Token,
 		})
 		return true

@@ -11,6 +11,7 @@ type GatewayProfile struct {
 	Name      string         `gorm:"size:100;not null" json:"name"`
 	Host      string         `gorm:"size:255;not null" json:"host"`
 	Port      int            `gorm:"not null;default:18789" json:"port"`
+	Path      string         `gorm:"size:255;default:'/'" json:"path"`
 	Token     string         `gorm:"size:512" json:"token"`
 	IsActive  bool           `gorm:"default:false" json:"is_active"`
 	CreatedAt time.Time      `json:"created_at"`

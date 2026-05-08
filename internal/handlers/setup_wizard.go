@@ -335,6 +335,7 @@ func (h *SetupWizardHandler) syncGatewayToken() {
 		h.gwClient.Reconnect(openclaw.GWClientConfig{
 			Host:  oldCfg.Host,
 			Port:  oldCfg.Port,
+			Path:  oldCfg.Path,
 			Token: token,
 		})
 	}
