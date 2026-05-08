@@ -1,16 +1,17 @@
 ﻿## What's Changed
 
+### ✨ New Features / 新功能
+
+- add elevated tools UI in overview security card with provider auto-detection
+
 ### 🐛 Bug Fixes / 修复
 
-- harden docker config workflows
-- serialize gateway config writes
-- strip leaked NO_REPLY sentinel from displayed messages
-
-### ⚡ Performance / 性能优化
-
-- proactive write budget + patch coalescing to prevent rate limiting
+- route safe apply through patch when possible
+- wait for gateway restart before finishing wizard
+- prefer patch saves to reduce apply rate limits
+- keep openclaw peer symlink scanner-safe
 
 ---
-**Full Changelog**: [v0.2.11...v0.2.12](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.11...v0.2.12)
+**Full Changelog**: [v0.2.12...v0.2.13](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.12...v0.2.13)
 
 
