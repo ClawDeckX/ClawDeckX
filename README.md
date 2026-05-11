@@ -173,7 +173,7 @@ bash install.sh --yes --mode update --no-start
 | `--help` / `-h` | Show usage help |
 
 > [!NOTE]
-> Non-interactive binary install **cannot run as root**. Switch to a regular user first, or use `--mode docker` instead.
+> When running as root in non-interactive mode, the installer skips user creation and installs directly. In interactive mode, it will offer to create a dedicated `openclaw` user.
 
 ### Manual Download
 

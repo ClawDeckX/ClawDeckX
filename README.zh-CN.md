@@ -166,7 +166,7 @@ bash install.sh --yes --mode update --no-start
 | `--help` / `-h` | 显示帮助信息 |
 
 > [!NOTE]
-> 非交互式二进制安装**不能以 root 用户运行**。请先切换到普通用户，或使用 `--mode docker` 代替。
+> 以 root 用户执行非交互式安装时，脚本会跳过用户创建，直接在当前目录安装。交互模式下则会引导创建专用的 `openclaw` 用户。
 
 ### 手动下载
 

@@ -2252,10 +2252,9 @@ esac
 # 0. Check root user (Binary install only — Docker does not need a dedicated user)
 if [ "$(id -u)" = "0" ]; then
     if is_non_interactive; then
-        echo -e "${RED}Error: Non-interactive binary install cannot run as root.${NC}"
-        echo -e "${YELLOW}Please switch to a non-root user, or use --mode docker instead.${NC}"
-        exit 1
-    fi
+        echo -e "${YELLOW}⚠ Running non-interactive binary install as root."
+        echo -e "  以 root 用户执行非交互式安装，跳过用户创建。${NC}"
+    else
     echo ""
     echo -e "${RED}⚠  Warning: Running as root is not recommended"
     echo -e "   不建议以 root 用户运行，可能导致权限和安全问题${NC}"
@@ -2379,6 +2378,7 @@ if [ "$(id -u)" = "0" ]; then
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 0
+    fi
     fi
 fi
 
