@@ -137,6 +137,44 @@ curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh
 irm https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.ps1 | iex
 ```
 
+#### Non-Interactive Install
+
+The installer supports fully non-interactive (headless) installation via command-line flags — perfect for CI/CD pipelines, provisioning scripts, and automated deployments.
+
+```bash
+# Binary install with all defaults (auto-confirm everything)
+curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh | bash -s -- \
+  --yes --mode binary
+
+# Docker install with custom port and instance name
+curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh | bash -s -- \
+  --yes --mode docker --port 19000 --instance-name myapp
+
+# Binary install with fine-grained control
+curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh | bash -s -- \
+  --yes --mode binary --port 8080 --register-path --install-service --start
+
+# Non-interactive update without restarting
+bash install.sh --yes --mode update --no-start
+```
+
+| Flag | Description |
+| :--- | :--- |
+| `--yes` / `-y` | Auto-confirm all prompts (implies `--non-interactive`) |
+| `--non-interactive` | Use default values for all prompts without confirming |
+| `--mode <mode>` | Skip menu: `binary`, `docker`, `update`, or `stop` |
+| `--port <port>` | Specify service port |
+| `--instance-name <name>` | Docker instance name (default: `clawdeckx`) |
+| `--register-path` | Add `clawdeckx` to PATH |
+| `--no-register-path` | Skip PATH registration |
+| `--install-service` | Install systemd auto-start service |
+| `--no-install-service` | Skip service installation |
+| `--start` / `--no-start` | Start (or skip starting) after install/update |
+| `--help` / `-h` | Show usage help |
+
+> [!NOTE]
+> Non-interactive binary install **cannot run as root**. Switch to a regular user first, or use `--mode docker` instead.
+
 ### Manual Download
 
 Download from [Releases](https://github.com/ClawDeckX/ClawDeckX/releases). Single file, no dependencies. Just run.

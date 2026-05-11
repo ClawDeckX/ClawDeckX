@@ -23,6 +23,107 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# CLI options
+ASSUME_YES=false
+NON_INTERACTIVE=false
+CLI_MODE=""
+CLI_PORT=""
+CLI_INSTANCE_NAME=""
+CLI_REGISTER_PATH="ask"
+CLI_INSTALL_SERVICE="ask"
+CLI_START="ask"
+
+usage() {
+    cat << EOF
+Usage: install.sh [options]
+
+Options:
+  --yes, -y
+  --non-interactive
+  --mode <binary|docker|update|stop>
+  --port <port>
+  --instance-name <name>
+  --register-path | --no-register-path
+  --install-service | --no-install-service
+  --start | --no-start
+  --help, -h
+EOF
+}
+
+parse_args() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --yes|-y) ASSUME_YES=true; NON_INTERACTIVE=true ;;
+            --non-interactive) NON_INTERACTIVE=true ;;
+            --mode) CLI_MODE="$2"; shift ;;
+            --port) CLI_PORT="$2"; shift ;;
+            --instance-name) CLI_INSTANCE_NAME="$2"; shift ;;
+            --register-path) CLI_REGISTER_PATH="yes" ;;
+            --no-register-path) CLI_REGISTER_PATH="no" ;;
+            --install-service) CLI_INSTALL_SERVICE="yes" ;;
+            --no-install-service) CLI_INSTALL_SERVICE="no" ;;
+            --start) CLI_START="yes" ;;
+            --no-start) CLI_START="no" ;;
+            --help|-h) usage; exit 0 ;;
+            *) echo -e "${RED}Error: Unknown option: $1${NC}"; usage; exit 1 ;;
+        esac
+        shift
+    done
+}
+
+is_non_interactive() {
+    [ "$NON_INTERACTIVE" = true ] || [ "$ASSUME_YES" = true ]
+}
+
+validate_port() {
+    local port="$1"
+    [ -n "$port" ] && [ "$port" -gt 0 ] 2>/dev/null && [ "$port" -le 65535 ] 2>/dev/null
+}
+
+confirm_default_yes() {
+    local prompt="$1"
+    if is_non_interactive; then
+        echo -e "$prompt ${GREEN}[auto: yes]${NC}"
+        return 0
+    fi
+    echo -n "$prompt"
+    read -n 1 -r </dev/tty
+    echo
+    [[ $REPLY =~ ^[Nn]$ ]] && return 1
+    return 0
+}
+
+confirm_default_no() {
+    local prompt="$1"
+    if is_non_interactive; then
+        echo -e "$prompt ${YELLOW}[auto: no]${NC}"
+        return 1
+    fi
+    echo -n "$prompt"
+    read -n 1 -r </dev/tty
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]] && return 0
+    return 1
+}
+
+prompt_with_default() {
+    local __resultvar="$1"
+    local prompt="$2"
+    local default_value="$3"
+    local value=""
+    if is_non_interactive; then
+        value="$default_value"
+        echo -e "$prompt ${GREEN}[auto: ${value}]${NC}"
+    else
+        echo -n "$prompt"
+        read -r value </dev/tty
+        value="${value:-$default_value}"
+    fi
+    printf -v "$__resultvar" '%s' "$value"
+}
+
+parse_args "$@"
+
 # Installation paths - prefer current directory
 BINARY_NAME="clawdeckx"
 DEFAULT_PORT=18788
@@ -676,9 +777,11 @@ docker_install_new() {
     echo -e "Suggested instance name: ${GREEN}${default_name}${NC}"
     echo -e "Examples: clawdeckx-2, clawdeckx-dev, clawdeckx-test"
     echo ""
-    echo -n "Enter instance name (or press Enter for '${default_name}') / 输入实例名称（回车使用 '${default_name}'）: "
-    read -r INSTANCE_NAME </dev/tty
-    INSTANCE_NAME="${INSTANCE_NAME:-$default_name}"
+    if [ -n "$CLI_INSTANCE_NAME" ]; then
+        INSTANCE_NAME="$CLI_INSTANCE_NAME"
+    else
+        prompt_with_default INSTANCE_NAME "Enter instance name (or press Enter for '${default_name}') / 输入实例名称（回车使用 '${default_name}'）: " "$default_name"
+    fi
     # Sanitize: lowercase, replace spaces with hyphens, remove invalid chars
     INSTANCE_NAME=$(echo "$INSTANCE_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9_-]//g')
     if [ -z "$INSTANCE_NAME" ]; then
@@ -691,17 +794,14 @@ docker_install_new() {
         check_file="docker-compose-${INSTANCE_NAME}.yml"
     fi
     if [ -f "$check_file" ]; then
-        echo -e "${YELLOW}⚠ Instance '$INSTANCE_NAME' already exists ($check_file)."
-        echo -e "  实例 '$INSTANCE_NAME' 已存在 ($check_file)${NC}"
-        echo -n "Continue anyway? (will overwrite) / 继续？（将覆盖） [y/N] "
-        read -n 1 -r </dev/tty
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            return 1
-        fi
-    fi
+     echo -e "${YELLOW}⚠ Instance '$INSTANCE_NAME' already exists ($check_file)."
+     echo -e "  实例 '$INSTANCE_NAME' 已存在 ($check_file)${NC}"
+     if ! confirm_default_no "Continue anyway? (will overwrite) / 继续？（将覆盖） [y/N] "; then
+         return 1
+     fi
+ fi
 
-    docker_install "$INSTANCE_NAME"
+ docker_install "$INSTANCE_NAME"
 }
 
 # Install ClawDeckX via Docker
@@ -753,10 +853,7 @@ docker_install() {
 
     # Step 1: Ensure Docker is installed
     if ! check_docker verbose; then
-        echo -n "Docker is not installed. Install Docker now? / Docker 未安装，现在安装？ [Y/n] "
-        read -n 1 -r </dev/tty
-        echo
-        if [[ $REPLY =~ ^[Nn]$ ]]; then
+        if ! confirm_default_yes "Docker is not installed. Install Docker now? / Docker 未安装，现在安装？ [Y/n] "; then
             echo -e "${YELLOW}Cannot proceed without Docker. / 没有 Docker 无法继续。${NC}"
             exit 1
         fi
@@ -831,13 +928,11 @@ docker_install() {
         echo -e "${GREEN}✓ Port $auto_port is available / 端口 $auto_port 可用${NC}"
     fi
 
-    echo -n "Use port $auto_port? / 使用端口 $auto_port？ [Y/n] "
-    read -n 1 -r </dev/tty
-    echo
-    if [[ $REPLY =~ ^[Nn]$ ]]; then
-        echo -n "Enter port / 输入端口: "
-        read -r CUSTOM_PORT </dev/tty
-        if [ -n "$CUSTOM_PORT" ] && [ "$CUSTOM_PORT" -gt 0 ] 2>/dev/null && [ "$CUSTOM_PORT" -le 65535 ] 2>/dev/null; then
+    if validate_port "$CLI_PORT"; then
+        auto_port="$CLI_PORT"
+    elif ! confirm_default_yes "Use port $auto_port? / 使用端口 $auto_port？ [Y/n] "; then
+        prompt_with_default CUSTOM_PORT "Enter port / 输入端口: " "$auto_port"
+        if validate_port "$CUSTOM_PORT"; then
             auto_port=$CUSTOM_PORT
         else
             echo -e "${YELLOW}Invalid port, using $auto_port / 端口无效，使用 $auto_port${NC}"
@@ -978,10 +1073,7 @@ docker_update() {
     echo -e "${CYAN}Will pull / 将拉取：${NC} $DOCKER_IMAGE"
     echo ""
 
-    echo -n "Proceed with update? / 确认更新？ [Y/n] "
-    read -n 1 -r </dev/tty
-    echo
-    if [[ $REPLY =~ ^[Nn]$ ]]; then
+    if ! confirm_default_yes "Proceed with update? / 确认更新？ [Y/n] "; then
         echo -e "${YELLOW}Update cancelled / 更新已取消${NC}"
         return
     fi
@@ -1815,17 +1907,11 @@ update() {
     if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
         echo -e "${GREEN}✓ Already up to date! / 已经是最新版本！${NC}"
         echo ""
-        echo -n "Force re-download? / 强制重新下载？ [y/N] "
-        read -n 1 -r </dev/tty
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        if ! confirm_default_no "Force re-download? / 强制重新下载？ [y/N] "; then
             exit 0
         fi
     else
-        echo -n "Proceed with update? / 确认更新？ [Y/n] "
-        read -n 1 -r </dev/tty
-        echo
-        if [[ $REPLY =~ ^[Nn]$ ]]; then
+        if ! confirm_default_yes "Proceed with update? / 确认更新？ [Y/n] "; then
             exit 0
         fi
     fi
@@ -1836,10 +1922,7 @@ update() {
         echo -e "${YELLOW}⚠ ClawDeckX is currently running / ClawDeckX 正在运行${NC}"
         echo -e "${YELLOW}The program needs to be stopped before updating. / 更新前需要停止程序。${NC}"
         echo ""
-        echo -n "Stop ClawDeckX now and continue update? / 立即停止 ClawDeckX 并继续更新？ [Y/n] "
-        read -n 1 -r </dev/tty
-        echo
-        if [[ $REPLY =~ ^[Nn]$ ]]; then
+        if ! confirm_default_yes "Stop ClawDeckX now and continue update? / 立即停止 ClawDeckX 并继续更新？ [Y/n] "; then
             echo -e "${YELLOW}Update cancelled. / 更新已取消${NC}"
             exit 0
         fi
@@ -1876,11 +1959,14 @@ update() {
     echo ""
     
     # Ask if user wants to restart ClawDeckX
-    echo -n "Start ClawDeckX now? / 立即启动 ClawDeckX？ [Y/n] "
-    read -n 1 -r </dev/tty
-    echo
+    local do_start=true
+    if [ "$CLI_START" = "no" ]; then
+        do_start=false
+    elif [ "$CLI_START" = "ask" ] && ! confirm_default_yes "Start ClawDeckX now? / 立即启动 ClawDeckX？ [Y/n] "; then
+        do_start=false
+    fi
     
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    if [ "$do_start" = true ]; then
         start_clawdeckx
         
         # Show access URL if running
@@ -1998,6 +2084,34 @@ fi
 
 N=$((N + 1)); MENU_ITEMS+=("$N) Exit / 退出"); MENU_ACTIONS+=("exit")
 
+if [ -n "$CLI_MODE" ]; then
+    case "$CLI_MODE" in
+        binary)
+            SELECTED_ACTION="install_binary"
+            ;;
+        docker)
+            SELECTED_ACTION="install_docker"
+            ;;
+        update)
+            if [ "$HAS_BINARY" = true ]; then
+                update
+                exit 0
+            fi
+            echo -e "${RED}Error: No local binary installation found for update${NC}"
+            exit 1
+            ;;
+        stop)
+            stop_service
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Error: Invalid mode '$CLI_MODE'${NC}"
+            usage
+            exit 1
+            ;;
+    esac
+else
+
 echo -e "${YELLOW}What would you like to do? / 您想做什么？${NC}"
 for item in "${MENU_ITEMS[@]}"; do
     echo "  $item"
@@ -2020,6 +2134,7 @@ if [ -z "$MAIN_CHOICE" ] || ! [[ "$MAIN_CHOICE" =~ ^[0-9]+$ ]] || [ "$MAIN_CHOIC
 fi
 
 SELECTED_ACTION="${MENU_ACTIONS[$((MAIN_CHOICE - 1))]}"
+fi
 
 case "$SELECTED_ACTION" in
     manage_docker)
@@ -2136,6 +2251,11 @@ esac
 
 # 0. Check root user (Binary install only — Docker does not need a dedicated user)
 if [ "$(id -u)" = "0" ]; then
+    if is_non_interactive; then
+        echo -e "${RED}Error: Non-interactive binary install cannot run as root.${NC}"
+        echo -e "${YELLOW}Please switch to a non-root user, or use --mode docker instead.${NC}"
+        exit 1
+    fi
     echo ""
     echo -e "${RED}⚠  Warning: Running as root is not recommended"
     echo -e "   不建议以 root 用户运行，可能导致权限和安全问题${NC}"
@@ -2381,14 +2501,13 @@ echo ""
 if ! command -v clawdeckx &>/dev/null || [ "$(command -v clawdeckx 2>/dev/null)" != "$INSTALLED_BINARY" ]; then
     echo -e "${YELLOW}Would you like to add clawdeckx to PATH for global access?"
     echo -e "是否将 clawdeckx 添加到 PATH 以便全局使用？${NC}"
-    echo -n "Register in PATH? / 注册到 PATH？ [Y/n] "
-    read -n 1 -r </dev/tty
-    echo
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    if [ "$CLI_REGISTER_PATH" = "yes" ]; then
+        register_path "$INSTALLED_BINARY"
+    elif [ "$CLI_REGISTER_PATH" = "ask" ] && confirm_default_yes "Register in PATH? / 注册到 PATH？ [Y/n] "; then
         register_path "$INSTALLED_BINARY"
     fi
-    echo ""
 fi
+echo ""
 
 # Smart port detection for binary install
 echo -e "${CYAN}Detecting available port... / 正在检测可用端口...${NC}"
@@ -2402,17 +2521,16 @@ else
     echo -e "${GREEN}✓ Port $BINARY_PORT is available / 端口 $BINARY_PORT 可用${NC}"
 fi
 
-echo -n "Use port $BINARY_PORT? / 使用端口 $BINARY_PORT？ [Y/n] "
-read -n 1 -r </dev/tty
-echo
-if [[ $REPLY =~ ^[Nn]$ ]]; then
-    echo -n "Enter port / 输入端口: "
-    read -r CUSTOM_PORT </dev/tty
-    if [ -n "$CUSTOM_PORT" ] && [ "$CUSTOM_PORT" -gt 0 ] 2>/dev/null && [ "$CUSTOM_PORT" -le 65535 ] 2>/dev/null; then
+if validate_port "$CLI_PORT"; then
+    BINARY_PORT="$CLI_PORT"
+elif ! confirm_default_yes "Use port $BINARY_PORT? / 使用端口 $BINARY_PORT？ [Y/n] "; then
+    prompt_with_default CUSTOM_PORT "Enter port / 输入端口: " "$BINARY_PORT"
+    if validate_port "$CUSTOM_PORT"; then
         BINARY_PORT=$CUSTOM_PORT
     else
         echo -e "${YELLOW}Invalid port, using $BINARY_PORT / 端口无效，使用 $BINARY_PORT${NC}"
     fi
+    echo ""
 fi
 PORT=$BINARY_PORT
 echo -e "${GREEN}✓ Port set to $PORT / 端口已设置为 $PORT${NC}"
@@ -2423,11 +2541,10 @@ SERVICE_JUST_INSTALLED=false
 if ! check_systemd_service; then
     echo -e "${YELLOW}Would you like to install auto-start service?"
     echo -e "是否安装自动启动服务？（系统重启后自动运行）${NC}"
-    echo -n "Install auto-start service? / 安装自动启动服务？ [Y/n] "
-    read -n 1 -r </dev/tty
-    echo
-    
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    if [ "$CLI_INSTALL_SERVICE" = "yes" ]; then
+        install_systemd_service
+        SERVICE_JUST_INSTALLED=true
+    elif [ "$CLI_INSTALL_SERVICE" = "ask" ] && confirm_default_yes "Install auto-start service? / 安装自动启动服务？ [Y/n] "; then
         install_systemd_service
         SERVICE_JUST_INSTALLED=true
     fi
@@ -2441,11 +2558,14 @@ if [ "$SERVICE_JUST_INSTALLED" = true ]; then
     echo ""
 fi
 
-echo -n "Start ClawDeckX now? / 立即启动 ClawDeckX？ [Y/n] "
-read -n 1 -r </dev/tty
-echo
+START_NOW=true
+if [ "$CLI_START" = "no" ]; then
+    START_NOW=false
+elif [ "$CLI_START" = "ask" ] && ! confirm_default_yes "Start ClawDeckX now? / 立即启动 ClawDeckX？ [Y/n] "; then
+    START_NOW=false
+fi
 
-if [[ $REPLY =~ ^[Nn]$ ]]; then
+if [ "$START_NOW" = false ]; then
     echo ""
     echo -e "${YELLOW}You can start it later with: / 稍后可以使用以下命令启动：${NC}"
     echo -e "  ${GREEN}./$BINARY_NAME${NC}"

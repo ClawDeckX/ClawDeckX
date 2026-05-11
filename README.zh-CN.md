@@ -130,6 +130,44 @@ curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh
 irm https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.ps1 | iex
 ```
 
+#### 非交互式安装
+
+安装脚本支持通过命令行参数实现全自动无人值守安装，适用于 CI/CD 流水线、批量部署和自动化运维场景。
+
+```bash
+# 二进制一键安装（全部使用默认值）
+curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh | bash -s -- \
+  --yes --mode binary
+
+# Docker 安装，指定端口和实例名
+curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh | bash -s -- \
+  --yes --mode docker --port 19000 --instance-name myapp
+
+# 二进制安装，精细控制各选项
+curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh | bash -s -- \
+  --yes --mode binary --port 8080 --register-path --install-service --start
+
+# 非交互式更新，不自动启动
+bash install.sh --yes --mode update --no-start
+```
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `--yes` / `-y` | 自动确认所有提示（同时启用非交互模式） |
+| `--non-interactive` | 非交互模式，所有提示使用默认值 |
+| `--mode <模式>` | 跳过菜单直接执行：`binary`、`docker`、`update`、`stop` |
+| `--port <端口>` | 指定服务端口 |
+| `--instance-name <名称>` | Docker 实例名称（默认 `clawdeckx`） |
+| `--register-path` | 将 `clawdeckx` 添加到 PATH |
+| `--no-register-path` | 跳过 PATH 注册 |
+| `--install-service` | 安装 systemd 自启服务 |
+| `--no-install-service` | 跳过服务安装 |
+| `--start` / `--no-start` | 安装/更新后是否启动 |
+| `--help` / `-h` | 显示帮助信息 |
+
+> [!NOTE]
+> 非交互式二进制安装**不能以 root 用户运行**。请先切换到普通用户，或使用 `--mode docker` 代替。
+
 ### 手动下载
 
 从 [Releases](https://github.com/ClawDeckX/ClawDeckX/releases) 下载二进制文件，零依赖，直接运行。
