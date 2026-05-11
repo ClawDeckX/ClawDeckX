@@ -173,7 +173,7 @@ bash install.sh --yes --mode update --no-start
 | `--help` / `-h` | Show usage help |
 
 > [!NOTE]
-> When running as root in non-interactive mode, the installer skips user creation and installs directly. In interactive mode, it will offer to create a dedicated `openclaw` user.
+> The binary is always installed to `/opt/clawdeckx/` regardless of user. Non-root users will be prompted for `sudo` to create the directory. A symlink is placed in `/usr/local/bin` (root) or `~/.local/bin` (user) for global access.
 
 ### Manual Download
 

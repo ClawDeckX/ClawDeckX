@@ -136,10 +136,18 @@ DATA_DIR=""
 
 # Function to check if ClawDeckX is installed and find its location
 check_installed() {
-    # Check current directory (preferred location)
-    if [ -f "./$BINARY_NAME" ] && [ -x "./$BINARY_NAME" ]; then
-        INSTALLED_LOCATION="./$BINARY_NAME"
-        RAW_VERSION=$(./$BINARY_NAME --version 2>/dev/null || echo "unknown")
+    local found=""
+    # Check standard location first
+    if [ -f "/opt/clawdeckx/$BINARY_NAME" ] && [ -x "/opt/clawdeckx/$BINARY_NAME" ]; then
+        found="/opt/clawdeckx/$BINARY_NAME"
+    # Fallback: check current directory (legacy installs)
+    elif [ -f "./$BINARY_NAME" ] && [ -x "./$BINARY_NAME" ]; then
+        found="./$BINARY_NAME"
+    fi
+
+    if [ -n "$found" ]; then
+        INSTALLED_LOCATION="$found"
+        RAW_VERSION=$("$found" --version 2>/dev/null || echo "unknown")
         # Extract version number from output like "ClawDeckX 0.0.11"
         CURRENT_VERSION=$(echo "$RAW_VERSION" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
         if [ -z "$CURRENT_VERSION" ]; then
@@ -436,8 +444,10 @@ sed_inplace() {
     fi
 }
 
-# Register ClawDeckX binary in PATH via ~/.local/bin symlink (preferred)
-# or shell profile export as fallback.
+# Register ClawDeckX binary in PATH via symlink.
+#   root → /usr/local/bin/clawdeckx  (system-wide, already in PATH)
+#   user → ~/.local/bin/clawdeckx    (XDG standard)
+# Falls back to shell profile export if symlink dir is not in PATH.
 # Usage: register_path <absolute_binary_path>
 register_path() {
     local binary_abs="$1"
@@ -447,14 +457,21 @@ register_path() {
     fi
     local install_dir
     install_dir="$(dirname "$binary_abs")"
-    local link_dir="$HOME/.local/bin"
 
-    # Method 1: symlink in ~/.local/bin (XDG standard, cleanest)
+    # Choose symlink directory based on user
+    local link_dir
+    if [ "$(id -u)" = "0" ]; then
+        link_dir="/usr/local/bin"
+    else
+        link_dir="$HOME/.local/bin"
+    fi
+
+    # Create symlink
     if mkdir -p "$link_dir" 2>/dev/null; then
         ln -sf "$binary_abs" "$link_dir/clawdeckx"
         echo -e "${GREEN}✓ Created symlink: $link_dir/clawdeckx → $binary_abs${NC}"
 
-        # Ensure ~/.local/bin is in PATH for future shells
+        # Ensure link_dir is in PATH for future shells
         if ! echo "$PATH" | tr ':' '\n' | grep -qx "$link_dir"; then
             local profile_file=""
             if [ -f "$HOME/.zshrc" ]; then
@@ -478,7 +495,7 @@ register_path() {
         return 0
     fi
 
-    # Method 2: direct PATH export in shell profile
+    # Fallback: direct PATH export in shell profile
     local profile_file=""
     if [ -f "$HOME/.zshrc" ]; then
         profile_file="$HOME/.zshrc"
@@ -506,15 +523,16 @@ register_path() {
 }
 
 # Remove ClawDeckX PATH registration (for uninstall)
+# Removes symlinks from both /usr/local/bin and ~/.local/bin, plus shell profile entries.
 # Usage: unregister_path
 unregister_path() {
-    local link_dir="$HOME/.local/bin"
-
-    # Remove symlink
-    if [ -L "$link_dir/clawdeckx" ]; then
-        rm -f "$link_dir/clawdeckx"
-        echo -e "${GREEN}✓ Removed symlink: $link_dir/clawdeckx${NC}"
-    fi
+    # Remove symlinks from both possible locations
+    for link_dir in "/usr/local/bin" "$HOME/.local/bin"; do
+        if [ -L "$link_dir/clawdeckx" ]; then
+            rm -f "$link_dir/clawdeckx"
+            echo -e "${GREEN}✓ Removed symlink: $link_dir/clawdeckx${NC}"
+        fi
+    done
 
     # Remove PATH entries from shell profiles
     local marker='# ClawDeckX PATH'
@@ -2463,8 +2481,14 @@ fi
 
 echo -e "${GREEN}✓ Found asset:${NC} $DOWNLOAD_URL"
 
-# 3. Download - use $(pwd) to get current working directory (with China proxy fallback)
-INSTALLED_BINARY="$(pwd)/$BINARY_NAME"
+# 3. Determine install directory — always /opt/clawdeckx for unified management
+INSTALL_DIR="/opt/clawdeckx"
+if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
+    echo -e "${YELLOW}Creating $INSTALL_DIR requires elevated privileges...${NC}"
+    sudo mkdir -p "$INSTALL_DIR"
+    sudo chown "$(id -u):$(id -g)" "$INSTALL_DIR"
+fi
+INSTALLED_BINARY="$INSTALL_DIR/$BINARY_NAME"
 echo -e "${YELLOW}Downloading $BINARY_NAME ...${NC}"
 if [ "$NEED_MIRROR" = true ]; then
     CN_DL_URL="https://ghfast.top/$DOWNLOAD_URL"
@@ -2481,9 +2505,9 @@ fi
 chmod +x "$INSTALLED_BINARY"
 echo -e "${GREEN}✓ Download complete!${NC}"
 
-# 5. Installation complete (binary already in correct location)
+# 5. Installation complete
 echo ""
-echo -e "${BLUE}Installing to current directory ($PWD) ...${NC}"
+echo -e "${BLUE}Installing to $INSTALL_DIR ...${NC}"
 echo -e "${GREEN}✓ Installed: $INSTALLED_BINARY${NC}"
 
 echo ""
@@ -2492,9 +2516,7 @@ echo -e "${GREEN}✅ Installation complete! / 安装完成！${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "${CYAN}ClawDeckX location / ClawDeckX 位置：${NC} $INSTALLED_BINARY"
-echo -e "${CYAN}Config & Data directory / 配置和数据目录：${NC} $(dirname "$INSTALLED_BINARY")/data"
-echo ""
-echo -e "${GREEN}✓ Installed in current directory / 已安装在当前目录${NC}"
+echo -e "${CYAN}Config & Data directory / 配置和数据目录：${NC} $INSTALL_DIR/data"
 echo ""
 
 # Register in PATH so `clawdeckx` is available globally

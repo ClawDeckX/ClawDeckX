@@ -166,7 +166,7 @@ bash install.sh --yes --mode update --no-start
 | `--help` / `-h` | 显示帮助信息 |
 
 > [!NOTE]
-> 以 root 用户执行非交互式安装时，脚本会跳过用户创建，直接在当前目录安装。交互模式下则会引导创建专用的 `openclaw` 用户。
+> 二进制统一安装到 `/opt/clawdeckx/` 目录，不区分用户。非 root 用户安装时会通过 `sudo` 创建目录。PATH 注册：root 创建 `/usr/local/bin/clawdeckx` 软链接，普通用户创建 `~/.local/bin/clawdeckx` 软链接。
 
 ### 手动下载
 
