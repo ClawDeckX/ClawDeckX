@@ -158,6 +158,22 @@ func RunServe(args []string) int {
 				Str("host", localProfile.Host).
 				Int("port", localProfile.Port).
 				Msg(i18n.T(i18n.MsgLogUsingGatewayProfile))
+
+			// Sync gateway port from openclaw.json if it differs from the DB
+			// profile. This catches cases where the user changed the port in
+			// OpenClaw after the profile was initially created.
+			isLocal := gwHost == "" || gwHost == "127.0.0.1" || gwHost == "localhost" || gwHost == "::1"
+			if isLocal {
+				if gwCfg := openclaw.ReadGatewayConfig(); gwCfg != nil && gwCfg.Port > 0 && gwCfg.Port != localProfile.Port {
+					logger.Log.Info().
+						Int("oldPort", localProfile.Port).
+						Int("newPort", gwCfg.Port).
+						Msg(i18n.T(i18n.MsgLogGwPortSyncedFromConfig))
+					localProfile.Port = gwCfg.Port
+					gwPort = gwCfg.Port
+					_ = profileRepo.Update(localProfile)
+				}
+			}
 		}
 	}
 
@@ -673,6 +689,7 @@ func RunServe(args []string) int {
 
 	router.GET("/api/v1/setup/scan", setupWizardHandler.Scan)
 	router.GET("/api/v1/setup/status", setupWizardHandler.Status)
+	router.GET("/api/v1/setup/detect-config", setupWizardHandler.DetectConfig)
 	router.POST("/api/v1/setup/install-deps", web.RequireAdmin(setupWizardHandler.InstallDeps))
 	router.POST("/api/v1/setup/install-openclaw", web.RequireAdmin(setupWizardHandler.InstallOpenClaw))
 	router.POST("/api/v1/setup/configure", web.RequireAdmin(setupWizardHandler.Configure))
@@ -1470,6 +1487,19 @@ func ensureLocalGatewayProfile(repo *database.GatewayProfileRepo, port int, toke
 	if repo == nil || selectLocalGatewayProfile(repo) != nil {
 		return
 	}
+
+	// Auto-detect actual gateway config from openclaw.json instead of using
+	// hardcoded defaults. This handles the case where the user already has
+	// OpenClaw installed on a non-default port.
+	if gwCfg := openclaw.ReadGatewayConfig(); gwCfg != nil {
+		if gwCfg.Port > 0 {
+			port = gwCfg.Port
+		}
+		if gwCfg.Token != "" && token == "" {
+			token = gwCfg.Token
+		}
+	}
+
 	if port == 0 {
 		port = 18789
 	}
@@ -1484,7 +1514,7 @@ func ensureLocalGatewayProfile(repo *database.GatewayProfileRepo, port int, toke
 		logger.Log.Info().
 			Str("name", localProfile.Name).
 			Int("port", localProfile.Port).
-			Msg("auto-created default local gateway profile")
+			Msg(i18n.T(i18n.MsgLogGwProfileCreatedFromConfig))
 	}
 }
 

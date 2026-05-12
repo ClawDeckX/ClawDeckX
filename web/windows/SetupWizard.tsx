@@ -100,6 +100,11 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
   const [gwStartError, setGwStartError] = useState<string | null>(null);
   const [gwRetryCount, setGwRetryCount] = useState(0);
   const [wasInstalledOnOpen, setWasInstalledOnOpen] = useState<boolean | null>(null);
+  const [detectedConfig, setDetectedConfig] = useState<{
+    installed?: boolean; version?: string; command?: string;
+    configPath?: string; configExists?: boolean;
+    gatewayPort?: number; gatewayBind?: string; gatewayMode?: string; gatewayToken?: boolean;
+  } | null>(null);
   const { confirm } = useConfirm();
 
   // 安装选项
@@ -164,6 +169,14 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
       // 记录首次扫描时 OpenClaw 是否已安装
       if (wasInstalledOnOpen === null) {
         setWasInstalledOnOpen(data.openClawInstalled);
+      }
+
+      // 检测已有 OpenClaw 配置
+      if (data.openClawInstalled && data.openClawConfigured) {
+        try {
+          const cfgRes = await get<any>('/api/v1/setup/detect-config');
+          setDetectedConfig(cfgRes.data || cfgRes);
+        } catch { /* ignore */ }
       }
 
       // 保持在 scan 阶段，显示扫描结果（无论是否已安装）
@@ -774,6 +787,43 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
                         </div>
                       </div>
                     </div>
+
+                    {/* 检测到的网关配置 */}
+                    {detectedConfig?.configExists && (detectedConfig.gatewayPort || detectedConfig.gatewayBind || detectedConfig.gatewayMode) && (
+                      <div className="p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-base">settings_suggest</span>
+                          <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300">{sw.detectedConfigTitle}</h4>
+                        </div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400/80 mb-3">{sw.detectedConfigDesc}</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {detectedConfig.gatewayPort != null && detectedConfig.gatewayPort > 0 && (
+                            <div className="p-2.5 bg-blue-100/60 dark:bg-blue-500/10 rounded-lg">
+                              <p className="text-[10px] text-blue-500 dark:text-blue-400/60 uppercase">{sw.detectedGwPort}</p>
+                              <p className="text-sm font-mono font-medium text-blue-900 dark:text-blue-200">{detectedConfig.gatewayPort}</p>
+                            </div>
+                          )}
+                          {detectedConfig.gatewayBind && (
+                            <div className="p-2.5 bg-blue-100/60 dark:bg-blue-500/10 rounded-lg">
+                              <p className="text-[10px] text-blue-500 dark:text-blue-400/60 uppercase">{sw.detectedGwBind}</p>
+                              <p className="text-sm font-mono font-medium text-blue-900 dark:text-blue-200">{detectedConfig.gatewayBind}</p>
+                            </div>
+                          )}
+                          {detectedConfig.gatewayMode && (
+                            <div className="p-2.5 bg-blue-100/60 dark:bg-blue-500/10 rounded-lg">
+                              <p className="text-[10px] text-blue-500 dark:text-blue-400/60 uppercase">{sw.detectedGwMode}</p>
+                              <p className="text-sm font-mono font-medium text-blue-900 dark:text-blue-200">{detectedConfig.gatewayMode}</p>
+                            </div>
+                          )}
+                          <div className="p-2.5 bg-blue-100/60 dark:bg-blue-500/10 rounded-lg">
+                            <p className="text-[10px] text-blue-500 dark:text-blue-400/60 uppercase">{sw.detectedGwToken}</p>
+                            <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                              {detectedConfig.gatewayToken ? sw.detectedConfigured : sw.detectedNotConfigured}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

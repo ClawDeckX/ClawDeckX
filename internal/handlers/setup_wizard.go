@@ -452,6 +452,33 @@ func (h *SetupWizardHandler) Status(w http.ResponseWriter, r *http.Request) {
 	web.OK(w, r, result)
 }
 
+// DetectConfig reads the existing openclaw.json and returns the detected
+// gateway configuration so the frontend can display it and offer to import.
+// GET /api/v1/setup/detect-config
+func (h *SetupWizardHandler) DetectConfig(w http.ResponseWriter, r *http.Request) {
+	configPath := openclaw.ResolveConfigPath()
+	configExists := openclaw.ConfigFileExists()
+
+	cmd, version, installed := openclaw.DetectOpenClawBinary()
+
+	result := map[string]interface{}{
+		"installed":    installed,
+		"version":      version,
+		"command":      cmd,
+		"configPath":   configPath,
+		"configExists": configExists,
+	}
+
+	if gwCfg := openclaw.ReadGatewayConfig(); gwCfg != nil {
+		result["gatewayPort"] = gwCfg.Port
+		result["gatewayBind"] = gwCfg.Bind
+		result["gatewayMode"] = gwCfg.Mode
+		result["gatewayToken"] = gwCfg.Token != ""
+	}
+
+	web.OK(w, r, result)
+}
+
 // Uninstall uninstalls OpenClaw.
 // POST /api/v1/setup/uninstall
 func (h *SetupWizardHandler) Uninstall(w http.ResponseWriter, r *http.Request) {

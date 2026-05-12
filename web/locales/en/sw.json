@@ -123,5 +123,13 @@
   "dockerMountsTitle": "Docker Volume Mounts",
   "dockerMountsDesc": "Volume mappings between host and container paths",
   "dockerMountHost": "Host",
-  "dockerMountContainer": "Container"
+  "dockerMountContainer": "Container",
+  "detectedConfigTitle": "Detected Configuration",
+  "detectedConfigDesc": "Found existing OpenClaw configuration, gateway settings have been automatically imported.",
+  "detectedGwPort": "Gateway Port",
+  "detectedGwBind": "Bind Address",
+  "detectedGwMode": "Gateway Mode",
+  "detectedGwToken": "Auth Token",
+  "detectedConfigured": "Configured",
+  "detectedNotConfigured": "Not Configured"
 }

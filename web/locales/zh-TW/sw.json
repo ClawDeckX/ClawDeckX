@@ -123,5 +123,13 @@
   "dockerMountsTitle": "Docker 卷映射",
   "dockerMountsDesc": "主機與容器之間的卷映射路徑",
   "dockerMountHost": "主機",
-  "dockerMountContainer": "容器"
+  "dockerMountContainer": "容器",
+  "detectedConfigTitle": "偵測到的設定",
+  "detectedConfigDesc": "發現已有 OpenClaw 設定，閘道設定已自動匯入。",
+  "detectedGwPort": "閘道連接埠",
+  "detectedGwBind": "綁定位址",
+  "detectedGwMode": "閘道模式",
+  "detectedGwToken": "認證權杖",
+  "detectedConfigured": "已設定",
+  "detectedNotConfigured": "未設定"
 }

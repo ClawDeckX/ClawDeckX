@@ -742,6 +742,8 @@ const (
 	MsgLogGwTokenReadFailed          = "log.gw_token_read_failed"
 	MsgLogRemoteGatewayMode          = "log.remote_gateway_mode"
 	MsgLogBindNonLoopbackWarning     = "log.bind_non_loopback_warning"
+	MsgLogGwPortSyncedFromConfig     = "log.gw_port_synced_from_config"
+	MsgLogGwProfileCreatedFromConfig = "log.gw_profile_created_from_config"
 	MsgDefaultLocalGatewayName       = "gateway.default_local_name"
 )
 

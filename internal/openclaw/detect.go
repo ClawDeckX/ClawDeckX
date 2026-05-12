@@ -105,6 +105,46 @@ func NotifyConfigured() bool {
 	return false
 }
 
+// GatewayConfigFromFile represents gateway configuration read from openclaw.json.
+type GatewayConfigFromFile struct {
+	Port  int    // gateway.port
+	Bind  string // gateway.bind ("loopback", "0.0.0.0", etc.)
+	Mode  string // gateway.mode ("local", "remote", etc.)
+	Token string // gateway.auth.token
+}
+
+// ReadGatewayConfig reads gateway configuration from the openclaw.json config file.
+// Returns nil if the config file does not exist or cannot be parsed.
+func ReadGatewayConfig() *GatewayConfigFromFile {
+	cfg := readOpenClawConfig()
+	if cfg == nil {
+		return nil
+	}
+	gw, ok := cfg["gateway"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	result := &GatewayConfigFromFile{}
+	switch v := gw["port"].(type) {
+	case float64:
+		if v > 0 && v <= 65535 {
+			result.Port = int(v)
+		}
+	}
+	if bind, ok := gw["bind"].(string); ok {
+		result.Bind = bind
+	}
+	if mode, ok := gw["mode"].(string); ok {
+		result.Mode = mode
+	}
+	if auth, ok := gw["auth"].(map[string]interface{}); ok {
+		if token, ok := auth["token"].(string); ok {
+			result.Token = token
+		}
+	}
+	return result
+}
+
 func readOpenClawConfig() map[string]interface{} {
 	path := ResolveConfigPath()
 	if path == "" {

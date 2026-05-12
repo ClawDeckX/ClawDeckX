@@ -123,5 +123,13 @@
   "dockerMountsTitle": "Docker ボリュームマウント",
   "dockerMountsDesc": "ホストとコンテナ間のボリュームマッピング",
   "dockerMountHost": "ホスト",
-  "dockerMountContainer": "コンテナ"
+  "dockerMountContainer": "コンテナ",
+  "detectedConfigTitle": "検出された設定",
+  "detectedConfigDesc": "既存の OpenClaw 設定を検出し、ゲートウェイ設定を自動インポートしました。",
+  "detectedGwPort": "ゲートウェイポート",
+  "detectedGwBind": "バインドアドレス",
+  "detectedGwMode": "ゲートウェイモード",
+  "detectedGwToken": "認証トークン",
+  "detectedConfigured": "設定済み",
+  "detectedNotConfigured": "未設定"
 }

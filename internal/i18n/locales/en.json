@@ -597,6 +597,8 @@
   "log.gw_token_read_failed": "Failed to read gateway auth token from openclaw.json (see DEBUG logs above)",
   "log.remote_gateway_mode": "Remote Gateway mode",
   "log.bind_non_loopback_warning": "⚠️  Web service bound to non-loopback address, ensure firewall rules are configured",
+  "log.gw_port_synced_from_config": "Synced gateway port from openclaw.json to local profile",
+  "log.gw_profile_created_from_config": "Auto-created local gateway profile from openclaw.json",
   "gateway.default_local_name": "Local Gateway",
   "success.applied": "Applied successfully",
   "success.saved": "Saved successfully",

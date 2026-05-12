@@ -597,6 +597,8 @@
   "log.gw_token_read_failed": "未能从 openclaw.json 读取到 gateway auth token（详见上方 DEBUG 日志）",
   "log.remote_gateway_mode": "远程 Gateway 模式",
   "log.bind_non_loopback_warning": "⚠️  Web 服务绑定到非回环地址，请确保已配置防火墙规则",
+  "log.gw_port_synced_from_config": "已从 openclaw.json 同步网关端口到本地配置",
+  "log.gw_profile_created_from_config": "已根据 openclaw.json 自动创建本地网关配置",
   "gateway.default_local_name": "本地网关",
   "success.applied": "应用成功",
   "success.saved": "保存成功",

@@ -123,5 +123,13 @@
   "dockerMountsTitle": "Docker 卷映射",
   "dockerMountsDesc": "宿主机与容器之间的卷映射路径",
   "dockerMountHost": "宿主机",
-  "dockerMountContainer": "容器"
+  "dockerMountContainer": "容器",
+  "detectedConfigTitle": "检测到的配置",
+  "detectedConfigDesc": "发现已有 OpenClaw 配置，网关设置已自动导入。",
+  "detectedGwPort": "网关端口",
+  "detectedGwBind": "绑定地址",
+  "detectedGwMode": "网关模式",
+  "detectedGwToken": "认证令牌",
+  "detectedConfigured": "已配置",
+  "detectedNotConfigured": "未配置"
 }

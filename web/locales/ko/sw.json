@@ -123,5 +123,13 @@
   "dockerMountsTitle": "Docker 볼륨 마운트",
   "dockerMountsDesc": "호스트와 컨테이너 간의 볼륨 매핑",
   "dockerMountHost": "호스트",
-  "dockerMountContainer": "컨테이너"
+  "dockerMountContainer": "컨테이너",
+  "detectedConfigTitle": "감지된 설정",
+  "detectedConfigDesc": "기존 OpenClaw 설정을 감지하여 게이트웨이 설정을 자동으로 가져왔습니다.",
+  "detectedGwPort": "게이트웨이 포트",
+  "detectedGwBind": "바인드 주소",
+  "detectedGwMode": "게이트웨이 모드",
+  "detectedGwToken": "인증 토큰",
+  "detectedConfigured": "설정됨",
+  "detectedNotConfigured": "미설정"
 }
