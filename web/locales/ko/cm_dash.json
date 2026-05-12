@@ -215,6 +215,7 @@
     "pluginNotEnabled": "Prometheus 플러그인이 활성화되지 않음",
     "pluginNotEnabledHint": "OpenClaw에서 diagnostics-prometheus 플러그인을 활성화하여 실시간 메트릭을 시작하세요.",
     "enablePlugin": "플러그인 활성화",
+    "enablingPlugin": "활성화 중...",
     "versionTooLow": "OpenClaw 버전이 너무 낮습니다",
     "versionTooLowHint": "실시간 메트릭을 사용하려면 OpenClaw ≥ {{min}}이 필요합니다. 현재: {{cur}}."
   },

@@ -215,6 +215,7 @@
     "pluginNotEnabled": "Prometheus plugin not enabled",
     "pluginNotEnabledHint": "Enable the diagnostics-prometheus plugin in OpenClaw to activate live metrics.",
     "enablePlugin": "Enable Plugin",
+    "enablingPlugin": "Enabling...",
     "versionTooLow": "OpenClaw version too low",
     "versionTooLowHint": "Live Metrics requires OpenClaw ≥ {{min}}. Current: {{cur}}."
   },

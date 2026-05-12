@@ -310,12 +310,46 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 		entry = map[string]interface{}{}
 	}
 
-	// Check if already enabled
+	// Check if already enabled in config
+	alreadyEnabled := false
 	if enabled, ok := entry["enabled"].(bool); ok && enabled {
-		web.OK(w, r, map[string]interface{}{"already_enabled": true})
-		return
+		alreadyEnabled = true
 	}
 
+	if alreadyEnabled {
+		// Config says enabled, but the plugin HTTP route may not be active.
+		// Probe the actual metrics endpoint to verify.
+		gwCfg := h.gwClient.GetConfig()
+		if h.probeMetricsEndpoint(gwCfg) {
+			web.OK(w, r, map[string]interface{}{"already_enabled": true, "metrics_available": true})
+			return
+		}
+		// Metrics endpoint not available — force a config toggle (disable→enable)
+		// to trigger the gateway to reload the plugin.
+		logger.Log.Info().Msg("diagnostics-prometheus enabled in config but metrics endpoint not responding — forcing config toggle")
+		entry["enabled"] = false
+		entries["diagnostics-prometheus"] = entry
+		if toggleJSON, err := json.Marshal(configObj); err == nil {
+			toggleParams := map[string]interface{}{"raw": string(toggleJSON)}
+			if baseHash != "" {
+				toggleParams["baseHash"] = baseHash
+			}
+			cfgBudget.waitForSlot()
+			if toggleResp, err := h.gwClient.RequestWithTimeout("config.set", toggleParams, 15*time.Second); err == nil {
+				cfgBudget.recordWrite()
+				// Read updated baseHash from toggle response
+				var toggleWrapper map[string]interface{}
+				if json.Unmarshal(toggleResp, &toggleWrapper) == nil {
+					if newHash, ok := toggleWrapper["hash"].(string); ok && newHash != "" {
+						baseHash = newHash
+					}
+				}
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	// Set enabled = true (either first time or after toggle-off)
 	entry["enabled"] = true
 	entries["diagnostics-prometheus"] = entry
 
@@ -341,8 +375,40 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 	}
 	cfgBudget.recordWrite()
 
-	logger.Log.Info().Msg("auto-enabled diagnostics-prometheus plugin via observability handler")
-	web.OK(w, r, map[string]interface{}{"enabled": true})
+	if alreadyEnabled {
+		logger.Log.Info().Msg("toggled diagnostics-prometheus plugin (off→on) to force gateway reload")
+	} else {
+		logger.Log.Info().Msg("auto-enabled diagnostics-prometheus plugin via observability handler")
+	}
+	web.OK(w, r, map[string]interface{}{"enabled": true, "was_toggle": alreadyEnabled})
+}
+
+// probeMetricsEndpoint sends a HEAD/GET to the gateway diagnostics-prometheus
+// endpoint and returns true if it responds with 200.
+func (h *ObservabilityHandler) probeMetricsEndpoint(gwCfg openclaw.GWClientConfig) bool {
+	host := gwCfg.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	if gwCfg.Port <= 0 {
+		return false
+	}
+	url := fmt.Sprintf("http://%s/api/diagnostics/prometheus",
+		net.JoinHostPort(host, fmt.Sprintf("%d", gwCfg.Port)))
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	if gwCfg.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+gwCfg.Token)
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 // ────────────────────────────────────────────────────────────────────────────

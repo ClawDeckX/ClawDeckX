@@ -288,7 +288,8 @@ const Observability: React.FC<ObservabilityProps> = ({ language }) => {
             <p className="text-sm font-medium text-text">{ob.pluginNotEnabled || 'Prometheus plugin not enabled'}</p>
             <p className="text-xs text-text-muted">{ob.pluginNotEnabledHint || 'Enable the diagnostics-prometheus plugin in OpenClaw to activate live metrics.'}</p>
             <button
-              className="px-4 py-1.5 rounded-lg bg-primary/90 hover:bg-primary text-white text-sm font-medium transition-colors"
+              disabled={loading}
+              className="px-4 py-1.5 rounded-lg bg-primary/90 hover:bg-primary text-white text-sm font-medium transition-colors disabled:opacity-60 flex items-center gap-1.5"
               onClick={async () => {
                 setLoading(true);
                 setError(null);
@@ -297,6 +298,11 @@ const Observability: React.FC<ObservabilityProps> = ({ language }) => {
                   if (res?.version_too_low) {
                     setError(`version_too_low:${res.current_version || '?'}:${res.min_version || '2026.4.25'}`);
                     setLoading(false);
+                    return;
+                  }
+                  // If metrics are already available, just fetch directly
+                  if (res?.already_enabled && res?.metrics_available) {
+                    fetchMetrics(true);
                     return;
                   }
                   // Poll until the plugin is loaded and metrics are available
@@ -315,7 +321,8 @@ const Observability: React.FC<ObservabilityProps> = ({ language }) => {
                 }
               }}
             >
-              {ob.enablePlugin || 'Enable Plugin'}
+              {loading && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
+              {loading ? (ob.enablingPlugin || 'Enabling...') : (ob.enablePlugin || 'Enable Plugin')}
             </button>
           </>
         ) : (

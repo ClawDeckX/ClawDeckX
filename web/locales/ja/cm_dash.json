@@ -215,6 +215,7 @@
     "pluginNotEnabled": "Prometheus プラグインが未有効",
     "pluginNotEnabledHint": "OpenClaw で diagnostics-prometheus プラグインを有効にしてライブメトリクスを開始してください。",
     "enablePlugin": "プラグインを有効化",
+    "enablingPlugin": "有効化中...",
     "versionTooLow": "OpenClaw のバージョンが低すぎます",
     "versionTooLowHint": "ライブメトリクスには OpenClaw ≥ {{min}} が必要です。現在: {{cur}}。"
   },

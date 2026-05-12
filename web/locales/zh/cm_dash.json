@@ -215,6 +215,7 @@
     "pluginNotEnabled": "Prometheus 插件未启用",
     "pluginNotEnabledHint": "请在 OpenClaw 中启用 diagnostics-prometheus 插件以激活实时观测。",
     "enablePlugin": "一键启用插件",
+    "enablingPlugin": "正在启用...",
     "versionTooLow": "OpenClaw 版本过低",
     "versionTooLowHint": "实时观测需要 OpenClaw ≥ {{min}}，当前版本：{{cur}}。"
   },
