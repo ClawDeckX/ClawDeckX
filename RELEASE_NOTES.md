@@ -2,16 +2,19 @@
 
 ### ✨ New Features / 新功能
 
-- add elevated tools UI in overview security card with provider auto-detection
+- auto-discover and sync OpenClaw gateway config on startup
+- add non-interactive install mode with CLI flags
 
 ### 🐛 Bug Fixes / 修复
 
-- route safe apply through patch when possible
-- wait for gateway restart before finishing wizard
-- prefer patch saves to reduce apply rate limits
-- keep openclaw peer symlink scanner-safe
+- force plugin reload when metrics endpoint returns 404
+- allow root user in non-interactive binary install
+
+### ♻️ Refactoring / 重构
+
+- unify binary install path to /opt/clawdeckx
 
 ---
-**Full Changelog**: [v0.2.12...v0.2.13](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.12...v0.2.13)
+**Full Changelog**: [v0.2.13...v0.2.14](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.13...v0.2.14)
 
 
