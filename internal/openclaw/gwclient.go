@@ -1111,9 +1111,9 @@ func (c *GWClient) connectLoop() {
 			if isAuthError(errMsg) && c.backoffMs < 60000 {
 				c.backoffMs = 60000
 			}
-			// Pairing required: slow down to avoid rapid retries while
-			// autoApprovePairing runs asynchronously (~1-2s).
-			isPairingErr := strings.Contains(errMsg, "pairing required")
+			// Pairing/scope approval required: slow down to avoid rapid retries
+			// while autoApprovePairing runs asynchronously (~1-2s).
+			isPairingErr := isPairingApprovalRequired(errMsg)
 			if isPairingErr && c.backoffMs < 10000 {
 				c.backoffMs = 10000
 			}
@@ -1490,6 +1490,9 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 			if resp != nil && resp.Error != nil {
 				msg = resp.Error.Message
 				pairingRequestID = resp.Error.extractPairingRequestID()
+				if pairingRequestID == "" {
+					pairingRequestID = extractApprovalRequestIDFromMessage(msg)
+				}
 			} else if resp == nil {
 				// Channel closed — usually means the server closed the connection
 				// right after sending an error (e.g. "pairing required").
@@ -1497,9 +1500,9 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 			}
 			c.mu.Lock()
 			c.lastError = msg
-			// Pairing required: slow down to avoid rapid retries while
-			// autoApprovePairing runs asynchronously.
-			isPairing := strings.Contains(msg, "pairing required")
+			// Pairing/scope approval required: slow down to avoid rapid retries
+			// while autoApprovePairing runs asynchronously.
+			isPairing := isPairingApprovalRequired(msg)
 			if isPairing && c.backoffMs < 10000 {
 				c.backoffMs = 10000
 			}
@@ -1672,6 +1675,33 @@ func extractLatestPendingRequestID(output string) string {
 		}
 	}
 	return latest.RequestID
+}
+
+func isPairingApprovalRequired(msg string) bool {
+	msg = strings.ToLower(msg)
+	return strings.Contains(msg, "pairing required") ||
+		strings.Contains(msg, "scope upgrade pending approval") ||
+		strings.Contains(msg, "pending approval")
+}
+
+func extractApprovalRequestIDFromMessage(msg string) string {
+	const key = "requestId:"
+	idx := strings.Index(msg, key)
+	if idx < 0 {
+		return ""
+	}
+	rest := strings.TrimSpace(msg[idx+len(key):])
+	if rest == "" {
+		return ""
+	}
+	end := len(rest)
+	for i, r := range rest {
+		if r == ')' || r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\r' || r == '\t' {
+			end = i
+			break
+		}
+	}
+	return strings.Trim(rest[:end], `"'`)
 }
 
 // isAuthError returns true if the connect rejection message indicates a token/auth problem.
