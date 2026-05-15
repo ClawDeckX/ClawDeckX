@@ -7,7 +7,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -678,8 +680,23 @@ func (h *ObservabilityHandler) isPluginInstalled() bool {
 	return false
 }
 
-// installPrometheusPlugin runs `openclaw plugins install @openclaw/diagnostics-prometheus`.
+// installPrometheusPlugin tries multiple approaches to install the diagnostics-prometheus plugin:
+// 1. openclaw CLI (may fail due to bundled npm@10 file: spec bug)
+// 2. system npm install into ~/.openclaw/npm (bypasses bundled npm)
 func (h *ObservabilityHandler) installPrometheusPlugin() error {
+	// Approach 1: try the openclaw CLI first
+	if err := h.tryOpenClawCLIInstall(); err != nil {
+		logger.Log.Warn().Err(err).Msg("openclaw CLI plugin install failed, trying system npm fallback")
+		// Approach 2: fallback to system npm
+		if err2 := h.trySystemNpmInstall(); err2 != nil {
+			return fmt.Errorf("openclaw CLI: %v\nsystem npm: %v", err, err2)
+		}
+	}
+	return nil
+}
+
+// tryOpenClawCLIInstall runs `openclaw plugins install @openclaw/diagnostics-prometheus`.
+func (h *ObservabilityHandler) tryOpenClawCLIInstall() error {
 	spec := "@openclaw/diagnostics-prometheus"
 	cliArgs := []string{"plugins", "install", spec}
 	var cmd *exec.Cmd
@@ -714,5 +731,68 @@ func (h *ObservabilityHandler) installPrometheusPlugin() error {
 			cmd.Process.Kill()
 		}
 		return fmt.Errorf("plugin install timed out after 3 minutes")
+	}
+}
+
+// trySystemNpmInstall installs @openclaw/diagnostics-prometheus using the system npm
+// directly into ~/.openclaw/npm, bypassing the openclaw CLI's bundled npm which may
+// have bugs with file: dependency specs.
+func (h *ObservabilityHandler) trySystemNpmInstall() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home dir: %w", err)
+	}
+	npmRoot := filepath.Join(homeDir, ".openclaw", "npm")
+	if err := os.MkdirAll(npmRoot, 0o755); err != nil {
+		return fmt.Errorf("cannot create npm root: %w", err)
+	}
+
+	// Ensure package.json exists (npm install needs it)
+	pkgJsonPath := filepath.Join(npmRoot, "package.json")
+	if _, serr := os.Stat(pkgJsonPath); os.IsNotExist(serr) {
+		_ = os.WriteFile(pkgJsonPath, []byte(`{"private":true}`), 0o644)
+	}
+
+	// Delete stale package-lock.json to avoid arborist bugs
+	lockPath := filepath.Join(npmRoot, "package-lock.json")
+	_ = os.Remove(lockPath)
+
+	spec := "@openclaw/diagnostics-prometheus@latest"
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd.exe", "/c", "npm", "install", "--save", spec,
+			"--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund", "--loglevel=error")
+	} else {
+		cmd = exec.Command("npm", "install", "--save", spec,
+			"--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund", "--loglevel=error")
+	}
+	cmd.Dir = npmRoot
+	executil.HideWindow(cmd)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Run() }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			errMsg := stderr.String()
+			if errMsg == "" {
+				errMsg = stdout.String()
+			}
+			if errMsg == "" {
+				errMsg = err.Error()
+			}
+			return fmt.Errorf("npm install failed: %s", errMsg)
+		}
+		logger.Log.Info().Str("output", stdout.String()).Msg("system npm install diagnostics-prometheus succeeded")
+		return nil
+	case <-time.After(3 * time.Minute):
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		return fmt.Errorf("npm install timed out after 3 minutes")
 	}
 }
