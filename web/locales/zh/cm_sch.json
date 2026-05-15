@@ -189,7 +189,16 @@
     "bgEnded": "结束时间",
     "bgResult": "结果",
     "bgAuditTitle": "任务审计详情",
-    "bgNoAuditFindings": "无审计发现"
+    "bgNoAuditFindings": "无审计发现",
+    "currentSession": "当前会话",
+    "failureDestination": "失败通知目标",
+    "confirmRunTitle": "运行任务",
+    "confirmRunMsg": "立即运行任务“{name}”？",
+    "confirmEnableTitle": "启用任务",
+    "confirmEnableMsg": "启用任务“{name}”？",
+    "confirmDisableTitle": "禁用任务",
+    "confirmDisableMsg": "禁用任务“{name}”？",
+    "tokens": "Token"
   },
   "cron": {
     "title": "定时任务",

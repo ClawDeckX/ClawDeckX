@@ -189,7 +189,16 @@
     "bgEnded": "Ended",
     "bgResult": "Result",
     "bgAuditTitle": "Task Audit Detail",
-    "bgNoAuditFindings": "No audit findings"
+    "bgNoAuditFindings": "No audit findings",
+    "currentSession": "Current",
+    "failureDestination": "Failure Destination",
+    "confirmRunTitle": "Run Job",
+    "confirmRunMsg": "Run job \"{name}\" now?",
+    "confirmEnableTitle": "Enable Job",
+    "confirmEnableMsg": "Enable job \"{name}\"?",
+    "confirmDisableTitle": "Disable Job",
+    "confirmDisableMsg": "Disable job \"{name}\"?",
+    "tokens": "Tokens"
   },
   "cron": {
     "title": "Scheduled Tasks",

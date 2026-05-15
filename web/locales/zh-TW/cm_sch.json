@@ -189,7 +189,16 @@
     "bgEnded": "結束時間",
     "bgResult": "結果",
     "bgAuditTitle": "任務稽核詳情",
-    "bgNoAuditFindings": "無稽核發現"
+    "bgNoAuditFindings": "無稽核發現",
+    "currentSession": "目前會話",
+    "failureDestination": "失敗通知目標",
+    "confirmRunTitle": "執行任務",
+    "confirmRunMsg": "立即執行任務「{name}」？",
+    "confirmEnableTitle": "啟用任務",
+    "confirmEnableMsg": "啟用任務「{name}」？",
+    "confirmDisableTitle": "停用任務",
+    "confirmDisableMsg": "停用任務「{name}」？",
+    "tokens": "Token"
   },
   "cron": {
     "title": "定時任務",

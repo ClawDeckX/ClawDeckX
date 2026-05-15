@@ -299,6 +299,12 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 		configObj["plugins"] = pluginsObj
 	}
 
+	diagnosticsObj, _ := configObj["diagnostics"].(map[string]interface{})
+	if diagnosticsObj == nil {
+		diagnosticsObj = map[string]interface{}{}
+		configObj["diagnostics"] = diagnosticsObj
+	}
+
 	entries, _ := pluginsObj["entries"].(map[string]interface{})
 	if entries == nil {
 		entries = map[string]interface{}{}
@@ -310,10 +316,10 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 		entry = map[string]interface{}{}
 	}
 
-	// Check if already enabled in config
-	alreadyEnabled := false
-	if enabled, ok := entry["enabled"].(bool); ok && enabled {
-		alreadyEnabled = true
+	diagnosticsEnabled, _ := diagnosticsObj["enabled"].(bool)
+	alreadyEnabled := diagnosticsEnabled
+	if enabled, ok := entry["enabled"].(bool); !ok || !enabled {
+		alreadyEnabled = false
 	}
 
 	if alreadyEnabled {
@@ -352,6 +358,7 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 	// Set enabled = true (either first time or after toggle-off)
 	entry["enabled"] = true
 	entries["diagnostics-prometheus"] = entry
+	diagnosticsObj["enabled"] = true
 
 	// 3. Write back with baseHash
 	cfgJSON, err := json.Marshal(configObj)
@@ -375,12 +382,28 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 	}
 	cfgBudget.recordWrite()
 
+	restartTriggered := false
+	restartRequired := true
+	if h.gwSvc != nil && !h.gwSvc.IsRemote() {
+		if err := h.gwSvc.Restart(); err != nil {
+			web.Fail(w, r, "GATEWAY_RESTART_FAILED", err.Error(), http.StatusBadGateway)
+			return
+		}
+		restartTriggered = true
+		restartRequired = false
+	}
+
 	if alreadyEnabled {
 		logger.Log.Info().Msg("toggled diagnostics-prometheus plugin (off→on) to force gateway reload")
 	} else {
 		logger.Log.Info().Msg("auto-enabled diagnostics-prometheus plugin via observability handler")
 	}
-	web.OK(w, r, map[string]interface{}{"enabled": true, "was_toggle": alreadyEnabled})
+	web.OK(w, r, map[string]interface{}{
+		"enabled":           true,
+		"was_toggle":        alreadyEnabled,
+		"restart_triggered": restartTriggered,
+		"restart_required":  restartRequired,
+	})
 }
 
 // probeMetricsEndpoint sends a HEAD/GET to the gateway diagnostics-prometheus

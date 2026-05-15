@@ -34,6 +34,20 @@ function fmtBytes(b?: number) {
   return `${s.toFixed(s < 10 ? 1 : 0)} ${u[i]}`;
 }
 
+function fmtCronSchedule(job: any, fallback: string) {
+  const schedule = job?.schedule;
+  if (!schedule) return fallback;
+  if (typeof schedule === 'string') return schedule;
+  if (schedule.kind === 'every') return `${Math.round((schedule.everyMs || 0) / 60000)}m`;
+  if (schedule.kind === 'at') return schedule.at ? new Date(schedule.at).toLocaleString() : fallback;
+  return schedule.expr || fallback;
+}
+
+function fmtCronTarget(delivery: any, fallback: string) {
+  if (!delivery || delivery.mode === 'none') return fallback;
+  return [delivery.channel, delivery.to, delivery.accountId, delivery.threadId].filter(Boolean).join(' · ') || delivery.mode || fallback;
+}
+
 function extractRunText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
@@ -366,7 +380,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     }
     if (p === 'cron') {
       gwApi.cronStatus().then(setCronStatus).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); });
-      gwApi.cron().then((d: any) => setCronJobs(Array.isArray(d) ? d : d?.jobs || [])).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); });
+      gwApi.cronList({ includeDisabled: true, agentId: selectedId || undefined }).then((d: any) => setCronJobs(Array.isArray(d) ? d : d?.jobs || [])).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); });
     }
     if (p === 'tasks') {
       setTasksLoading(true);
@@ -1315,7 +1329,6 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                         }
                         setToolSaving(false);
                       };
-
                       return (
                         <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] p-4">
                           <div className="flex items-center gap-2 mb-4">
@@ -2989,7 +3002,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                         <button onClick={() => dispatchOpenWindow({ id: 'scheduler' })} className="text-[10px] text-amber-600 dark:text-amber-400 font-bold hover:underline flex items-center gap-0.5">
                           {a.viewScheduler || 'View Scheduler'}<span className="material-symbols-outlined text-[12px]">chevron_right</span>
                         </button>
-                        <button onClick={() => { gwApi.cronStatus().then(setCronStatus).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); }); gwApi.cron().then((d: any) => setCronJobs(Array.isArray(d) ? d : d?.jobs || [])).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); }); }}
+                        <button onClick={() => { gwApi.cronStatus().then(setCronStatus).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); }); gwApi.cronList({ includeDisabled: true, agentId: selected.id }).then((d: any) => setCronJobs(Array.isArray(d) ? d : d?.jobs || [])).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); }); }}
                           className="text-[10px] text-primary hover:underline">{a.refresh}</button>
                       </div>
                     </div>
@@ -2997,21 +3010,39 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                       <p className="text-[10px] text-slate-400 dark:text-white/20 py-8 text-center">{a.noJobs}</p>
                     ) : (
                       <div className="space-y-2">
-                        {jobs.map((job: any, i: number) => (
-                          <div key={job.name || i} onClick={() => dispatchOpenWindow({ id: 'scheduler' })} className="px-3 py-2.5 rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] cursor-pointer hover:border-amber-400/40 hover:ring-1 hover:ring-amber-400/20 transition-all">
+                        {jobs.map((job: any, i: number) => {
+                          const lastStatus = job.state?.lastRunStatus || job.state?.lastStatus;
+                          const deliveryStatus = job.state?.lastDeliveryStatus;
+                          return (
+                          <div key={job.id || job.name || i} onClick={() => dispatchOpenWindow({ id: 'scheduler' })} className="px-3 py-2.5 rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] cursor-pointer hover:border-amber-400/40 hover:ring-1 hover:ring-amber-400/20 transition-all">
                             <div className="flex items-center justify-between">
-                              <p className="text-[11px] font-semibold text-slate-700 dark:text-white/60">{job.name}</p>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${job.enabled ? 'bg-mac-green/10 text-mac-green' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>
-                                {job.enabled ? a.enabled : a.disabled}
-                              </span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <p className="text-[11px] font-semibold text-slate-700 dark:text-white/60 truncate">{job.name}</p>
+                                {job.state?.runningAtMs && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold animate-pulse">{a.taskStatusRunning || 'Running'}</span>}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {lastStatus && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${lastStatus === 'ok' ? 'bg-mac-green/10 text-mac-green' : lastStatus === 'error' ? 'bg-red-100 dark:bg-red-500/10 text-red-500' : 'bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>{lastStatus}</span>}
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${job.enabled ? 'bg-mac-green/10 text-mac-green' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>
+                                  {job.enabled ? a.enabled : a.disabled}
+                                </span>
+                              </div>
                             </div>
                             {job.description && <p className="text-[11px] text-slate-400 dark:text-white/35 mt-0.5">{job.description}</p>}
-                            <div className="flex gap-3 mt-1.5 text-[11px] text-slate-400 dark:text-white/35 font-mono">
-                              {job.schedule && <span>{a.schedule}: {typeof job.schedule === 'string' ? job.schedule : job.schedule.kind === 'every' ? `${Math.round((job.schedule.everyMs || 0) / 60000)}m` : job.schedule.kind === 'at' ? (job.schedule.at ? new Date(job.schedule.at).toLocaleString() : '-') : job.schedule.expr || '-'}</span>}
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-[11px] text-slate-400 dark:text-white/35 font-mono">
+                              {job.schedule && <span>{a.schedule}: {fmtCronSchedule(job, na)}</span>}
                               {job.sessionTarget && <span>→ {job.sessionTarget}</span>}
+                              {job.state?.lastDurationMs != null && <span>{a.duration || 'Duration'}: {job.state.lastDurationMs}ms</span>}
+                              {deliveryStatus && <span className={deliveryStatus === 'delivered' ? 'text-mac-green' : deliveryStatus === 'not-delivered' ? 'text-red-500' : ''}>{a.delivery || 'Delivery'}: {deliveryStatus}</span>}
+                              {job.state?.lastErrorReason && <span className="text-red-500">{job.state.lastErrorReason}</span>}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 mt-1.5 text-[10px]">
+                              {job.delivery && job.delivery.mode !== 'none' && <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">{a.delivery || 'Delivery'}: {fmtCronTarget(job.delivery, na)}</span>}
+                              {job.delivery?.failureDestination && <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">{a.failureDestination || 'Failure Destination'}: {fmtCronTarget(job.delivery.failureDestination, na)}</span>}
+                              {job.state?.lastDeliveryError && <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-500">{job.state.lastDeliveryError}</span>}
+                              {job.state?.consecutiveErrors > 0 && <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-500">{a.consecutiveErrors || 'Consecutive Errors'}: {job.state.consecutiveErrors}</span>}
                             </div>
                           </div>
-                        ))}
+                        );})}
                       </div>
                     )}
                   </div>

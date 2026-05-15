@@ -965,7 +965,7 @@ export const observabilityApi = {
   gatewayStateCached: (ttlMs = 3000, force = false) =>
     getCached<GatewayObservedState>('/api/v1/observability/gateway-state', ttlMs, force),
   scrapeConfig: () => get<PromScrapeConfig>('/api/v1/observability/scrape-config'),
-  enablePlugin: () => post<{ enabled?: boolean; already_enabled?: boolean; metrics_available?: boolean; was_toggle?: boolean; version_too_low?: boolean; current_version?: string; min_version?: string }>('/api/v1/observability/enable-plugin'),
+  enablePlugin: () => post<{ enabled?: boolean; already_enabled?: boolean; metrics_available?: boolean; was_toggle?: boolean; restart_triggered?: boolean; restart_required?: boolean; version_too_low?: boolean; current_version?: string; min_version?: string }>('/api/v1/observability/enable-plugin'),
 };
 
 // ==================== LLM 供应商健康 ====================
@@ -1570,8 +1570,10 @@ export const gwApi = {
     includeDisabled?: boolean; limit?: number; offset?: number;
     query?: string; enabled?: 'all' | 'enabled' | 'disabled';
     sortBy?: 'nextRunAtMs' | 'updatedAtMs' | 'name'; sortDir?: 'asc' | 'desc';
+    agentId?: string;
   }) => rpc('cron.list', { includeDisabled: true, ...opts }),
   cronStatus: () => rpc('cron.status'),
+  cronGet: (id: string) => rpc('cron.get', { id }),
   cronAdd: (job: any) => rpc('cron.add', job),
   cronUpdate: (id: string, patch: any) =>
     rpc('cron.update', { id, patch }),
@@ -1586,7 +1588,8 @@ export const gwApi = {
   }) => rpc('cron.runs', { id, limit, ...opts }),
   cronRunsAll: (opts?: {
     limit?: number; offset?: number; status?: string; statuses?: string[];
-    deliveryStatus?: string; query?: string; sortDir?: 'asc' | 'desc';
+    deliveryStatus?: string; deliveryStatuses?: string[];
+    query?: string; sortDir?: 'asc' | 'desc';
   }) => rpc('cron.runs', { scope: 'all', ...opts }),
   // Exec Approvals
   execApprovalsGet: (target?: { kind: string; nodeId?: string }) => {

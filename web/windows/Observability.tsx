@@ -160,8 +160,8 @@ const Observability: React.FC<ObservabilityProps> = ({ language }) => {
   const metrics = data?.metrics ?? [];
 
   // ── Derived metrics ──────────────────────────────────────────────
-  const tokenUsage = findMetric(metrics, 'openclaw_model_usage_tokens');
-  const costUsage = findMetric(metrics, 'openclaw_model_usage_cost_dollars');
+  const tokenUsage = findMetric(metrics, 'openclaw_model_tokens') || findMetric(metrics, 'openclaw_model_usage_tokens');
+  const costUsage = findMetric(metrics, 'openclaw_model_cost_usd') || findMetric(metrics, 'openclaw_model_usage_cost_dollars');
   const modelCall = findMetric(metrics, 'openclaw_model_call');
   const modelCallDuration = findMetric(metrics, 'openclaw_model_call_duration_seconds');
   const toolExec = findMetric(metrics, 'openclaw_tool_execution');
@@ -173,10 +173,10 @@ const Observability: React.FC<ObservabilityProps> = ({ language }) => {
   const sessionQueueDepth = findMetric(metrics, 'openclaw_session_queue_depth');
   const memBytes = findMetric(metrics, 'openclaw_memory_bytes');
   const memPressure = findMetric(metrics, 'openclaw_memory_pressure');
-  const droppedSeries = findMetric(metrics, 'openclaw_prometheus_dropped_series');
+  const droppedSeries = findMetric(metrics, 'openclaw_prometheus_series_dropped') || findMetric(metrics, 'openclaw_prometheus_dropped_series');
 
-  const totalInputTokens = sumValues(tokenUsage, l => l.direction === 'input');
-  const totalOutputTokens = sumValues(tokenUsage, l => l.direction === 'output');
+  const totalInputTokens = sumValues(tokenUsage, l => (l.token_type || l.direction) === 'input');
+  const totalOutputTokens = sumValues(tokenUsage, l => (l.token_type || l.direction) === 'output');
   const totalCost = sumValues(costUsage);
   const totalModelCalls = sumValues(modelCall);
   const modelCallErrors = sumValues(modelCall, l => l.outcome === 'error');
@@ -305,8 +305,13 @@ const Observability: React.FC<ObservabilityProps> = ({ language }) => {
                     fetchMetrics(true);
                     return;
                   }
+                  if (res?.restart_required && !res?.restart_triggered) {
+                    setError(ob.restartRequired || 'Plugin enabled. Restart the OpenClaw gateway, then retry.');
+                    setLoading(false);
+                    return;
+                  }
                   // Poll until the plugin is loaded and metrics are available
-                  for (let i = 0; i < 15; i++) {
+                  for (let i = 0; i < 45; i++) {
                     await new Promise(r => setTimeout(r, 2000));
                     try {
                       const m = await observabilityApi.metricsJsonCached(0, true);

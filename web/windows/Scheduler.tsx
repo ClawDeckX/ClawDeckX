@@ -18,7 +18,7 @@ interface SchedulerProps { language: Language; }
 
 type ScheduleKind = 'every' | 'at' | 'cron';
 type PayloadKind = 'systemEvent' | 'agentTurn';
-type SessionTarget = 'main' | 'isolated';
+type SessionTarget = 'main' | 'isolated' | 'current' | `session:${string}`;
 type WakeMode = 'now' | 'next-heartbeat';
 type DeliveryMode = 'announce' | 'none' | 'webhook';
 
@@ -27,7 +27,7 @@ interface CronForm {
   scheduleKind: ScheduleKind; scheduleAt: string; everyAmount: string; everyUnit: 'minutes' | 'hours' | 'days';
   cronExpr: string; cronTz: string; sessionTarget: SessionTarget; wakeMode: WakeMode;
   payloadKind: PayloadKind; payloadText: string; deliveryMode: DeliveryMode; deliveryChannel: string; deliveryTo: string;
-  deliveryThreadId: string;
+  deliveryThreadId: string; failureMode: DeliveryMode; failureChannel: string; failureTo: string; failureAccountId: string;
   timeoutSeconds: string; model: string; thinking: string; deleteAfterRun: boolean;
   sessionKey: string; accountId: string; bestEffort: boolean;
 }
@@ -37,7 +37,7 @@ const DEFAULT_FORM: CronForm = {
   scheduleKind: 'every', scheduleAt: '', everyAmount: '30', everyUnit: 'minutes',
   cronExpr: '0 7 * * *', cronTz: '', sessionTarget: 'isolated', wakeMode: 'now',
   payloadKind: 'agentTurn', payloadText: '', deliveryMode: 'announce', deliveryChannel: 'last', deliveryTo: '',
-  deliveryThreadId: '',
+  deliveryThreadId: '', failureMode: 'none', failureChannel: '', failureTo: '', failureAccountId: '',
   timeoutSeconds: '', model: '', thinking: '', deleteAfterRun: false,
   sessionKey: '', accountId: '', bestEffort: false,
 };
@@ -84,10 +84,39 @@ function cronToHuman(expr: string, s?: any): string {
   return expr;
 }
 
+function renderRunDebug(run: any, s: any) {
+  const diagnostics = run.diagnostics?.entries || run.diagnostics || [];
+  const entries = Array.isArray(diagnostics) ? diagnostics.slice(-4) : [];
+  const usage = run.usage || {};
+  const delivery = run.delivery || {};
+  const showDelivery = run.deliveryStatus || run.deliveryError || run.delivered != null;
+  if (entries.length === 0 && !run.sessionKey && !run.model && !run.provider && !showDelivery && Object.keys(usage).length === 0) return null;
+  return (
+    <div className="mt-1.5 space-y-1 text-[10px]">
+      <div className="flex flex-wrap gap-1.5">
+        {run.sessionKey && <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 font-mono">{run.sessionKey}</span>}
+        {(run.provider || run.model) && <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary">{[run.provider, run.model].filter(Boolean).join('/')}</span>}
+        {usage.total_tokens != null && <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">{s.tokens || 'Tokens'}: {usage.total_tokens}</span>}
+        {showDelivery && <span className={`px-1.5 py-0.5 rounded font-bold ${run.deliveryStatus === 'delivered' || run.delivered === true ? 'bg-mac-green/10 text-mac-green' : run.deliveryStatus === 'not-delivered' || run.delivered === false ? 'bg-mac-red/10 text-mac-red' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>{s.delivery}: {run.deliveryStatus || (run.delivered ? 'delivered' : 'not-delivered')}</span>}
+        {delivery?.resolved?.channel && <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">{delivery.resolved.channel}{delivery.resolved.to ? ` → ${delivery.resolved.to}` : ''}</span>}
+      </div>
+      {run.deliveryError && <p className="text-mac-red">{run.deliveryError}</p>}
+      {entries.map((entry: any, idx: number) => (
+        <div key={`${entry.ts || idx}-${entry.message || idx}`} className={`rounded px-2 py-1 ${entry.severity === 'error' ? 'bg-mac-red/10 text-mac-red' : entry.severity === 'warn' ? 'bg-mac-yellow/10 text-mac-yellow' : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/45'}`}>
+          <span className="font-bold">{entry.source || entry.severity || s.status}</span>
+          {entry.toolName && <span className="ms-1 font-mono">{entry.toolName}</span>}
+          <span className="ms-1">{entry.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function jobToForm(job: any): CronForm {
   const sch = job.schedule || {};
   const p = job.payload || {};
   const d = job.delivery || {};
+  const fd = d.failureDestination || {};
   let scheduleKind: ScheduleKind = 'every';
   let everyAmount = '30', everyUnit: 'minutes' | 'hours' | 'days' = 'minutes';
   let scheduleAt = '', cronExpr = '0 7 * * *', cronTz = '';
@@ -106,7 +135,7 @@ function jobToForm(job: any): CronForm {
     cronExpr, cronTz, sessionTarget: job.sessionTarget || 'isolated', wakeMode: job.wakeMode || 'now',
     payloadKind: p.kind || 'agentTurn', payloadText: p.kind === 'systemEvent' ? (p.text || '') : (p.message || ''),
     deliveryMode: (d.mode as DeliveryMode) || 'announce', deliveryChannel: d.channel || 'last', deliveryTo: d.to || '',
-    deliveryThreadId: d.threadId || '',
+    deliveryThreadId: d.threadId || '', failureMode: (fd.mode as DeliveryMode) || 'none', failureChannel: fd.channel || '', failureTo: fd.to || '', failureAccountId: fd.accountId || '',
     timeoutSeconds: p.timeoutSeconds ? String(p.timeoutSeconds) : '', model: p.model || '', thinking: p.thinking || '',
     deleteAfterRun: !!job.deleteAfterRun, sessionKey: job.sessionKey || '',
     accountId: d.accountId || '', bestEffort: !!d.bestEffort,
@@ -148,6 +177,12 @@ function formToJobPayload(f: CronForm) {
       threadId: f.deliveryThreadId.trim() || undefined,
       accountId: f.accountId.trim() || undefined,
       bestEffort: f.bestEffort || undefined,
+      failureDestination: f.failureMode !== 'none' ? {
+        mode: f.failureMode,
+        channel: f.failureChannel.trim() || undefined,
+        to: f.failureTo.trim() || undefined,
+        accountId: f.failureAccountId.trim() || undefined,
+      } : undefined,
     } : undefined;
   if (!f.name.trim()) throw new Error('errNameRequired');
   return {
@@ -428,8 +463,13 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   }, [formBusy, editingJobId, form, loadAll, toast, toErrorText, validateForm, setErrorWithAutoClear]);
 
   // Open edit form
-  const openEditForm = useCallback((job: any) => {
-    setForm(jobToForm(job));
+  const openEditForm = useCallback(async (job: any) => {
+    try {
+      const fullJob = await gwApi.cronGet(job.id);
+      setForm(jobToForm(fullJob || job));
+    } catch {
+      setForm(jobToForm(job));
+    }
     setEditingJobId(job.id);
     setShowForm(true);
     setFieldErrors({});
@@ -492,6 +532,13 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
 
   const toggleJob = useCallback(async (job: any) => {
     if (busyJobs.has(job.id)) return;
+    const ok = await confirm({
+      title: job.enabled ? (sRef.current.confirmDisableTitle || sRef.current.disable) : (sRef.current.confirmEnableTitle || sRef.current.enable),
+      message: (job.enabled ? (sRef.current.confirmDisableMsg || 'Disable job "{name}"?') : (sRef.current.confirmEnableMsg || 'Enable job "{name}"?')).replace('{name}', job.name || job.id),
+      confirmText: job.enabled ? sRef.current.disable : sRef.current.enable,
+      danger: job.enabled,
+    });
+    if (!ok) return;
     setBusyJobs(prev => new Set(prev).add(job.id));
     try {
       await gwApi.cronUpdate(job.id, { enabled: !job.enabled });
@@ -508,6 +555,12 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
 
   const runJob = useCallback(async (job: any) => {
     if (busyJobs.has(job.id)) return;
+    const ok = await confirm({
+      title: sRef.current.confirmRunTitle || sRef.current.run,
+      message: (sRef.current.confirmRunMsg || 'Run job "{name}" now?').replace('{name}', job.name || job.id),
+      confirmText: sRef.current.run,
+    });
+    if (!ok) return;
     setBusyJobs(prev => new Set(prev).add(job.id));
     try {
       await gwApi.cronRun(job.id);
@@ -768,7 +821,16 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                   <label className="block">
                     <span className={labelCls}>{s.session}</span>
                     <CustomSelect value={form.sessionTarget} onChange={v => patchForm({ sessionTarget: v as SessionTarget })}
-                      options={[{ value: 'main', label: s.main }, { value: 'isolated', label: s.isolated }]} className={selectCls} />
+                      options={[
+                        { value: 'main', label: s.main },
+                        { value: 'isolated', label: s.isolated },
+                        { value: 'current', label: s.currentSession || 'Current' },
+                        ...sessionsList.map((sess: any) => {
+                          const key = sess.key || sess.sessionKey || '';
+                          const label = sess.label ? `${sess.label} (${key})` : key;
+                          return { value: `session:${key}`, label };
+                        }),
+                      ]} className={selectCls} />
                   </label>
                   <label className="block">
                     <span className={labelCls}>{s.wakeMode}</span>
@@ -831,6 +893,35 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                         <input value={form.deliveryThreadId} onChange={e => patchForm({ deliveryThreadId: e.target.value })} placeholder="forum_topic_id" className={inputCls} />
                       </label>
                     </>}
+                  </div>
+                )}
+                {form.payloadKind === 'agentTurn' && form.deliveryMode !== 'none' && (
+                  <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.02] p-2.5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="material-symbols-outlined text-[14px] text-mac-yellow">notification_important</span>
+                      <span className={labelCls}>{s.failureDestination || 'Failure Destination'}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      <label className="block">
+                        <span className={labelCls}>{s.delivery}</span>
+                        <CustomSelect value={form.failureMode} onChange={v => patchForm({ failureMode: v as DeliveryMode })}
+                          options={[{ value: 'none', label: s.none }, { value: 'announce', label: s.announce }, { value: 'webhook', label: s.webhook }]} className={selectCls} />
+                      </label>
+                      {form.failureMode !== 'none' && <>
+                        <label className="block">
+                          <span className={labelCls}>{s.channel}</span>
+                          <input value={form.failureChannel} onChange={e => patchForm({ failureChannel: e.target.value })} placeholder="last" className={inputCls} />
+                        </label>
+                        <label className="block">
+                          <span className={labelCls}>{s.to}</span>
+                          <input value={form.failureTo} onChange={e => patchForm({ failureTo: e.target.value })} className={inputCls} />
+                        </label>
+                        <label className="block">
+                          <span className={labelCls}>{s.accountId}</span>
+                          <input value={form.failureAccountId} onChange={e => patchForm({ failureAccountId: e.target.value })} placeholder={s.accountIdPlaceholder} className={inputCls} />
+                        </label>
+                      </>}
+                    </div>
                   </div>
                 )}
                 {/* Advanced: sessionKey, deleteAfterRun, bestEffort, enabled */}
@@ -916,7 +1007,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
             <div className="space-y-2">
               {jobs.map((job: any) => {
                 const isSelected = runsJobId === job.id;
-                const lastStatus = job.state?.lastStatus;
+                const lastStatus = job.state?.lastRunStatus || job.state?.lastStatus;
                 const isBusy = busyJobs.has(job.id);
                 return (
                   <div key={job.id} onClick={() => loadRuns(job.id)}
@@ -936,10 +1027,13 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                           <span className="text-slate-500 dark:text-white/40 font-mono">{fmtSchedule(job, s)}</span>
                           <span className="text-slate-400 dark:text-white/35">{fmtPayload(job, s)}</span>
                           {job.agentId && <span className="text-slate-400 dark:text-white/35">{s.agentId}: {job.agentId}</span>}
+                          {job.state?.lastDurationMs != null && <span className="text-slate-400 dark:text-white/35">{s.duration}: {job.state.lastDurationMs}ms</span>}
                         </div>
                         <div className="flex gap-2 mt-1.5">
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">{job.sessionTarget}</span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40">{job.wakeMode}</span>
+                          {job.state?.lastDeliveryStatus && <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${job.state.lastDeliveryStatus === 'delivered' ? 'bg-mac-green/10 text-mac-green' : job.state.lastDeliveryStatus === 'not-delivered' ? 'bg-mac-red/10 text-mac-red' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>{s.delivery}: {job.state.lastDeliveryStatus}</span>}
+                          {job.state?.lastErrorReason && <span className="text-[10px] px-1.5 py-0.5 rounded bg-mac-red/10 text-mac-red font-bold">{job.state.lastErrorReason}</span>}
                         </div>
                       </div>
                       {/* State + Actions */}
@@ -1030,6 +1124,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                         </div>
                         {run.summary && <p className="text-[11px] text-slate-500 dark:text-white/40 truncate mt-0.5">{run.summary}</p>}
                         {run.error && <p className="text-[11px] text-mac-red truncate mt-0.5">{run.error}</p>}
+                        {renderRunDebug(run, s)}
                       </div>
                       <span className="text-[11px] text-slate-400 dark:text-white/20 shrink-0">{run.ts ? new Date(run.ts).toLocaleString() : na}</span>
                     </div>
@@ -1066,6 +1161,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                       </div>
                       {run.summary && <p className="text-[11px] text-slate-500 dark:text-white/40 truncate mt-0.5">{run.summary}</p>}
                       {run.error && <p className="text-[11px] text-mac-red truncate mt-0.5">{run.error}</p>}
+                      {renderRunDebug(run, s)}
                     </div>
                     <span className="text-[11px] text-slate-400 dark:text-white/20 shrink-0">{run.ts ? new Date(run.ts).toLocaleString() : na}</span>
                   </div>

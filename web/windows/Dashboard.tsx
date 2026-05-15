@@ -938,6 +938,26 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
 
             {taskSummary.total > 0 && (
               <div className="p-4 space-y-3">
+                {(cronJobCount > 0 || cronRunningIds.size > 0) && (
+                  <div className="rounded-xl border border-amber-200/60 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/[0.04] p-3 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-[16px] text-amber-500">schedule</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                        {d.taskCron || 'Cron'} · {cronJobCount} {d.jobs || 'jobs'}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {cronEnabled && <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">{d.enabled || 'Enabled'}</span>}
+                        {cronRunningIds.size > 0 && <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-[10px] font-bold">{cronRunningIds.size} {d.cronRunningLabel || 'running'}</span>}
+                        {cronNextRun && <span className="px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/50 text-[10px] font-bold">{d.nextRun || 'Next'}: {cronNextRun.toLocaleString()}</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => openWindow('scheduler')} className="text-[10px] text-amber-600 dark:text-amber-400 font-bold hover:underline flex items-center gap-0.5 shrink-0">
+                      {d.taskViewScheduler || 'View Scheduler'}<span className="material-symbols-outlined text-[12px]">chevron_right</span>
+                    </button>
+                  </div>
+                )}
                 {/* Summary KPI cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[

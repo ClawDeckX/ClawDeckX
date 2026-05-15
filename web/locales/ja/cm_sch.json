@@ -189,7 +189,16 @@
     "bgEnded": "終了日時",
     "bgResult": "結果",
     "bgAuditTitle": "タスク監査詳細",
-    "bgNoAuditFindings": "監査結果なし"
+    "bgNoAuditFindings": "監査結果なし",
+    "currentSession": "現在のセッション",
+    "failureDestination": "失敗通知先",
+    "confirmRunTitle": "ジョブを実行",
+    "confirmRunMsg": "ジョブ「{name}」を今すぐ実行しますか？",
+    "confirmEnableTitle": "ジョブを有効化",
+    "confirmEnableMsg": "ジョブ「{name}」を有効化しますか？",
+    "confirmDisableTitle": "ジョブを無効化",
+    "confirmDisableMsg": "ジョブ「{name}」を無効化しますか？",
+    "tokens": "トークン"
   },
   "cron": {
     "title": "スケジュールタスク",
