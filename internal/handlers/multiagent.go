@@ -231,6 +231,25 @@ func multiAgentCountHint(teamSize string) string {
 	}
 }
 
+func normalizeGeneratedTemplateForRequest(result *GenerateResult, req GenerateRequest) {
+	if req.TeamSize != "single" {
+		return
+	}
+	if len(result.Template.Agents) > 1 {
+		result.Template.Agents = result.Template.Agents[:1]
+	}
+	agentID := ""
+	if len(result.Template.Agents) == 1 {
+		agentID = result.Template.Agents[0].ID
+	}
+	result.Template.Workflow.Type = "standalone"
+	result.Template.Workflow.Description = "Standalone single-agent execution"
+	result.Template.Workflow.Steps = []WorkflowStep{{
+		Agent:  agentID,
+		Action: "Handle the user task independently and produce the result",
+	}}
+}
+
 // Generate uses the connected LLM to analyze a scenario and generate a multi-agent team definition.
 func (h *MultiAgentHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var req GenerateRequest
@@ -506,6 +525,7 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
 	if result.Template.Description == "" {
 		result.Template.Description = req.Description
 	}
+	normalizeGeneratedTemplateForRequest(&result, req)
 
 	web.OK(w, r, result)
 }
@@ -992,6 +1012,7 @@ Output %s agents. JSON schema:
 	if result.Template.Description == "" {
 		result.Template.Description = req.Description
 	}
+	normalizeGeneratedTemplateForRequest(&result, req)
 
 	broadcast(genTaskDone, "done", elapsed(), &result, "", "")
 	logger.Log.Info().Str("taskId", task.ID).Int("agents", len(result.Template.Agents)).Msg("async team generation completed")

@@ -124,6 +124,12 @@ function getAgentCountHint(size: TeamSize, style: 'compact' | 'words' = 'compact
   return style === 'words' ? '4 to 6' : '4-6';
 }
 
+function getWorkflowLabelKey(type: string): string {
+  if (type === 'standalone') return 'workflowStandalone';
+  if (type === 'event-driven') return 'workflowEventDriven';
+  return `workflow${type.charAt(0).toUpperCase()}${type.slice(1)}`;
+}
+
 const ElapsedTimer: React.FC<{ startedAt: number; className?: string }> = ({ startedAt, className }) => {
   const [elapsed, setElapsed] = useState(() => Math.floor((Date.now() - startedAt) / 1000));
   useEffect(() => {
@@ -173,6 +179,28 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const [teamSize, setTeamSize] = useState<TeamSize>('medium');
   const [workflowType, setWorkflowType] = useState<Exclude<WorkflowType, 'standalone'>>('collaborative');
   const effectiveWorkflowType: WorkflowType = teamSize === 'single' ? 'standalone' : workflowType;
+  const normalizeWorkflow = useCallback((workflow: MultiAgentGenerateResult['template']['workflow'] | undefined, agents?: MultiAgentGenerateResult['template']['agents']): MultiAgentGenerateResult['template']['workflow'] => {
+    if (teamSize !== 'single') return workflow ?? { type: effectiveWorkflowType, description: '', steps: [] };
+    const agent = agents?.[0];
+    return {
+      type: 'standalone',
+      description: getWorkflowDescription('standalone', language),
+      steps: [{
+        agent: agent?.id || '',
+        action: language === 'zh' || language === 'zh-TW'
+          ? '独立处理用户任务并根据需要产出结果'
+          : 'Handle the user task independently and produce the result',
+      }],
+    };
+  }, [teamSize, effectiveWorkflowType, language]);
+  const normalizeGenerateResult = useCallback((result: MultiAgentGenerateResult): MultiAgentGenerateResult => ({
+    ...result,
+    template: {
+      ...result.template,
+      agents: teamSize === 'single' ? result.template.agents.slice(0, 1) : result.template.agents,
+      workflow: normalizeWorkflow(result.template.workflow, result.template.agents),
+    },
+  }), [teamSize, normalizeWorkflow]);
   const [generateResult, setGenerateResult] = useState<MultiAgentGenerateResult | null>(null);
   const [editingAgent, setEditingAgent] = useState<AgentEdit | null>(null);
   const [editedAgents, setEditedAgents] = useState<Record<string, AgentEdit>>({});
@@ -228,10 +256,10 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   // Jump to preview if a completed result is provided (background task finished while window was closed)
   useEffect(() => {
     if (!completedResult) return;
-    setGenerateResult(completedResult);
+    setGenerateResult(normalizeGenerateResult(completedResult));
     setEditedAgents({});
     setStep('preview');
-  }, [completedResult]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [completedResult, normalizeGenerateResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore pending task on mount if pendingTaskId provided
   useEffect(() => {
@@ -276,7 +304,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
           genTimersRef.current = [];
           setGenPhase('parsing');
           setTimeout(() => {
-            setGenerateResult(result as MultiAgentGenerateResult);
+            setGenerateResult(normalizeGenerateResult(result as MultiAgentGenerateResult));
             setEditedAgents({});
             setStep('preview');
             setGenTaskId(null);
@@ -605,13 +633,14 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
         heartbeat: edited?.heartbeat ?? agent.heartbeat,
       };
     });
+    const workflow = normalizeWorkflow(template.workflow, agents);
     const deployRequest: MultiAgentDeployRequest = {
       template: {
         id: template.id,
         name: template.name,
         description: template.description,
         agents,
-        workflow: template.workflow,
+        workflow,
         bindings: [],
       },
       prefix: template.id,
@@ -619,7 +648,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
       dryRun: false,
     };
     onReadyToDeploy(deployRequest, generateResult.reasoning);
-  }, [generateResult, editedAgents, onReadyToDeploy]);
+  }, [generateResult, editedAgents, normalizeWorkflow, onReadyToDeploy]);
 
   const getWorkflowTypeColor = (type: string) => {
     const colors: Record<string, string> = {
@@ -628,6 +657,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
       collaborative: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
       'event-driven': 'bg-orange-500/10 text-orange-500 border-orange-500/20',
       routing: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
+      standalone: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
     };
     return colors[type] || 'bg-slate-500/10 text-slate-500 border-slate-500/20';
   };
@@ -918,13 +948,13 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
           soul: a.soul, agentsMd: a.agentsMd, userMd: a.userMd,
           identityMd: a.identityMd, heartbeat: a.heartbeat,
         })),
-        workflow: parsed.template?.workflow ?? { type: workflowType, description: '', steps: [] },
+        workflow: normalizeWorkflow(parsed.template?.workflow, wzAgents),
       },
     };
-    setGenerateResult(result);
+    setGenerateResult(normalizeGenerateResult(result));
     setEditedAgents({});
     setStep('preview');
-  }, [wzStep1Result, wzAgents, scenarioName, description, workflowType]);
+  }, [wzStep1Result, wzAgents, scenarioName, description, normalizeWorkflow, normalizeGenerateResult]);
 
   // Cleanup wizard SSE on unmount or leaving wizard step
   useEffect(() => {
@@ -1083,7 +1113,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                                 </p>
                                 <div className="flex items-center gap-1.5 mt-1">
                                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/40 font-medium">
-                                    {ma[`workflow${tpl.workflowType.charAt(0).toUpperCase() + tpl.workflowType.slice(1)}`] || tpl.workflowType}
+                                    {ma[getWorkflowLabelKey(tpl.workflowType)] || tpl.workflowType}
                                   </span>
                                   <span className="text-[9px] text-slate-400 dark:text-white/30">
                                     {formatAgentCountLabel(tpl.teamSize)}
@@ -1482,8 +1512,12 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                       <span className="text-xs text-slate-600 dark:text-white/60">{stb[`teamSize_${teamSize}`] || teamSize} · {TEAM_SIZES.find(s => s.value === teamSize)?.range}</span>
                     </div>
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                      <span className="material-symbols-outlined text-[11px] text-violet-500">{WORKFLOW_TYPES.find(w => w.value === workflowType)?.icon || 'hub'}</span>
-                      <span className="text-xs text-slate-600 dark:text-white/60">{ma[WORKFLOW_TYPES.find(w => w.value === workflowType)?.labelKey || ''] || workflowType}</span>
+                      <span className="material-symbols-outlined text-[11px] text-violet-500">
+                        {effectiveWorkflowType === 'standalone' ? 'person' : (WORKFLOW_TYPES.find(w => w.value === workflowType)?.icon || 'hub')}
+                      </span>
+                      <span className="text-xs text-slate-600 dark:text-white/60">
+                        {ma[getWorkflowLabelKey(effectiveWorkflowType)] || effectiveWorkflowType}
+                      </span>
                     </div>
                     {selectedModelLabel && (
                       <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
@@ -1842,7 +1876,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                     <p className="text-[11px] text-slate-500 dark:text-white/40 mt-0.5">{generateResult.template.description}</p>
                   </div>
                   <span className={`px-2 py-1 rounded text-[9px] font-bold border shrink-0 ${getWorkflowTypeColor(generateResult.template.workflow.type)}`}>
-                    {ma[`workflow${generateResult.template.workflow.type.charAt(0).toUpperCase() + generateResult.template.workflow.type.slice(1)}`] || generateResult.template.workflow.type}
+                    {ma[getWorkflowLabelKey(generateResult.template.workflow.type)] || generateResult.template.workflow.type}
                   </span>
                 </div>
               </div>
