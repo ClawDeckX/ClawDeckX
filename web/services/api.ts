@@ -1938,7 +1938,7 @@ export interface MultiAgentStatus {
 export interface MultiAgentGenerateRequest {
   scenarioName: string;
   description: string;
-  teamSize?: 'small' | 'medium' | 'large';
+  teamSize?: 'single' | 'small' | 'medium' | 'large';
   workflowType?: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
   language?: string;
 }

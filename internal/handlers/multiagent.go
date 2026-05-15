@@ -218,6 +218,19 @@ type GenerateResult struct {
 	Reasoning string             `json:"reasoning"`
 }
 
+func multiAgentCountHint(teamSize string) string {
+	switch teamSize {
+	case "single":
+		return "exactly 1"
+	case "small":
+		return "2 to 3"
+	case "large":
+		return "7 to 10"
+	default:
+		return "4 to 6"
+	}
+}
+
 // Generate uses the connected LLM to analyze a scenario and generate a multi-agent team definition.
 func (h *MultiAgentHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var req GenerateRequest
@@ -241,13 +254,7 @@ func (h *MultiAgentHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		req.Language = "en"
 	}
 
-	agentCountHint := "5 to 7"
-	switch req.TeamSize {
-	case "small":
-		agentCountHint = "3 to 4"
-	case "large":
-		agentCountHint = "8 to 10"
-	}
+	agentCountHint := multiAgentCountHint(req.TeamSize)
 
 	langHint := "English"
 	if req.Language == "zh" || req.Language == "zh-TW" {
@@ -584,13 +591,7 @@ func (h *MultiAgentHandler) runGenerateTask(task *genTask, req GenerateRequest) 
 
 	elapsed := func() int { return int(time.Since(start).Seconds()) }
 
-	agentCountHint := "5 to 7"
-	switch req.TeamSize {
-	case "small":
-		agentCountHint = "3 to 4"
-	case "large":
-		agentCountHint = "8 to 10"
-	}
+	agentCountHint := multiAgentCountHint(req.TeamSize)
 	langHint := "English"
 	if req.Language == "zh" || req.Language == "zh-TW" {
 		langHint = "Chinese"
@@ -1921,13 +1922,7 @@ func (h *MultiAgentHandler) GenerateWizardStep1(w http.ResponseWriter, r *http.R
 		langHint = "Korean"
 	}
 
-	agentCountHint := "5 to 7"
-	switch req.TeamSize {
-	case "small":
-		agentCountHint = "3 to 4"
-	case "large":
-		agentCountHint = "8 to 10"
-	}
+	agentCountHint := multiAgentCountHint(req.TeamSize)
 
 	prompt := req.CustomPrompt
 	if prompt == "" {

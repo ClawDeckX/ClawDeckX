@@ -27,6 +27,7 @@ interface ScenarioTeamBuilderProps {
 }
 
 type BuilderStep = 'input' | 'generating' | 'wizard' | 'preview' | 'edit-agent';
+type TeamSize = 'single' | 'small' | 'medium' | 'large';
 
 interface AgentEdit {
   id: string;
@@ -48,7 +49,7 @@ interface ScenarioTemplate {
   nameKey: string;
   descKey: string;
   workflowType: 'collaborative' | 'sequential' | 'parallel' | 'routing';
-  teamSize: 'small' | 'medium' | 'large';
+  teamSize: TeamSize;
   name: string;
   desc: string;
   /** ID matching templates/official/multi-agent/{id}.json — used to load prompts */
@@ -105,10 +106,18 @@ function getWorkflowDescription(wfType: string, language: string): string {
 }
 
 const TEAM_SIZES = [
+  { value: 'single', range: '1', icon: 'person' },
   { value: 'small', range: '2-3', icon: 'group' },
   { value: 'medium', range: '4-6', icon: 'groups' },
   { value: 'large', range: '7-10', icon: 'diversity_3' },
 ] as const;
+
+function getAgentCountHint(size: TeamSize, style: 'compact' | 'words' = 'compact'): string {
+  if (size === 'single') return style === 'words' ? 'exactly 1' : '1';
+  if (size === 'small') return style === 'words' ? '2 to 3' : '2-3';
+  if (size === 'large') return style === 'words' ? '7 to 10' : '7-10';
+  return style === 'words' ? '4 to 6' : '4-6';
+}
 
 const ElapsedTimer: React.FC<{ startedAt: number; className?: string }> = ({ startedAt, className }) => {
   const [elapsed, setElapsed] = useState(() => Math.floor((Date.now() - startedAt) / 1000));
@@ -147,11 +156,16 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const ma = (t.multiAgent || {}) as any;
   const stb = (t.scenarioTeamBuilder || {}) as any;
   const { toast } = useToast();
+  const formatAgentCountLabel = useCallback((size: TeamSize) => {
+    const range = TEAM_SIZES.find(s => s.value === size)?.range || getAgentCountHint(size);
+    const label = size === 'single' ? (stb.agentSingular || stb.agents || 'agent') : (stb.agents || 'agents');
+    return `${range} ${label}`;
+  }, [stb]);
 
   const [step, setStep] = useState<BuilderStep>('input');
   const [scenarioName, setScenarioName] = useState('');
   const [description, setDescription] = useState('');
-  const [teamSize, setTeamSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [teamSize, setTeamSize] = useState<TeamSize>('medium');
   const [workflowType, setWorkflowType] = useState<'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing'>('collaborative');
   const [generateResult, setGenerateResult] = useState<MultiAgentGenerateResult | null>(null);
   const [editingAgent, setEditingAgent] = useState<AgentEdit | null>(null);
@@ -395,7 +409,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     setWzPromptUserEdited(false);
     // Load template prompts if linked
     if (tpl.multiAgentTemplateId) {
-      const agentCount = tpl.teamSize === 'small' ? '2-3' : tpl.teamSize === 'large' ? '7-10' : '4-6';
+      const agentCount = getAgentCountHint(tpl.teamSize);
       templateSystem.getMultiAgentTemplates(language).then(templates => {
         const matched = templates.find(t => t.id === tpl.multiAgentTemplateId);
         if (!matched?.content.prompts) return;
@@ -416,7 +430,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
       }).catch(() => { applyingTemplateRef.current = false; });
     } else {
       // No linked template — load generic default prompt + agentFile
-      const agentCount = tpl.teamSize === 'small' ? '2 to 3' : tpl.teamSize === 'large' ? '7 to 10' : '4 to 6';
+      const agentCount = getAgentCountHint(tpl.teamSize, 'words');
       templateSystem.getMultiAgentTemplates(language).then(templates => {
         const def = templates.find(t => t.id === 'default');
         if (!def) return;
@@ -447,7 +461,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
 
   /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
   const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
-    const agentCount = size === 'small' ? '2 to 3' : size === 'large' ? '7 to 10' : '4 to 6';
+    const agentCount = getAgentCountHint(size, 'words');
     try {
       const templates = await templateSystem.getMultiAgentTemplates(language);
       const def = templates.find(t => t.id === 'default');
@@ -726,7 +740,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   useEffect(() => {
     if (step !== 'wizard' || wzPhase !== 'step1' || wzStep1Prompt || wzStep1Running) return;
     const tplId = currentTemplateIdRef.current;
-    const agentCount = teamSize === 'small' ? '2-3' : teamSize === 'large' ? '7-10' : '4-6';
+    const agentCount = getAgentCountHint(teamSize);
     templateSystem.getMultiAgentTemplates(language).then(templates => {
       const tpl = tplId ? templates.find(t => t.id === tplId) : templates.find(t => t.id === 'default');
       const promptObj = tpl?.content.prompts?.step1 ?? templates.find(t => t.id === 'default')?.content.prompts?.step1;
@@ -1066,7 +1080,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                                     {ma[`workflow${tpl.workflowType.charAt(0).toUpperCase() + tpl.workflowType.slice(1)}`] || tpl.workflowType}
                                   </span>
                                   <span className="text-[9px] text-slate-400 dark:text-white/30">
-                                    {TEAM_SIZES.find(s => s.value === tpl.teamSize)?.range} {stb.agents || 'agents'}
+                                    {formatAgentCountLabel(tpl.teamSize)}
                                   </span>
                                 </div>
                               </div>
@@ -1124,7 +1138,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                       <span className="flex-1 text-[12px] font-medium text-slate-800 dark:text-white/80 truncate">
                         {stb[`teamSize_${teamSize}`] || teamSize.charAt(0).toUpperCase() + teamSize.slice(1)}
                         <span className="ms-1.5 text-[11px] font-normal text-slate-400 dark:text-white/30">
-                          ({TEAM_SIZES.find(s => s.value === teamSize)?.range} {stb.agents || 'agents'})
+                          ({formatAgentCountLabel(teamSize)})
                         </span>
                       </span>
                       <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 shrink-0 transition-transform ${teamSizeOpen ? 'rotate-180' : ''}`}>expand_more</span>
