@@ -20,7 +20,7 @@ interface WorkflowStep {
 }
 
 interface Workflow {
-  type: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
+  type: 'standalone' | 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
   description?: string;
   steps: WorkflowStep[];
 }
@@ -226,6 +226,7 @@ const WorkflowVisualizer: React.FC<WorkflowVisualizerProps> = ({
 
   const renderWorkflowType = () => {
     const typeConfig: Record<string, { icon: string; color: string; label: string }> = {
+      standalone: { icon: '•', color: '#8b5cf6', label: ma.workflowStandalone || 'Standalone' },
       sequential: { icon: '→', color: '#3b82f6', label: ma.workflowSequential || 'Sequential' },
       parallel: { icon: '⇉', color: '#22c55e', label: ma.workflowParallel || 'Parallel' },
       collaborative: { icon: '⟷', color: '#a855f7', label: ma.workflowCollaborative || 'Collaborative' },

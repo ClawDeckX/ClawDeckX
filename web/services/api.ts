@@ -1888,7 +1888,7 @@ export interface MultiAgentDeployRequest {
       env?: Record<string, string>;
     }>;
     workflow: {
-      type: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
+      type: 'standalone' | 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
       description: string;
       steps: Array<{
         agent?: string;
@@ -1939,7 +1939,7 @@ export interface MultiAgentGenerateRequest {
   scenarioName: string;
   description: string;
   teamSize?: 'single' | 'small' | 'medium' | 'large';
-  workflowType?: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
+  workflowType?: 'standalone' | 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
   language?: string;
 }
 
@@ -1962,7 +1962,7 @@ export interface MultiAgentGenerateResult {
       heartbeat?: string;
     }>;
     workflow: {
-      type: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
+      type: 'standalone' | 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
       description: string;
       steps: Array<{
         agent?: string;
@@ -2164,7 +2164,7 @@ export interface WorkflowExecutionDefinition {
   id: string;
   name: string;
   description: string;
-  type: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
+  type: 'standalone' | 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
   steps: WorkflowExecutionStep[];
   agents: string[];
 }

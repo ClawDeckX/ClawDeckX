@@ -231,6 +231,7 @@ ${blockEnd}
   const getWorkflowTypeLabel = useCallback(
     (type: string) => {
       const labels: Record<string, string> = {
+        standalone: ma.workflowStandalone || 'Standalone',
         sequential: ma.workflowSequential || 'Sequential',
         parallel: ma.workflowParallel || 'Parallel',
         collaborative: ma.workflowCollaborative || 'Collaborative',
@@ -244,6 +245,7 @@ ${blockEnd}
 
   const getWorkflowTypeColor = useCallback((type: string) => {
     const colors: Record<string, string> = {
+      standalone: 'bg-violet-500/10 text-violet-500',
       sequential: 'bg-blue-500/10 text-blue-500',
       parallel: 'bg-green-500/10 text-green-500',
       collaborative: 'bg-purple-500/10 text-purple-500',

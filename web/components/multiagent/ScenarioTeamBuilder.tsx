@@ -28,6 +28,7 @@ interface ScenarioTeamBuilderProps {
 
 type BuilderStep = 'input' | 'generating' | 'wizard' | 'preview' | 'edit-agent';
 type TeamSize = 'single' | 'small' | 'medium' | 'large';
+type WorkflowType = 'standalone' | 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
 
 interface AgentEdit {
   id: string;
@@ -48,7 +49,7 @@ interface ScenarioTemplate {
   color: string;
   nameKey: string;
   descKey: string;
-  workflowType: 'collaborative' | 'sequential' | 'parallel' | 'routing';
+  workflowType: Exclude<WorkflowType, 'standalone' | 'event-driven'>;
   teamSize: TeamSize;
   name: string;
   desc: string;
@@ -81,6 +82,10 @@ const WORKFLOW_TYPES = [
 ] as const;
 
 const WORKFLOW_DESCRIPTIONS: Record<string, { en: string; zh: string }> = {
+  standalone: {
+    en: 'standalone — a single agent works independently without multi-agent coordination',
+    zh: '独立式 — 单个智能体独立工作，不需要多智能体协作',
+  },
   collaborative: {
     en: 'collaborative — all agents work together simultaneously, sharing context and coordinating freely',
     zh: '协作式 — 所有智能体同时协作，自由共享上下文和协调任务',
@@ -166,7 +171,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const [scenarioName, setScenarioName] = useState('');
   const [description, setDescription] = useState('');
   const [teamSize, setTeamSize] = useState<TeamSize>('medium');
-  const [workflowType, setWorkflowType] = useState<'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing'>('collaborative');
+  const [workflowType, setWorkflowType] = useState<Exclude<WorkflowType, 'standalone'>>('collaborative');
+  const effectiveWorkflowType: WorkflowType = teamSize === 'single' ? 'standalone' : workflowType;
   const [generateResult, setGenerateResult] = useState<MultiAgentGenerateResult | null>(null);
   const [editingAgent, setEditingAgent] = useState<AgentEdit | null>(null);
   const [editedAgents, setEditedAgents] = useState<Record<string, AgentEdit>>({});
@@ -460,7 +466,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const [wzPromptExpanded, setWzPromptExpanded] = useState(true); // collapsed/expanded state for prompt editor
 
   /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
-  const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
+  const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: WorkflowType): Promise<string> => {
     const agentCount = getAgentCountHint(size, 'words');
     try {
       const templates = await templateSystem.getMultiAgentTemplates(language);
@@ -498,10 +504,10 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     }, 0);
     // Pre-fill prompt in background if not yet set
     if (!wzStep1Prompt) {
-      const prompt = await buildDefaultStep1Prompt(scenarioName.trim(), description.trim(), teamSize, workflowType);
+      const prompt = await buildDefaultStep1Prompt(scenarioName.trim(), description.trim(), teamSize, effectiveWorkflowType);
       if (prompt) setWzStep1Prompt(prompt);
     }
-  }, [scenarioName, description, teamSize, workflowType, wzStep1Prompt, buildDefaultStep1Prompt]);
+  }, [scenarioName, description, teamSize, effectiveWorkflowType, wzStep1Prompt, buildDefaultStep1Prompt]);
 
   const handleConfirmWizard = handlePreparePrompt;
 
@@ -517,7 +523,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
         scenarioName: scenarioName.trim(),
         description: description.trim(),
         teamSize,
-        workflowType,
+        workflowType: effectiveWorkflowType,
         language,
         ...(selectedModel ? { modelId: selectedModel } : {}),
         directLlm,
@@ -545,7 +551,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
       }
       setStep('input');
     }
-  }, [scenarioName, description, teamSize, workflowType, language, selectedModel, directLlm, stb, onTaskSubmitted]);
+  }, [scenarioName, description, teamSize, effectiveWorkflowType, language, selectedModel, directLlm, stb, onTaskSubmitted]);
 
   const getEffectiveAgent = useCallback(
     (agentId: string) => editedAgents[agentId] ?? null,
@@ -680,7 +686,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
       scenarioName: scenarioName.trim(),
       description: description.trim(),
       teamSize,
-      workflowType,
+      workflowType: effectiveWorkflowType,
       language,
       modelId: selectedModel || undefined,
       customPrompt: wzStep1Prompt || undefined,
@@ -722,7 +728,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
         setWzStep1Error(`${code}: ${msg}`);
       },
     );
-  }, [scenarioName, description, teamSize, workflowType, language, selectedModel, wzStep1Prompt, wzLangHint]);
+  }, [scenarioName, description, teamSize, effectiveWorkflowType, language, selectedModel, wzStep1Prompt, wzLangHint]);
 
   // Register auto-start ref so handleConfirmWizard can call it after state flush
   useEffect(() => { wzStartStep1Ref.current = wzHandleStep1Start; }, [wzHandleStep1Start]);
@@ -749,15 +755,15 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
         scenarioName: scenarioName.trim(),
         description: description.trim(),
         agentCount,
-        workflowType,
-        workflowDescription: getWorkflowDescription(workflowType, language),
+        workflowType: effectiveWorkflowType,
+        workflowDescription: getWorkflowDescription(effectiveWorkflowType, language),
       });
       if (resolved) {
         setWzStep1Prompt(resolved);
         setWzPromptSource(tplId ? (tpl?.metadata?.name ?? tplId) : null);
       }
     }).catch(() => {});
-  }, [step, wzPhase, wzStep1Prompt, wzStep1Running, scenarioName, description, teamSize, workflowType, language]);
+  }, [step, wzPhase, wzStep1Prompt, wzStep1Running, scenarioName, description, teamSize, effectiveWorkflowType, language, wzPromptUserEdited]);
 
   const wzHandleStep1Stop = useCallback(() => {
     wzStep1AbortRef.current?.abort();
@@ -1169,41 +1175,50 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                 {/* Workflow Type dropdown */}
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider block mb-1.5">
-                    {stb.workflowTypeLabel || 'Workflow Style'}
+                    {teamSize === 'single' ? (stb.agentModeLabel || 'Agent Mode') : (stb.workflowTypeLabel || 'Workflow Style')}
                   </label>
-                  <div ref={workflowRef} className="relative">
-                    <button
-                      onClick={() => { setWorkflowOpen(v => !v); setTeamSizeOpen(false); }}
-                      className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-start transition-all ${
-                        workflowOpen ? 'border-violet-500/50 ring-1 ring-violet-500/20 bg-violet-500/5' : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 bg-slate-50 dark:bg-white/[0.03]'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[16px] text-violet-500 shrink-0">
-                        {WORKFLOW_TYPES.find(w => w.value === workflowType)?.icon || 'hub'}
-                      </span>
+                  {teamSize === 'single' ? (
+                    <div className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] text-start">
+                      <span className="material-symbols-outlined text-[16px] text-violet-500 shrink-0">person</span>
                       <span className="flex-1 text-[12px] font-medium text-slate-800 dark:text-white/80 truncate">
-                        {ma[WORKFLOW_TYPES.find(w => w.value === workflowType)?.labelKey || 'workflowCollaborative'] || workflowType}
+                        {ma.workflowStandalone || stb.agentModeStandalone || 'Standalone'}
                       </span>
-                      <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 shrink-0 transition-transform ${workflowOpen ? 'rotate-180' : ''}`}>expand_more</span>
-                    </button>
-                    {workflowOpen && (
-                      <div className="absolute start-0 end-0 top-full mt-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e2028] shadow-xl shadow-black/10 dark:shadow-black/40 z-50 py-1 overflow-hidden">
-                        {WORKFLOW_TYPES.map(wf => (
-                          <button
-                            key={wf.value}
-                            onClick={() => { setWorkflowType(wf.value); setWorkflowOpen(false); }}
-                            className={`w-full text-start px-3 py-2 flex items-center gap-2.5 transition-colors ${
-                              wf.value === workflowType ? 'bg-violet-500/5 text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-white/70 hover:bg-slate-50 dark:hover:bg-white/[0.06]'
-                            }`}
-                          >
-                            <span className={`material-symbols-outlined text-[16px] ${wf.value === workflowType ? 'text-violet-500' : 'text-slate-400 dark:text-white/30'}`}>{wf.icon}</span>
-                            <span className="text-[11px] font-medium">{ma[wf.labelKey] || wf.value}</span>
-                            {wf.value === workflowType && <span className="material-symbols-outlined text-[13px] text-violet-500 ms-auto">check</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div ref={workflowRef} className="relative">
+                      <button
+                        onClick={() => { setWorkflowOpen(v => !v); setTeamSizeOpen(false); }}
+                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-start transition-all ${
+                          workflowOpen ? 'border-violet-500/50 ring-1 ring-violet-500/20 bg-violet-500/5' : 'border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 bg-slate-50 dark:bg-white/[0.03]'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[16px] text-violet-500 shrink-0">
+                          {WORKFLOW_TYPES.find(w => w.value === workflowType)?.icon || 'hub'}
+                        </span>
+                        <span className="flex-1 text-[12px] font-medium text-slate-800 dark:text-white/80 truncate">
+                          {ma[WORKFLOW_TYPES.find(w => w.value === workflowType)?.labelKey || 'workflowCollaborative'] || workflowType}
+                        </span>
+                        <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 shrink-0 transition-transform ${workflowOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                      </button>
+                      {workflowOpen && (
+                        <div className="absolute start-0 end-0 top-full mt-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e2028] shadow-xl shadow-black/10 dark:shadow-black/40 z-50 py-1 overflow-hidden">
+                          {WORKFLOW_TYPES.map(wf => (
+                            <button
+                              key={wf.value}
+                              onClick={() => { setWorkflowType(wf.value); setWorkflowOpen(false); }}
+                              className={`w-full text-start px-3 py-2 flex items-center gap-2.5 transition-colors ${
+                                wf.value === workflowType ? 'bg-violet-500/5 text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-white/70 hover:bg-slate-50 dark:hover:bg-white/[0.06]'
+                              }`}
+                            >
+                              <span className={`material-symbols-outlined text-[16px] ${wf.value === workflowType ? 'text-violet-500' : 'text-slate-400 dark:text-white/30'}`}>{wf.icon}</span>
+                              <span className="text-[11px] font-medium">{ma[wf.labelKey] || wf.value}</span>
+                              {wf.value === workflowType && <span className="material-symbols-outlined text-[13px] text-violet-500 ms-auto">check</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -75,7 +75,7 @@ export interface TemplateAgent {
 }
 
 export interface TemplateWorkflow {
-  type: 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
+  type: 'standalone' | 'sequential' | 'parallel' | 'collaborative' | 'event-driven' | 'routing';
   description: string;
   steps: Array<{
     agent?: string;
