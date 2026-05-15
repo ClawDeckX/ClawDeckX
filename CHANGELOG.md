@@ -14,6 +14,7 @@ _2026-05-16_
 
 ### 🐛 Bug Fixes / 修复
 
+- repair local device auto-pairing
 - scope-upgrade auto-approve targets ClawDeckX device only
 - retry pairing auto-approve with discovery on stale hint
 - auto-approve scope upgrade pairing
@@ -1835,6 +1836,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 
