@@ -1609,28 +1609,28 @@ func (c *GWClient) autoApprovePairing(hintRequestID string) {
 	}
 
 	// 2. Discover the freshest pending requestId via the CLI's loopback
-	//    fallback, then approve that. `--latest --json` is preview-only on
-	//    OpenClaw ≥2026.4.8 (exits 1 with selection JSON); legacy versions
-	//    approved directly on success.
-	out, err := RunCLIWithTimeout("devices", "approve", "--latest", "--json")
-	if err == nil {
-		// Legacy OpenClaw: --latest approved directly.
-		c.mu.Lock()
-		c.pairingAutoApprove = false
-		c.lastError = ""
-		c.backoffMs = 1000
-		c.mu.Unlock()
-		logger.Log.Info().Msg("device pairing approved (legacy --latest) — triggering immediate reconnect")
-		select {
-		case c.reconnectNowCh <- struct{}{}:
-		default:
-		}
-		return
+	//    fallback, then approve that. We MUST filter by our own deviceId:
+	//    when the CLI invocation itself talks to the gateway, the gateway
+	//    may create a separate pending pairing entry for the CLI process
+	//    (different deviceId/publicKey, fresher ts). Generic "latest" picks
+	//    that CLI-process pending instead of ClawDeckX's, so approving it
+	//    does not unblock our reconnect. `devices list --json` falls back to
+	//    the local pairing state file on loopback when the gateway rejects
+	//    with pending approval, giving us the full pending list.
+	ourDeviceID := ""
+	if id, idErr := LoadOrCreateDeviceIdentity(""); idErr == nil && id != nil {
+		ourDeviceID = strings.TrimSpace(id.DeviceID)
 	}
-	discovered := extractRequestIDFromApproveLatest(out)
-	if discovered == "" {
-		listOut, listErr := RunCLIWithTimeout("devices", "list", "--json")
-		if listErr == nil {
+	listOut, listErr := RunCLIWithTimeout("devices", "list", "--json")
+	var discovered string
+	if listErr == nil {
+		if ourDeviceID != "" {
+			discovered = extractLatestPendingRequestIDForDevice(listOut, ourDeviceID)
+		}
+		if discovered == "" {
+			// Last-resort: no deviceId match available. Fall back to the
+			// global latest, which may target the wrong device but is still
+			// better than giving up.
 			discovered = extractLatestPendingRequestID(listOut)
 		}
 	}
@@ -1674,6 +1674,49 @@ func extractRequestIDFromApproveLatest(output string) string {
 		return parsed.Selected.RequestID
 	}
 	return ""
+}
+
+// extractLatestPendingRequestIDForDevice parses the JSON output from
+// `openclaw devices list --json` and returns the most recent pending requestId
+// whose `deviceId` matches the supplied id. Used to avoid auto-approving an
+// unrelated pending pairing (e.g. the CLI process's own scope-upgrade request)
+// when our hint requestId is stale and we have to rediscover.
+func extractLatestPendingRequestIDForDevice(output, deviceID string) string {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return ""
+	}
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return ""
+	}
+	idx := strings.Index(output, "{")
+	if idx < 0 {
+		return ""
+	}
+	output = output[idx:]
+	var parsed struct {
+		Pending []struct {
+			RequestID string `json:"requestId"`
+			DeviceID  string `json:"deviceId"`
+			Ts        int64  `json:"ts"`
+		} `json:"pending"`
+	}
+	if json.Unmarshal([]byte(output), &parsed) != nil || len(parsed.Pending) == 0 {
+		return ""
+	}
+	var latestID string
+	var latestTs int64 = -1
+	for _, p := range parsed.Pending {
+		if p.DeviceID != deviceID || p.RequestID == "" {
+			continue
+		}
+		if p.Ts > latestTs {
+			latestTs = p.Ts
+			latestID = p.RequestID
+		}
+	}
+	return latestID
 }
 
 // extractLatestPendingRequestID parses the JSON output from
