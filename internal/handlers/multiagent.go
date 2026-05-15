@@ -1175,9 +1175,11 @@ func (h *MultiAgentHandler) executeDeploy(w http.ResponseWriter, r *http.Request
 		}
 
 		status := AgentDeployStatus{
-			ID:   agentID,
-			Name: agentCfg.Name,
+			ID:        agentID,
+			Name:      agentCfg.Name,
+			Workspace: filepath.Join(homeDir, "agents", agentID),
 		}
+		workspace := status.Workspace
 
 		// Check if agent already exists
 		if existingMap[agentID] {
@@ -1199,7 +1201,6 @@ func (h *MultiAgentHandler) executeDeploy(w http.ResponseWriter, r *http.Request
 		// Create agent using agents.create API
 		// Note: OpenClaw uses 'name' to generate agentId, so we pass the agentID as name
 		// The display name will be set via IDENTITY.md file
-		workspace := filepath.Join(homeDir, "agents", agentID)
 		createParams := map[string]interface{}{
 			"name":      agentID, // Use agentID as name (OpenClaw generates agentId from name)
 			"workspace": workspace,
@@ -1214,8 +1215,11 @@ func (h *MultiAgentHandler) executeDeploy(w http.ResponseWriter, r *http.Request
 			if strings.Contains(errStr, "already exists") {
 				// Agent exists; overwrite its workspace files since skipExisting=false
 				status.Status = "updated"
-				status.Workspace = workspace
 				result.DeployedCount++
+				if err := h.updateAgentWorkspace(agentID, workspace); err != nil {
+					logger.Log.Warn().Err(err).Str("agentId", agentID).Str("workspace", workspace).Msg("Failed to update agent workspace")
+					result.Errors = append(result.Errors, fmt.Sprintf("agent %s workspace update: %s", agentID, err.Error()))
+				}
 				if _, writeErr := h.createAgentWorkspace(homeDir, agentID, agentCfg); writeErr != nil {
 					logger.Log.Warn().Err(writeErr).Str("agentId", agentID).Msg("Failed to overwrite agent config files")
 				}
@@ -1227,8 +1231,11 @@ func (h *MultiAgentHandler) executeDeploy(w http.ResponseWriter, r *http.Request
 			}
 		} else {
 			status.Status = "created"
-			status.Workspace = workspace
 			result.DeployedCount++
+			if err := h.updateAgentWorkspace(agentID, workspace); err != nil {
+				logger.Log.Warn().Err(err).Str("agentId", agentID).Str("workspace", workspace).Msg("Failed to confirm agent workspace")
+				result.Errors = append(result.Errors, fmt.Sprintf("agent %s workspace update: %s", agentID, err.Error()))
+			}
 
 			// Write agent configuration files
 			if _, writeErr := h.createAgentWorkspace(homeDir, agentID, agentCfg); writeErr != nil {
@@ -1567,6 +1574,14 @@ func (h *MultiAgentHandler) createAgentWorkspace(homeDir, agentID string, cfg Ag
 	}
 
 	return workspace, nil
+}
+
+func (h *MultiAgentHandler) updateAgentWorkspace(agentID, workspace string) error {
+	_, err := h.client.RequestWithTimeout("agents.update", map[string]interface{}{
+		"agentId":   agentID,
+		"workspace": workspace,
+	}, 15*time.Second)
+	return err
 }
 
 func (h *MultiAgentHandler) updateOpenClawConfig(template MultiAgentTemplate, prefix string) error {
