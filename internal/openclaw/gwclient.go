@@ -1551,75 +1551,104 @@ func (c *GWClient) autoApprovePairing(hintRequestID string) {
 	// Brief wait to let the WS close frame complete before we write the approval file
 	time.Sleep(600 * time.Millisecond)
 
-	requestID := hintRequestID
+	// Build the candidate list of requestIds to try. The hint (extracted from
+	// the connect error) is preferred, but can be stale: when the local pending
+	// pairing state is reconciled (different publicKey/scope set, scope-upgrade
+	// supersession, 5-minute TTL prune, or the connect error carries a connection
+	// id rather than a pending pairing id), the gateway returns a NEW requestId
+	// on subsequent connects. The CLI's local fallback then rejects our hint
+	// with "unknown requestId" even though approving the LATEST pending entry
+	// would unblock reconnect.
+	//
+	// Strategy:
+	//  1. Try the hint (if any).
+	//  2. On failure, run `devices approve --latest --json` (preview-only) to
+	//     discover the freshest pending requestId; the CLI itself falls back to
+	//     the local pairing state file when the gateway rejects with pending
+	//     approval (same loopback fallback we rely on).
+	//  3. Approve the discovered id. If --latest yields nothing, try
+	//     `devices list --json` as a final fallback.
+	tried := make(map[string]bool)
+	var lastErr error
+	tryApprove := func(requestID string) bool {
+		requestID = strings.TrimSpace(requestID)
+		if requestID == "" || tried[requestID] {
+			return false
+		}
+		tried[requestID] = true
 
-	// If we don't have a requestId from the connect error details, discover it
-	// via `openclaw devices approve --latest --json`.
-	if requestID == "" {
-		out, err := RunCLIWithTimeout("devices", "approve", "--latest", "--json")
-		if err != nil {
-			// --latest --json outputs JSON with the selected request info then exits 1.
-			// Parse the output even on error to extract the requestId.
-			requestID = extractRequestIDFromApproveLatest(out)
-			if requestID == "" {
-				// Also try listing pending devices as a final fallback
-				listOut, listErr := RunCLIWithTimeout("devices", "list", "--json")
-				if listErr == nil {
-					requestID = extractLatestPendingRequestID(listOut)
-				}
-			}
-		} else {
-			// Older OpenClaw: --latest succeeded directly (pre-4.8 behavior)
+		logger.Log.Info().Str("requestId", requestID).Msg("approving device pairing request")
+		c.mu.Lock()
+		c.lastError = fmt.Sprintf("pairing required: approving request %s...", requestID)
+		c.mu.Unlock()
+
+		_, err := RunCLIWithTimeout("devices", "approve", requestID)
+		if err == nil {
 			c.mu.Lock()
 			c.pairingAutoApprove = false
 			c.lastError = ""
 			c.backoffMs = 1000
 			c.mu.Unlock()
-			logger.Log.Info().Msg("device pairing approved (legacy --latest) — triggering immediate reconnect")
+			logger.Log.Info().Str("requestId", requestID).
+				Msg("device pairing approved — triggering immediate reconnect")
 			select {
 			case c.reconnectNowCh <- struct{}{}:
 			default:
 			}
-			return
+			return true
 		}
+		lastErr = err
+		logger.Log.Warn().Err(err).Str("requestId", requestID).
+			Msg("device pairing approve attempt failed; will try discovery fallback")
+		return false
 	}
 
-	if requestID == "" {
-		c.mu.Lock()
-		c.pairingAutoApprove = false
-		c.lastError = "pairing auto-approve failed: could not resolve request ID"
-		c.mu.Unlock()
-		logger.Log.Error().Msg("device pairing auto-approve failed: no requestId found")
+	// 1. Try the hint first.
+	if tryApprove(hintRequestID) {
 		return
 	}
 
-	logger.Log.Info().Str("requestId", requestID).Msg("approving device pairing request")
-
-	c.mu.Lock()
-	c.lastError = fmt.Sprintf("pairing required: approving request %s...", requestID)
-	c.mu.Unlock()
-
-	_, err := RunCLIWithTimeout("devices", "approve", requestID)
-
-	c.mu.Lock()
-	c.pairingAutoApprove = false
-	if err != nil {
-		logger.Log.Error().Err(err).Str("requestId", requestID).Msg("device pairing auto-approve failed")
-		c.lastError = fmt.Sprintf("pairing auto-approve failed: %v", err)
-	} else {
-		logger.Log.Info().Str("requestId", requestID).Msg("device pairing approved — triggering immediate reconnect")
+	// 2. Discover the freshest pending requestId via the CLI's loopback
+	//    fallback, then approve that. `--latest --json` is preview-only on
+	//    OpenClaw ≥2026.4.8 (exits 1 with selection JSON); legacy versions
+	//    approved directly on success.
+	out, err := RunCLIWithTimeout("devices", "approve", "--latest", "--json")
+	if err == nil {
+		// Legacy OpenClaw: --latest approved directly.
+		c.mu.Lock()
+		c.pairingAutoApprove = false
 		c.lastError = ""
 		c.backoffMs = 1000
-	}
-	c.mu.Unlock()
-
-	if err == nil {
-		// Signal connectLoop to skip the current backoff sleep
+		c.mu.Unlock()
+		logger.Log.Info().Msg("device pairing approved (legacy --latest) — triggering immediate reconnect")
 		select {
 		case c.reconnectNowCh <- struct{}{}:
 		default:
 		}
+		return
 	}
+	discovered := extractRequestIDFromApproveLatest(out)
+	if discovered == "" {
+		listOut, listErr := RunCLIWithTimeout("devices", "list", "--json")
+		if listErr == nil {
+			discovered = extractLatestPendingRequestID(listOut)
+		}
+	}
+	if tryApprove(discovered) {
+		return
+	}
+
+	c.mu.Lock()
+	c.pairingAutoApprove = false
+	if lastErr != nil {
+		c.lastError = fmt.Sprintf("pairing auto-approve failed: %v", lastErr)
+		logger.Log.Error().Err(lastErr).
+			Msg("device pairing auto-approve failed after hint+discovery")
+	} else {
+		c.lastError = "pairing auto-approve failed: could not resolve request ID"
+		logger.Log.Error().Msg("device pairing auto-approve failed: no requestId found")
+	}
+	c.mu.Unlock()
 }
 
 // extractRequestIDFromApproveLatest parses the JSON output from
