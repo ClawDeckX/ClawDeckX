@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Language, dispatchOpenWindow } from '../../types';
 import { getTranslation } from '../../locales';
-import { selfUpdateApi, hostInfoApi, serviceApi, gatewayApi, runtimeApi } from '../../services/api';
+import { selfUpdateApi, hostInfoApi, serviceApi, gatewayApi, gwApi, runtimeApi } from '../../services/api';
 import type { SelfUpdateInfo, UpdateCheckResult, UpdateHistoryEntry, RuntimeStatus, ReleaseSummary } from '../../services/api';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -418,9 +418,14 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
                 }
                 if (p.done) {
                   toast('success', sRef.current.runtimeUpdateOk || sRef.current.openclawUpdateOk);
+                  // Smart restart gateway after Docker update
+                  try { await gwApi.gatewayRestartRequest({ reason: 'openclaw-update' }); }
+                  catch { try { await gatewayApi.restart(); } catch { /* ignore */ } }
+                  await new Promise(r => setTimeout(r, 3000));
                   await loadRuntimeStatus();
                   const res = await hostInfoApi.checkUpdate();
                   setOcUpdateInfo({ ...res, available: false });
+                  window.dispatchEvent(new CustomEvent('clawdeck:refresh-badges'));
                 }
               } catch { }
             }
@@ -430,11 +435,16 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
       } else {
         await runOcUpdate({ tag: ocSelectedTag || '' });
         toast('success', sRef.current.openclawUpdateOk);
-        await new Promise(r => setTimeout(r, 1500));
+        // Smart restart gateway: safe restart if RPC online, hard restart fallback
+        try { await gwApi.gatewayRestartRequest({ reason: 'openclaw-update' }); }
+        catch { try { await gatewayApi.restart(); } catch { /* gateway may not be running */ } }
+        await new Promise(r => setTimeout(r, 3000));
         const res = await hostInfoApi.checkUpdate();
         setOcUpdateInfo({ ...res, available: false });
         // 装完新版本后重新拉 release 列表（current/older 标记需要刷新）。
         loadOcReleaseList(true);
+        // Refresh dashboard to reflect new version
+        window.dispatchEvent(new CustomEvent('clawdeck:refresh-badges'));
       }
     } catch {
       toast('error', isDockerRuntime ? (sRef.current.runtimeUpdateFailed || sRef.current.openclawUpdateFailed) : sRef.current.openclawUpdateFailed);
