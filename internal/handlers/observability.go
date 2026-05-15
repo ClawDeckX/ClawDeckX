@@ -713,7 +713,7 @@ func (h *ObservabilityHandler) installPrometheusPlugin() error {
 // tryOpenClawCLIInstall runs `openclaw plugins install @openclaw/diagnostics-prometheus`.
 func (h *ObservabilityHandler) tryOpenClawCLIInstall() error {
 	spec := "@openclaw/diagnostics-prometheus"
-	cliArgs := []string{"plugins", "install", spec}
+	cliArgs := []string{"plugins", "install", spec, "--force"}
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		cmd = exec.Command("cmd.exe", append([]string{"/c", "openclaw"}, cliArgs...)...)
