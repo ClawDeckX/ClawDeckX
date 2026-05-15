@@ -450,5 +450,22 @@
     "proxyEnable": "프록시 활성화",
     "proxyUrlLabel": "프록시 URL",
     "proxyUrlHint": "HTTP만 가능 (HTTPS/SOCKS 불가). 예: http://proxy:8080"
-  }
+  },
+  "channelStop": "중지",
+  "channelStopConfirm": "이 채널을 정상 중지하시겠습니까? 게이트웨이 재시작으로 복구할 수 있습니다.",
+  "channelStopped": "채널 중지됨",
+  "channelStopFailed": "채널 중지 실패",
+  "channelStopTip": "이 채널을 정상 중지",
+  "safeRestart": "안전 재시작",
+  "safeRestartTip": "프리플라이트 체크 + OpenClaw RPC를 통한 정상 재시작",
+  "safeRestartOk": "안전 재시작이 시작되었습니다",
+  "safeRestartFailed": "안전 재시작 실패",
+  "safeRestartActiveSessions": "개 활성 세션",
+  "safeRestartPendingTasks": "개 대기 작업",
+  "safeRestartWarn": "경고",
+  "safeRestartContinue": "재시작을 계속하시겠습니까?",
+  "safeRestartReady": "게이트웨이가 안전 재시작 준비가 되었습니다. 계속하시겠습니까?",
+  "smartRestartHard": "강제",
+  "smartRestartFallback": "게이트웨이 RPC가 응답하지 않습니다. 하드 프로세스 재시작을 수행합니다.",
+  "smartRestartTip": "스마트 재시작: RPC 온라인 시 안전 재시작, 오프라인 시 강제 재시작"
 }

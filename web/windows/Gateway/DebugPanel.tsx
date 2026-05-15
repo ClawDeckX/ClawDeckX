@@ -2,8 +2,9 @@ import React from 'react';
 import CustomSelect from '../../components/CustomSelect';
 
 const RPC_PRESETS = [
-  'system-presence', 'sessions.list', 'sessions.preview', 'config.get',
-  'config.channels', 'health', 'status', 'channels.status',
+  'system-presence', 'sessions.list', 'sessions.preview', 'sessions.describe', 'sessions.cleanup',
+  'config.get', 'config.channels', 'health', 'status', 'channels.status', 'channels.stop',
+  'tasks.list', 'tasks.get', 'cron.get', 'gateway.restart.preflight',
 ];
 
 export interface DebugPanelProps {

@@ -503,19 +503,27 @@ func (i *Installer) installViaNpmWithTag(ctx context.Context, version string, re
 	pkgName := version + "@" + tagSpec
 	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": pkgName}))
 
-	// Windows: force-remove the old package directory before npm install.
+	// Pre-remove the old package directory before npm install on all platforms.
 	// This completely avoids npm's "retire" rename step (rename old dir →
-	// .pkg-XXXX) which is the primary source of errno -4094 / EBUSY failures
-	// when Defender, VS Code, or indexers hold file handles. We skip
-	// `npm uninstall -g` because it also performs internal renames that hit
-	// the same lock issue — instead we delete the files directly via OS calls
-	// (os.RemoveAll → rd /s /q → takeown+icacls fallback).
-	if runtime.GOOS == "windows" {
+	// .pkg-XXXX) which fails when any process holds a file handle:
+	//   - Windows: Defender, VS Code, indexers → EBUSY / EPERM / errno -4094
+	//   - Linux/macOS: running gateway process → EBUSY / "directory not empty"
+	// We skip `npm uninstall -g` because it also performs internal renames
+	// that hit the same lock issue — instead we kill the gateway process tree
+	// first, then delete the files directly via OS calls.
+	{
 		npmPrefix := openclaw.ResolveNpmGlobalDir()
 		if npmPrefix != "" {
 			pkgDir := filepath.Join(npmPrefix, "node_modules", version)
 			if _, err := os.Stat(pkgDir); err == nil {
 				i.emitter.EmitLog("Pre-removing old package directory to avoid retire rename locks...")
+				// Kill gateway process tree first to release file handles
+				openclaw.ForceKillTree()
+				if runtime.GOOS == "windows" {
+					_ = WaitForOpenClawUnlocked(10 * time.Second)
+				} else {
+					time.Sleep(1 * time.Second)
+				}
 				if rerr := openclaw.ForceRemoveOpenClaw(version); rerr != nil {
 					i.emitter.EmitLog("⚠ Force remove failed: " + rerr.Error())
 				}

@@ -34,7 +34,7 @@ export const BrowserSection: React.FC<SectionProps> = ({ config, schema, setFiel
     setReqSending(true);
     setReqResult(null);
     try {
-      const res = await gwApi.browserRequest(reqMethod, reqPath.trim()) as any;
+      const res = await gwApi.proxy('browser.request', { method: reqMethod, path: reqPath.trim() }) as any;
       setReqResult({ ok: true, text: `${res?.status || 200} OK`, body: typeof res?.body === 'string' ? res.body.slice(0, 2000) : JSON.stringify(res, null, 2).slice(0, 2000) });
     } catch (err: any) {
       setReqResult({ ok: false, text: es.browserFailed + ': ' + (err?.message || '') });

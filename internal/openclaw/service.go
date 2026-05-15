@@ -553,10 +553,9 @@ func processExistsWindows() bool {
 
 // ForceKillTree aggressively terminates every OpenClaw-related process on the
 // host, including child processes (plugin workers, MCP stdio servers,
-// browser-use Chrome, ...). Used before npm install -g openclaw on Windows to
-// release file handles that block the npm "retire" rename step (errno -4094 /
-// EBUSY / UNKNOWN). Safe to call on any OS — it's a no-op outside Windows
-// because Stop()'s pkill paths already cover those cases.
+// browser-use Chrome, ...). Used before npm install -g openclaw on all platforms
+// to release file handles that block the npm "retire" rename step (Windows:
+// errno -4094 / EBUSY; Linux/macOS: EBUSY / "directory not empty").
 func ForceKillTree() {
 	if runtime.GOOS != "windows" {
 		// Unix: pkill the family with SIGKILL (caller usually already did SIGTERM)

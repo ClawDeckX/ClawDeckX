@@ -676,6 +676,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     { cmd: '/export', desc: c.cmdExport, icon: 'download', cat: 'status' },
     { cmd: '/export-session', desc: c.cmdExportSession, icon: 'file_download', cat: 'status' },
     { cmd: '/export-trajectory', desc: c.cmdExportTrajectory || 'Export trajectory bundle', icon: 'folder_zip', cat: 'status' },
+    { cmd: '/diagnostics', desc: c.cmdDiagnostics || 'Explain Gateway diagnostics and feedback upload options', icon: 'stethoscope', cat: 'status' },
     // — Options —
     { cmd: '/model', desc: c.quickModel, icon: 'smart_toy', cat: 'options' },
     { cmd: '/models', desc: c.cmdModels, icon: 'list', cat: 'options' },
@@ -2360,6 +2361,35 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     loadSessions();
   }, [repairIssues, c, toast, loadSessions, confirm]);
 
+  // Sessions cleanup via OpenClaw RPC (orphaned transcripts, compaction artifacts, etc.)
+  const [cleaningUp, setCleaningUp] = useState(false);
+  const handleSessionsCleanup = useCallback(async () => {
+    setCleaningUp(true);
+    try {
+      const dryRun = await gwApi.sessionsCleanup({ dryRun: true }) as any;
+      const count = dryRun?.count ?? dryRun?.files ?? 0;
+      if (count === 0) {
+        toast('success', c.cleanupNone || 'No orphaned files found');
+        setCleaningUp(false);
+        return;
+      }
+      if (!(await confirm({
+        title: c.cleanup || 'Sessions Cleanup',
+        message: (c.cleanupConfirm || 'Found {count} orphaned file(s). Remove them?').replace('{count}', String(count)),
+        confirmText: c.cleanupRun || 'Clean Up',
+        cancelText: c.cancel || 'Cancel',
+        danger: true,
+      }))) { setCleaningUp(false); return; }
+      const result = await gwApi.sessionsCleanup() as any;
+      const removed = result?.removed ?? result?.count ?? count;
+      toast('success', (c.cleanupDone || '{count} file(s) cleaned up').replace('{count}', String(removed)));
+    } catch (err: any) {
+      toast('error', `${c.cleanupFailed || 'Cleanup failed'}: ${err?.message || ''}`);
+    } finally {
+      setCleaningUp(false);
+    }
+  }, [confirm, toast, c]);
+
   // Select session
   const selectSession = useCallback((key: string) => {
     if (key === sessionKey) {
@@ -3125,6 +3155,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                       <span className={`material-symbols-outlined text-[16px] ${repairScanning ? 'animate-spin' : ''}`}>{repairScanning ? 'progress_activity' : 'healing'}</span>
                       {c.repair || 'Repair'}
                       {repairIssues.length > 0 && <span className="ms-auto text-[9px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full px-1.5 py-0.5">{repairIssues.length}</span>}
+                    </button>
+                    <button onClick={() => { handleSessionsCleanup(); setToolbarMenuOpen(false); }} disabled={!gwReady || cleaningUp}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] hover:bg-sky-50 dark:hover:bg-sky-500/10 text-sky-500/70 hover:text-sky-600 dark:hover:text-sky-400 disabled:opacity-30 transition-colors">
+                      <span className={`material-symbols-outlined text-[16px] ${cleaningUp ? 'animate-spin' : ''}`}>{cleaningUp ? 'progress_activity' : 'mop'}</span>
+                      {c.cleanup || 'Sessions Cleanup'}
                     </button>
                   </div>
                 </>

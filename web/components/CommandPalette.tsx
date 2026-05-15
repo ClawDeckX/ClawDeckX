@@ -198,7 +198,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ language, openWindow })
         label: cp.restartGateway || 'Restart Gateway',
         icon: 'restart_alt',
         keywords: 'restart gateway reboot',
-        exec: () => { gatewayApi.restart().catch(() => {}); },
+        exec: () => { gwApi.gatewayRestartRequest({ reason: 'command-palette' }).catch(() => gatewayApi.restart().catch(() => {})); },
       },
       {
         id: 'act:refresh-dashboard',

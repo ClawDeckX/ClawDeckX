@@ -573,7 +573,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
     try {
       if (action === 'start') await gatewayApi.start();
       else if (action === 'stop') await gatewayApi.stop();
-      else await gatewayApi.restart();
+      else { try { await gwApi.gatewayRestartRequest({ reason: 'dashboard' }); } catch { await gatewayApi.restart(); } }
       toast('success', action === 'start' ? d.gwStarted : action === 'stop' ? d.gwStopped : d.gwRestarted);
       setTimeout(() => { fetchFast(); }, 1500);
     } catch (e: any) { toast('error', String(e?.message || e)); }

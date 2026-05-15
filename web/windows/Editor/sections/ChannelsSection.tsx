@@ -846,7 +846,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
         console.error('Failed to save channel config before restart');
         throw new Error(cw.saveFailed || 'Failed to save channel config');
       }
-      await gatewayApi.restart();
+      // Prefer safe restart (preflight + graceful) with hard restart fallback
+      try { await gwApi.gatewayRestartRequest({ reason: 'channel-config-save' }); }
+      catch { await gatewayApi.restart(); }
       await new Promise(r => setTimeout(r, 2000));
       // Wait for WS to reconnect + health probe to succeed before exposing
       // QR / pairing UI. Otherwise the user clicks "Generate QR" before the
@@ -2762,10 +2764,6 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
 
       <ConfigSection title={es.chModelByChannel || 'Model by Channel'} icon="tune" iconColor="text-indigo-500" defaultOpen={false}>
         <KeyValueField label={es.chModelByChannelKv || 'Channel → Model Override'} tooltip={schemaTooltip('channels.modelByChannel', language, schema)} value={getField(['channels', 'modelByChannel']) || {}} onChange={v => setField(['channels', 'modelByChannel'], v)} />
-      </ConfigSection>
-
-      <ConfigSection title={es.chMatrixConfig || 'Matrix Defaults'} icon="hub" iconColor="text-teal-500" defaultOpen={false}>
-        <SwitchField label={es.chMatrixAllowBots || 'Allow Bot Messages'} tooltip={schemaTooltip('channels.matrix.allowBots', language, schema)} value={getField(['channels', 'matrix', 'allowBots']) === true} onChange={v => setField(['channels', 'matrix', 'allowBots'], v)} />
       </ConfigSection>
 
       {/* ================================================================ */}

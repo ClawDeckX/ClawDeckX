@@ -450,5 +450,22 @@
     "proxyEnable": "プロキシを有効化",
     "proxyUrlLabel": "プロキシURL",
     "proxyUrlHint": "HTTP必須（HTTPS/SOCKSは不可）。例: http://proxy:8080"
-  }
+  },
+  "channelStop": "停止",
+  "channelStopConfirm": "このチャネルを正常停止しますか？ゲートウェイ再起動で復旧できます。",
+  "channelStopped": "チャネル停止済み",
+  "channelStopFailed": "チャネル停止に失敗",
+  "channelStopTip": "このチャネルを正常停止",
+  "safeRestart": "セーフ再起動",
+  "safeRestartTip": "プリフライトチェック + OpenClaw RPC経由の正常再起動",
+  "safeRestartOk": "セーフ再起動を開始しました",
+  "safeRestartFailed": "セーフ再起動に失敗",
+  "safeRestartActiveSessions": "つのアクティブセッション",
+  "safeRestartPendingTasks": "つの保留タスク",
+  "safeRestartWarn": "警告",
+  "safeRestartContinue": "再起動を続行しますか？",
+  "safeRestartReady": "ゲートウェイはセーフ再起動の準備ができました。続行しますか？",
+  "smartRestartHard": "ハード",
+  "smartRestartFallback": "ゲートウェイ RPC が応答していません。ハードプロセス再起動を実行します。",
+  "smartRestartTip": "スマート再起動：RPC 接続時はセーフ再起動、未接続時はハード再起動"
 }

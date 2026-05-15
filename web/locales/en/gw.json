@@ -450,5 +450,22 @@
     "proxyEnable": "Enable Proxy",
     "proxyUrlLabel": "Proxy URL",
     "proxyUrlHint": "Must be HTTP (not HTTPS/SOCKS). Example: http://proxy:8080"
-  }
+  },
+  "channelStop": "Stop",
+  "channelStopConfirm": "Gracefully stop this channel? It can be restarted via gateway restart.",
+  "channelStopped": "Channel stopped",
+  "channelStopFailed": "Failed to stop channel",
+  "channelStopTip": "Gracefully stop this channel",
+  "safeRestart": "Safe Restart",
+  "safeRestartTip": "Preflight check + graceful restart via OpenClaw RPC",
+  "safeRestartOk": "Safe restart initiated",
+  "safeRestartFailed": "Safe restart failed",
+  "safeRestartActiveSessions": "active session(s)",
+  "safeRestartPendingTasks": "pending task(s)",
+  "safeRestartWarn": "Warning",
+  "safeRestartContinue": "Continue with restart?",
+  "safeRestartReady": "Gateway is ready for a safe restart. Proceed?",
+  "smartRestartHard": "Hard",
+  "smartRestartFallback": "Gateway RPC is not responding. A hard process restart will be performed.",
+  "smartRestartTip": "Smart restart: safe when RPC is online, hard restart as fallback"
 }

@@ -30,7 +30,6 @@ export const SessionSection: React.FC<SectionProps> = ({ config, schema, setFiel
         <NumberField label={es.idleMinutes} tooltip={tip('session.idleMinutes')} value={g(['idleMinutes'])} onChange={v => s(['idleMinutes'], v)} min={0} placeholder={def('session.idleMinutes')} />
         <TextField label={es.sessionStore} tooltip={tip('session.store')} value={g(['store']) || ''} onChange={v => s(['store'], v)} />
         <TextField label={es.sessionMainKey} tooltip={tip('session.mainKey')} value={g(['mainKey']) || ''} onChange={v => s(['mainKey'], v)} placeholder="main" />
-        <NumberField label={es.parentForkMaxTokens} tooltip={tip('session.parentForkMaxTokens')} value={g(['parentForkMaxTokens'])} onChange={v => s(['parentForkMaxTokens'], v)} min={0} placeholder={def('session.parentForkMaxTokens')} />
         <ArrayField label={es.resetTriggers} tooltip={tip('session.resetTriggers')} value={g(['resetTriggers']) || []} onChange={v => s(['resetTriggers'], v)} placeholder="/reset" />
         <KeyValueField label={es.identityLinks || 'Identity Links'} tooltip={tip('session.identityLinks')} value={g(['identityLinks']) || {}} onChange={v => s(['identityLinks'], v)} />
       </ConfigSection>
@@ -82,7 +81,7 @@ export const SessionSection: React.FC<SectionProps> = ({ config, schema, setFiel
         sectionPath="session"
         handledKeys={[
           'scope', 'dmScope', 'idleMinutes', 'store', 'mainKey',
-          'parentForkMaxTokens', 'resetTriggers', 'identityLinks',
+          'resetTriggers', 'identityLinks',
           'reset', 'resetByType', 'resetByChannel',
           'threadBindings', 'maintenance', 'sendPolicy', 'agentToAgent',
         ]}

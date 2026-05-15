@@ -450,5 +450,22 @@
     "proxyEnable": "啟用代理",
     "proxyUrlLabel": "代理位址",
     "proxyUrlHint": "必須是 HTTP（非 HTTPS/SOCKS）。範例: http://proxy:8080"
-  }
+  },
+  "channelStop": "停止",
+  "channelStopConfirm": "優雅停止該頻道？可透過閘道重啟恢復。",
+  "channelStopped": "頻道已停止",
+  "channelStopFailed": "停止頻道失敗",
+  "channelStopTip": "優雅停止該頻道",
+  "safeRestart": "安全重啟",
+  "safeRestartTip": "預檢 + 透過 OpenClaw RPC 優雅重啟",
+  "safeRestartOk": "安全重啟已發起",
+  "safeRestartFailed": "安全重啟失敗",
+  "safeRestartActiveSessions": "個活躍會話",
+  "safeRestartPendingTasks": "個待處理任務",
+  "safeRestartWarn": "警告",
+  "safeRestartContinue": "繼續重啟？",
+  "safeRestartReady": "閘道已準備好安全重啟，是否繼續？",
+  "smartRestartHard": "硬重啟",
+  "smartRestartFallback": "閘道 RPC 無回應，將執行硬行程重啟。",
+  "smartRestartTip": "智慧重啟：RPC 在線時安全重啟，不在線時硬重啟"
 }

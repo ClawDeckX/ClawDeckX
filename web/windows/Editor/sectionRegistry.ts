@@ -53,10 +53,9 @@ const MESSAGES_KEYS = [
   'broadcast.strategy',
 ];
 
-// Tools + canvasHost + media
+// Tools + media
 const TOOLS_KEYS = [
   'tools.*',
-  'canvasHost.enabled', 'canvasHost.root', 'canvasHost.port', 'canvasHost.liveReload',
   'media.preserveFilenames', 'media.ttlHours',
 ];
 

@@ -1658,9 +1658,26 @@ export const gwApi = {
     rpc<{ enabled?: boolean; provider?: string; voice?: string; speed?: number; language?: string }>('talk.config'),
   talkSpeak: (text: string, params?: { voice?: string; provider?: string; sessionKey?: string }) =>
     rpc('talk.speak', { text, ...params }),
-  // Browser
-  browserRequest: (method: string, path: string) =>
-    rpc('browser.request', { method, path }),
+  // Channels (2026.5.7)
+  channelsStop: (channel: string) =>
+    rpc('channels.stop', { channel }),
+  // Tasks (2026.5.7)
+  tasksList: (params?: { limit?: number; offset?: number }) =>
+    rpc('tasks.list', params),
+  tasksGet: (id: string) =>
+    rpc('tasks.get', { id }),
+  tasksCancel: (id: string) =>
+    rpc('tasks.cancel', { id }),
+  // Sessions (2026.5.7)
+  sessionsDescribe: (key: string) =>
+    rpc('sessions.describe', { key }),
+  sessionsCleanup: (params?: { dryRun?: boolean }) =>
+    rpc('sessions.cleanup', params),
+  // Gateway (2026.5.7)
+  gatewayRestartPreflight: () =>
+    rpc('gateway.restart.preflight'),
+  gatewayRestartRequest: (params?: { reason?: string }) =>
+    rpc('gateway.restart.request', params),
   // Wizard
   wizardStart: (params: any) => rpc('wizard.start', params),
   wizardNext: (sessionId: string, input: any, stepId?: string) =>

@@ -91,6 +91,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   const [channelsList, setChannelsList] = useState<any[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [channelLogoutLoading, setChannelLogoutLoading] = useState<string | null>(null);
+  const [channelStopLoading, setChannelStopLoading] = useState<string | null>(null);
 
   const fetchChannels = useCallback((force = false) => {
     setChannelsLoading(true);
@@ -137,6 +138,25 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
       toast('error', gw.channelLogoutFailed || 'Logout failed');
     } finally {
       setChannelLogoutLoading(null);
+    }
+  }, [confirm, toast, gw, fetchChannels]);
+
+  const handleChannelStop = useCallback(async (channel: string) => {
+    if (!(await confirm({
+      title: gw.channelStop || 'Stop Channel',
+      message: gw.channelStopConfirm || 'Gracefully stop this channel? It can be restarted via gateway restart.',
+      confirmText: gw.channelStop || 'Stop',
+      cancelText: gw.cancel || 'Cancel',
+    }))) return;
+    setChannelStopLoading(channel);
+    try {
+      await gwApi.channelsStop(channel);
+      toast('success', gw.channelStopped || 'Channel stopped');
+      fetchChannels(true);
+    } catch {
+      toast('error', gw.channelStopFailed || 'Failed to stop channel');
+    } finally {
+      setChannelStopLoading(null);
     }
   }, [confirm, toast, gw, fetchChannels]);
 
@@ -505,8 +525,58 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   };
 
   const handleAction = async (action: 'start' | 'stop' | 'restart' | 'kill') => {
-    // Confirm for destructive actions
-    if (action === 'stop' || action === 'restart' || action === 'kill') {
+    // Smart restart: try preflight → safe restart if RPC reachable, hard restart otherwise
+    if (action === 'restart') {
+      setActionLoading('restart');
+      try {
+        const preflight = await gwApi.gatewayRestartPreflight() as any;
+        // RPC reachable — show preflight info and do safe restart
+        const activeSessions = preflight?.activeSessions ?? 0;
+        const pendingTasks = preflight?.pendingTasks ?? 0;
+        const warnings: string[] = [];
+        if (activeSessions > 0) warnings.push(`${activeSessions} ${gw.safeRestartActiveSessions || 'active session(s)'}`);
+        if (pendingTasks > 0) warnings.push(`${pendingTasks} ${gw.safeRestartPendingTasks || 'pending task(s)'}`);
+        const detail = warnings.length > 0
+          ? `${gw.safeRestartWarn || 'Warning'}: ${warnings.join(', ')}.\n${gw.safeRestartContinue || 'Continue with restart?'}`
+          : (gw.safeRestartReady || 'Gateway is ready for a safe restart. Proceed?');
+        if (!(await confirm({
+          title: `${gw.restart} (${gw.safeRestart || 'Safe'})`,
+          message: detail,
+          confirmText: gw.restart,
+          cancelText: gw.cancel || 'Cancel',
+          danger: warnings.length > 0,
+        }))) { setActionLoading(null); return; }
+        await gwApi.gatewayRestartRequest({ reason: 'ClawDeckX user-initiated restart' });
+        toast('success', `${gw.restart} ${gw.ok} (${gw.safeRestart || 'Safe'})`);
+        setTimeout(() => refreshAll(true), 3000);
+        setTimeout(() => refreshAll(true), 8000);
+      } catch {
+        // RPC unreachable — fall back to hard restart
+        const ok = await confirm({
+          title: `${gw.restart} (${gw.smartRestartHard || 'Hard'})`,
+          message: gw.smartRestartFallback || 'Gateway RPC is not responding. A hard process restart will be performed.',
+          confirmText: gw.restart,
+          cancelText: gw.cancel || 'Cancel',
+          danger: true,
+        });
+        if (!ok) { setActionLoading(null); return; }
+        try {
+          const result = await gatewayApi.restart();
+          const durationMs = (result as any)?.observability?.duration_ms;
+          const parts: string[] = [`${gw.restart} ${gw.ok}`];
+          if (typeof durationMs === 'number' && durationMs >= 0) parts.push(`${durationMs}ms`);
+          toast('success', parts.join(' · '));
+          setTimeout(() => refreshAll(true), 1000);
+          setTimeout(() => refreshAll(true), 3000);
+        } catch (err: any) {
+          toast('error', `${gw.restart} ${gw.failed}: ${err?.message || String(err)}`);
+        }
+      }
+      setTimeout(() => setActionLoading(null), 1500);
+      return;
+    }
+    // Non-restart actions (start / stop / kill)
+    if (action === 'stop' || action === 'kill') {
       const ok = await confirm({
         title: actionLabels[action],
         message: action === 'kill' ? (gw.confirmKill || 'Force kill the gateway process?') : `${gw.confirmAction || 'Confirm'} ${actionLabels[action]}?`,
@@ -517,31 +587,16 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
     }
     setActionLoading(action);
     try {
-      const result = await (gatewayApi as any)[action]();
-      if (action === 'restart') {
-        const durationMs = result?.observability?.duration_ms;
-        const detail = result?.observability?.after?.detail || result?.observability?.before?.detail;
-        const parts: string[] = [`${actionLabels[action]} ${gw.ok}`];
-        if (typeof durationMs === 'number' && durationMs >= 0) parts.push(`${durationMs}ms`);
-        if (detail) parts.push(String(detail));
-        toast('success', parts.join(' · '));
-      } else {
-        toast('success', `${actionLabels[action]} ${gw.ok}`);
-      }
+      await (gatewayApi as any)[action]();
+      toast('success', `${actionLabels[action]} ${gw.ok}`);
       setTimeout(() => refreshAll(true), 1000);
       setTimeout(() => refreshAll(true), 3000);
     } catch (err: any) {
-      const msg = err?.message || String(err);
-      if (action === 'restart') {
-        toast('error', `${actionLabels[action]} ${gw.failed}: ${msg}. ${gw.diagnose || 'Diagnose'}?`);
-      } else {
-        toast('error', `${actionLabels[action]} ${gw.failed}: ${msg}`);
-      }
+      toast('error', `${actionLabels[action]} ${gw.failed}: ${err?.message || String(err)}`);
     } finally {
       setTimeout(() => setActionLoading(null), 1500);
     }
   };
-
 
   // 网关配置 CRUD — with validation
   const validateForm = useCallback(() => {
@@ -1894,7 +1949,9 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
                   <span className={`material-symbols-outlined text-[14px] ${actionLoading === 'stop' ? 'animate-spin' : ''}`}>{actionLoading === 'stop' ? 'progress_activity' : 'stop'}</span>{gw.stop}
                 </button>
               )}
-              <button onClick={() => handleAction('restart')} disabled={!!actionLoading} className="flex items-center gap-1 px-2.5 py-1 bg-primary text-white rounded-lg font-bold text-[10px] transition-all disabled:opacity-40">
+              <button onClick={() => handleAction('restart')} disabled={!!actionLoading}
+                className="flex items-center gap-1 px-2.5 py-1 bg-primary text-white rounded-lg font-bold text-[10px] transition-all disabled:opacity-40"
+                title={gw.smartRestartTip || 'Smart restart: safe when RPC is online, hard restart as fallback'}>
                 <span className={`material-symbols-outlined text-[14px] ${actionLoading === 'restart' ? 'animate-spin' : ''}`}>{actionLoading === 'restart' ? 'progress_activity' : 'refresh'}</span>{gw.restart}
               </button>
               <div className="w-px h-4 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -2171,8 +2228,8 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
         ) : activeTab === 'channels' ? (
           <ChannelsPanel
             gw={gw} channelsList={channelsList} channelsLoading={channelsLoading}
-            channelLogoutLoading={channelLogoutLoading}
-            fetchChannels={fetchChannels} handleChannelLogout={handleChannelLogout}
+            channelLogoutLoading={channelLogoutLoading} channelStopLoading={channelStopLoading}
+            fetchChannels={fetchChannels} handleChannelLogout={handleChannelLogout} handleChannelStop={handleChannelStop}
           />
         ) : activeTab === 'dreams' ? (
           <DreamsPanel gw={gw} toast={toast} />

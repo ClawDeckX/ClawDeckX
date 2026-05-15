@@ -163,13 +163,6 @@ export const ToolsSection: React.FC<SectionProps> = ({ config, schema, setField,
         <KeyValueField label={es.sandboxToolsPolicy || 'Sandbox Tool Allow/Deny'} tooltip={tip('tools.sandbox.tools')} value={g(['sandbox', 'tools']) || {}} onChange={v => s(['sandbox', 'tools'], v)} />
       </ConfigSection>
 
-      <ConfigSection title={es.canvasHost} icon="draw" iconColor="text-purple-500" defaultOpen={false}>
-        <SwitchField label={es.enabled} tooltip={tip('canvasHost.enabled')} value={getField(['canvasHost', 'enabled']) === true} onChange={v => setField(['canvasHost', 'enabled'], v)} />
-        <TextField label={es.root} tooltip={tip('canvasHost.root')} value={getField(['canvasHost', 'root']) || ''} onChange={v => setField(['canvasHost', 'root'], v)} />
-        <NumberField label={es.port} tooltip={tip('canvasHost.port')} value={getField(['canvasHost', 'port'])} onChange={v => setField(['canvasHost', 'port'], v)} min={1} max={65535} placeholder={def('canvasHost.port')} />
-        <SwitchField label={es.liveReload} tooltip={tip('canvasHost.liveReload')} value={getField(['canvasHost', 'liveReload']) !== false} onChange={v => setField(['canvasHost', 'liveReload'], v)} />
-      </ConfigSection>
-
       <ConfigSection title={es.mediaFiles} icon="perm_media" iconColor="text-orange-500" defaultOpen={false}>
         <SwitchField label={es.preserveFilenames} tooltip={tip('media.preserveFilenames')} value={getField(['media', 'preserveFilenames']) === true} onChange={v => setField(['media', 'preserveFilenames'], v)} />
         <NumberField label={es.mediaRetentionTTL || 'Retention TTL (hours)'} tooltip={tip('media.ttlHours')} value={getField(['media', 'ttlHours'])} onChange={v => setField(['media', 'ttlHours'], v)} min={0} step={1} placeholder={def('media.ttlHours')} />

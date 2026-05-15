@@ -74,7 +74,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'commands', icon: 'terminal', labelKey: 'secCommands', color: 'text-amber-500',
     searchKeys: ['commandToggles', 'nativeCommands', 'nativeSkills', 'textCommands', 'bashCommands', 'configCommands', 'debugCommands', 'restartCommand', 'bashConfig', 'foregroundMs', 'accessControl', 'useAccessGroups', 'ownerAllowFrom', 'ownerAllowFromDesc'] },
   { id: 'session', icon: 'history', labelKey: 'secSession', color: 'text-indigo-500',
-    searchKeys: ['sessionScope', 'scope', 'scopeDesc', 'dmScope', 'idleMinutes', 'sessionStore', 'sessionMainKey', 'parentForkMaxTokens', 'resetTriggers', 'sessionReset', 'resetMode', 'atHour', 'resetByType', 'threadBindings', 'tbIdleHours', 'tbMaxAgeHours', 'sessionMaintenance', 'maintMode', 'maintPruneAfter', 'maintMaxEntries', 'maintRotateBytes', 'maintMaxDiskBytes', 'agentToAgentSession', 'maxPingPongTurns'] },
+    searchKeys: ['sessionScope', 'scope', 'scopeDesc', 'dmScope', 'idleMinutes', 'sessionStore', 'sessionMainKey', 'resetTriggers', 'sessionReset', 'resetMode', 'atHour', 'resetByType', 'threadBindings', 'tbIdleHours', 'tbMaxAgeHours', 'sessionMaintenance', 'maintMode', 'maintPruneAfter', 'maintMaxEntries', 'maintRotateBytes', 'maintMaxDiskBytes', 'agentToAgentSession', 'maxPingPongTurns'] },
   { id: 'hooks', icon: 'webhook', labelKey: 'secHooks', color: 'text-pink-500',
     searchKeys: ['enableHooks', 'webhookPath', 'maxBodyBytes', 'presets', 'hookMappings', 'hookMatch', 'hookAction', 'hookChannel', 'hookModel', 'credentialsPath', 'tokenPath', 'webhookToken', 'gmailConfig', 'gmailEnabled', 'internalEnabled', 'internalHooks'] },
   { id: 'cron', icon: 'schedule', labelKey: 'secCron', color: 'text-lime-500',

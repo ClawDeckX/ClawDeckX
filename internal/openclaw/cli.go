@@ -349,8 +349,10 @@ func NpmUninstallGlobal(ctx context.Context, pkg string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// ForceRemoveOpenClaw removes OpenClaw files directly from disk as a last resort
-// when both `openclaw uninstall` and `npm uninstall -g` fail (e.g., file locks on Windows).
+// ForceRemoveOpenClaw removes OpenClaw files directly from disk. Used as a
+// pre-install step on all platforms to bypass npm's "retire" rename, which
+// fails when processes hold file handles (Windows: Defender/indexers; Linux/macOS:
+// running gateway). Also used as a last-resort fallback after lock-retry exhaustion.
 func ForceRemoveOpenClaw(pkg string) error {
 	npmGlobalDir := resolveNpmGlobalDir()
 	if npmGlobalDir == "" {

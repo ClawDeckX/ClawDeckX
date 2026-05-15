@@ -6,15 +6,17 @@ export interface ChannelsPanelProps {
   channelsList: any[];
   channelsLoading: boolean;
   channelLogoutLoading: string | null;
+  channelStopLoading: string | null;
   fetchChannels: (force?: boolean) => void;
   handleChannelLogout: (channel: string) => void;
+  handleChannelStop: (channel: string) => void;
 }
 
 const fmtAgo = (ts: number | null | undefined, gw: any): string | null => fmtAgoCompact(ts, gw);
 
 const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
-  gw, channelsList, channelsLoading, channelLogoutLoading,
-  fetchChannels, handleChannelLogout,
+  gw, channelsList, channelsLoading, channelLogoutLoading, channelStopLoading,
+  fetchChannels, handleChannelLogout, handleChannelStop,
 }) => {
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar neon-scrollbar">
@@ -130,6 +132,14 @@ const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => handleChannelStop(ch.channel || name)} disabled={channelStopLoading === (ch.channel || name) || isDisabled || !isConnected}
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-30 transition-all flex items-center gap-1"
+                      title={gw.channelStopTip || 'Gracefully stop this channel'}>
+                      <span className="material-symbols-outlined text-[12px]">
+                        {channelStopLoading === (ch.channel || name) ? 'progress_activity' : 'stop_circle'}
+                      </span>
+                      {gw.channelStop || 'Stop'}
+                    </button>
                     <button onClick={() => handleChannelLogout(ch.channel || name)} disabled={channelLogoutLoading === (ch.channel || name) || isDisabled}
                       className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-30 transition-all flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px]">

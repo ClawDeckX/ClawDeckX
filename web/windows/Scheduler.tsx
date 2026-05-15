@@ -250,6 +250,21 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   const [globalRunsOffset, setGlobalRunsOffset] = useState(0);
   const [globalRunsLoading, setGlobalRunsLoading] = useState(false);
 
+  // Job detail modal (cron.get)
+  const [detailJob, setDetailJob] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const openJobDetail = useCallback(async (jobId: string) => {
+    setDetailLoading(true);
+    try {
+      const full = await gwApi.cronGet(jobId);
+      setDetailJob(full);
+    } catch {
+      setDetailJob(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
   // Sessions list for session key picker
   const [sessionsList, setSessionsList] = useState<any[]>([]);
 
@@ -1048,6 +1063,10 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                           <div className="text-[11px] text-mac-red font-bold">{s.consecutiveErrors}: {job.state.consecutiveErrors}</div>
                         )}
                         <div className="flex gap-1 mt-1 justify-end flex-wrap">
+                          <button onClick={e => { e.stopPropagation(); openJobDetail(job.id); }} disabled={isBusy || detailLoading}
+                            className="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-primary disabled:opacity-30" title={s.detail || 'Detail'}>
+                            <span className="material-symbols-outlined text-[12px]">info</span>
+                          </button>
                           <button onClick={e => { e.stopPropagation(); openEditForm(job); }} disabled={isBusy}
                             className="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-primary disabled:opacity-30" title={s.editJob}>
                             <span className="material-symbols-outlined text-[12px]">edit</span>
@@ -1280,6 +1299,67 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
         )}
 
       </div>}
+
+      {/* Job Detail Modal (cron.get) */}
+      {detailJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setDetailJob(null)}>
+          <div className="w-full max-w-lg mx-4 rounded-2xl theme-panel sci-card shadow-2xl overflow-hidden animate-card-enter" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-white/10">
+              <h3 className="text-[13px] font-bold theme-text flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px] text-primary">schedule</span>
+                {detailJob.name || detailJob.id}
+              </h3>
+              <button onClick={() => setDetailJob(null)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 theme-text-muted">
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+            <div className="px-5 py-4 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
+                <div><span className="font-bold text-slate-400 dark:text-white/30">ID</span> <span className="font-mono text-slate-600 dark:text-white/60 break-all">{detailJob.id}</span></div>
+                <div><span className="font-bold text-slate-400 dark:text-white/30">{s.enabled}</span> <span className={detailJob.enabled ? 'text-mac-green font-bold' : 'text-slate-400'}>{detailJob.enabled ? 'Yes' : 'No'}</span></div>
+                {detailJob.description && <div className="col-span-2"><span className="font-bold text-slate-400 dark:text-white/30">{s.description || 'Description'}</span> <span className="text-slate-600 dark:text-white/60">{detailJob.description}</span></div>}
+                <div><span className="font-bold text-slate-400 dark:text-white/30">{s.schedule || 'Schedule'}</span> <span className="font-mono text-slate-600 dark:text-white/60">{detailJob.schedule?.cron || detailJob.schedule?.interval || '-'}</span></div>
+                <div><span className="font-bold text-slate-400 dark:text-white/30">{s.sessionTarget || 'Session'}</span> <span className="text-slate-600 dark:text-white/60">{detailJob.sessionTarget || '-'}</span></div>
+                <div><span className="font-bold text-slate-400 dark:text-white/30">{s.wakeMode || 'Wake'}</span> <span className="text-slate-600 dark:text-white/60">{detailJob.wakeMode || '-'}</span></div>
+                {detailJob.agentId && <div><span className="font-bold text-slate-400 dark:text-white/30">{s.agentId}</span> <span className="text-slate-600 dark:text-white/60">{detailJob.agentId}</span></div>}
+                {detailJob.payload?.model && <div><span className="font-bold text-slate-400 dark:text-white/30">{s.model || 'Model'}</span> <span className="text-slate-600 dark:text-white/60">{detailJob.payload.model}</span></div>}
+                {detailJob.deleteAfterRun && <div><span className="font-bold text-mac-yellow">{s.deleteAfterRun}</span></div>}
+              </div>
+              {detailJob.payload?.message && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-white/30 mb-1">{s.message || 'Message'}</p>
+                  <pre className="text-[10px] font-mono text-slate-600 dark:text-white/50 bg-slate-50 dark:bg-white/[0.02] rounded-lg p-2 whitespace-pre-wrap break-all max-h-32 overflow-y-auto">{detailJob.payload.message}</pre>
+                </div>
+              )}
+              {detailJob.state && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-white/30 mb-1">{s.status}</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                    <div><span className="text-slate-400 dark:text-white/30">{s.status}:</span> <span className={`font-bold ${detailJob.state.lastRunStatus === 'ok' ? 'text-mac-green' : detailJob.state.lastRunStatus === 'error' ? 'text-mac-red' : 'text-slate-400'}`}>{detailJob.state.lastRunStatus || '-'}</span></div>
+                    <div><span className="text-slate-400 dark:text-white/30">{s.nextRun}:</span> <span className="text-slate-600 dark:text-white/60">{detailJob.state.nextRunAtMs ? new Date(detailJob.state.nextRunAtMs).toLocaleString() : '-'}</span></div>
+                    <div><span className="text-slate-400 dark:text-white/30">{s.last}:</span> <span className="text-slate-600 dark:text-white/60">{detailJob.state.lastRunAtMs ? new Date(detailJob.state.lastRunAtMs).toLocaleString() : '-'}</span></div>
+                    {detailJob.state.lastDurationMs != null && <div><span className="text-slate-400 dark:text-white/30">{s.duration}:</span> <span className="text-slate-600 dark:text-white/60">{detailJob.state.lastDurationMs}ms</span></div>}
+                    {detailJob.state.lastDeliveryStatus && <div><span className="text-slate-400 dark:text-white/30">{s.delivery}:</span> <span className={`font-bold ${detailJob.state.lastDeliveryStatus === 'delivered' ? 'text-mac-green' : 'text-mac-red'}`}>{detailJob.state.lastDeliveryStatus}</span></div>}
+                    {detailJob.state.consecutiveErrors > 0 && <div><span className="text-slate-400 dark:text-white/30">{s.consecutiveErrors}:</span> <span className="text-mac-red font-bold">{detailJob.state.consecutiveErrors}</span></div>}
+                    {detailJob.state.lastErrorReason && <div className="col-span-2"><span className="text-slate-400 dark:text-white/30">{s.error || 'Error'}:</span> <span className="text-mac-red">{detailJob.state.lastErrorReason}</span></div>}
+                    {detailJob.state.runningAtMs && <div><span className="text-slate-400 dark:text-white/30">{s.running}:</span> <span className="text-primary font-bold">{new Date(detailJob.state.runningAtMs).toLocaleString()}</span></div>}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-white/10">
+              <button onClick={() => { setDetailJob(null); openEditForm(detailJob); }}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">edit</span> {s.editJob}
+              </button>
+              <button onClick={() => setDetailJob(null)}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-bold theme-field theme-text-secondary hover:bg-slate-100 dark:hover:bg-white/10 transition-colors">
+                {s.close || 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };
