@@ -1,13 +1,16 @@
 package openclaw
 
 import (
+	crand "crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand/v2"
+	mrand "math/rand/v2"
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -1140,7 +1143,7 @@ func (c *GWClient) connectLoop() {
 		}
 
 		// Add ±20% jitter to prevent reconnect storms across instances
-		jitter := 0.8 + rand.Float64()*0.4 // [0.8, 1.2)
+		jitter := 0.8 + mrand.Float64()*0.4 // [0.8, 1.2)
 		delay := time.Duration(float64(c.backoffMs)*jitter) * time.Millisecond
 		logger.Log.Debug().Dur("delay", delay).Int("backoff_ms", c.backoffMs).Msg("gateway reconnect backoff")
 		select {
@@ -1582,7 +1585,7 @@ func (c *GWClient) autoApprovePairing(hintRequestID string) {
 		c.lastError = fmt.Sprintf("pairing required: approving request %s...", requestID)
 		c.mu.Unlock()
 
-		_, err := RunCLIWithTimeout("devices", "approve", requestID)
+		err := approveLocalDevicePairingRequest(requestID)
 		if err == nil {
 			c.mu.Lock()
 			c.pairingAutoApprove = false
@@ -1621,18 +1624,9 @@ func (c *GWClient) autoApprovePairing(hintRequestID string) {
 	if id, idErr := LoadOrCreateDeviceIdentity(""); idErr == nil && id != nil {
 		ourDeviceID = strings.TrimSpace(id.DeviceID)
 	}
-	listOut, listErr := RunCLIWithTimeout("devices", "list", "--json")
 	var discovered string
-	if listErr == nil {
-		if ourDeviceID != "" {
-			discovered = extractLatestPendingRequestIDForDevice(listOut, ourDeviceID)
-		}
-		if discovered == "" {
-			// Last-resort: no deviceId match available. Fall back to the
-			// global latest, which may target the wrong device but is still
-			// better than giving up.
-			discovered = extractLatestPendingRequestID(listOut)
-		}
+	if ourDeviceID != "" {
+		discovered = latestLocalPendingRequestIDForDevice(ourDeviceID)
 	}
 	if tryApprove(discovered) {
 		return
@@ -1649,6 +1643,209 @@ func (c *GWClient) autoApprovePairing(hintRequestID string) {
 		logger.Log.Error().Msg("device pairing auto-approve failed: no requestId found")
 	}
 	c.mu.Unlock()
+}
+
+type localPendingDevicePairing struct {
+	RequestID    string   `json:"requestId"`
+	DeviceID     string   `json:"deviceId"`
+	PublicKey    string   `json:"publicKey,omitempty"`
+	Platform     string   `json:"platform,omitempty"`
+	DeviceFamily string   `json:"deviceFamily,omitempty"`
+	ClientID     string   `json:"clientId,omitempty"`
+	ClientMode   string   `json:"clientMode,omitempty"`
+	Role         string   `json:"role,omitempty"`
+	Roles        []string `json:"roles,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+	RemoteIP     string   `json:"remoteIp,omitempty"`
+	DisplayName  string   `json:"displayName,omitempty"`
+	Ts           int64    `json:"ts,omitempty"`
+}
+
+type localPairedDevice struct {
+	DeviceID       string                          `json:"deviceId"`
+	PublicKey      string                          `json:"publicKey,omitempty"`
+	Platform       string                          `json:"platform,omitempty"`
+	DeviceFamily   string                          `json:"deviceFamily,omitempty"`
+	ClientID       string                          `json:"clientId,omitempty"`
+	ClientMode     string                          `json:"clientMode,omitempty"`
+	Role           string                          `json:"role,omitempty"`
+	Roles          []string                        `json:"roles,omitempty"`
+	Scopes         []string                        `json:"scopes,omitempty"`
+	ApprovedScopes []string                        `json:"approvedScopes,omitempty"`
+	RemoteIP       string                          `json:"remoteIp,omitempty"`
+	DisplayName    string                          `json:"displayName,omitempty"`
+	Tokens         map[string]localDeviceAuthToken `json:"tokens,omitempty"`
+	CreatedAtMs    int64                           `json:"createdAtMs,omitempty"`
+	ApprovedAtMs   int64                           `json:"approvedAtMs,omitempty"`
+}
+
+type localDeviceAuthToken struct {
+	Token        string   `json:"token"`
+	Role         string   `json:"role"`
+	Scopes       []string `json:"scopes,omitempty"`
+	CreatedAtMs  int64    `json:"createdAtMs,omitempty"`
+	RotatedAtMs  int64    `json:"rotatedAtMs,omitempty"`
+	RevokedAtMs  *int64   `json:"revokedAtMs,omitempty"`
+	LastUsedAtMs *int64   `json:"lastUsedAtMs,omitempty"`
+}
+
+func latestLocalPendingRequestIDForDevice(deviceID string) string {
+	pending, err := readLocalPendingPairing()
+	if err != nil {
+		return ""
+	}
+	var latest localPendingDevicePairing
+	for _, p := range pending {
+		if p.DeviceID != deviceID || p.RequestID == "" {
+			continue
+		}
+		if latest.RequestID == "" || p.Ts > latest.Ts {
+			latest = p
+		}
+	}
+	return latest.RequestID
+}
+
+func approveLocalDevicePairingRequest(requestID string) error {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return fmt.Errorf("empty requestId")
+	}
+	pending, err := readLocalPendingPairing()
+	if err != nil {
+		return err
+	}
+	req, ok := pending[requestID]
+	if !ok {
+		return fmt.Errorf("unknown requestId")
+	}
+	paired, err := readLocalPairedDevices()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UnixMilli()
+	existing := paired[req.DeviceID]
+	roles := mergeStringSet(existing.Roles, []string{existing.Role}, req.Roles, []string{req.Role})
+	scopes := mergeStringSet(existing.ApprovedScopes, existing.Scopes, req.Scopes)
+	if len(roles) == 0 && req.Role != "" {
+		roles = []string{req.Role}
+	}
+	tokens := existing.Tokens
+	if tokens == nil {
+		tokens = make(map[string]localDeviceAuthToken)
+	}
+	for _, role := range roles {
+		if strings.TrimSpace(role) == "" {
+			continue
+		}
+		old := tokens[role]
+		created := old.CreatedAtMs
+		if created == 0 {
+			created = now
+		}
+		tokens[role] = localDeviceAuthToken{
+			Token:       newLocalPairingToken(),
+			Role:        role,
+			Scopes:      scopes,
+			CreatedAtMs: created,
+			RotatedAtMs: now,
+		}
+	}
+	createdAt := existing.CreatedAtMs
+	if createdAt == 0 {
+		createdAt = now
+	}
+	paired[req.DeviceID] = localPairedDevice{
+		DeviceID:       req.DeviceID,
+		PublicKey:      req.PublicKey,
+		Platform:       req.Platform,
+		DeviceFamily:   req.DeviceFamily,
+		ClientID:       req.ClientID,
+		ClientMode:     req.ClientMode,
+		Role:           req.Role,
+		Roles:          roles,
+		Scopes:         scopes,
+		ApprovedScopes: scopes,
+		RemoteIP:       req.RemoteIP,
+		DisplayName:    req.DisplayName,
+		Tokens:         tokens,
+		CreatedAtMs:    createdAt,
+		ApprovedAtMs:   now,
+	}
+	delete(pending, requestID)
+	if err := writeLocalJSON(localPairingPath("paired.json"), paired); err != nil {
+		return err
+	}
+	return writeLocalJSON(localPairingPath("pending.json"), pending)
+}
+
+func readLocalPendingPairing() (map[string]localPendingDevicePairing, error) {
+	out := make(map[string]localPendingDevicePairing)
+	data, err := os.ReadFile(localPairingPath("pending.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return out, nil
+		}
+		return nil, err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return out, nil
+	}
+	return out, json.Unmarshal(data, &out)
+}
+
+func readLocalPairedDevices() (map[string]localPairedDevice, error) {
+	out := make(map[string]localPairedDevice)
+	data, err := os.ReadFile(localPairingPath("paired.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return out, nil
+		}
+		return nil, err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return out, nil
+	}
+	return out, json.Unmarshal(data, &out)
+}
+
+func writeLocalJSON(path string, value interface{}) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(data, '\n'), 0o600)
+}
+
+func localPairingPath(name string) string {
+	return filepath.Join(ResolveStateDir(), "devices", name)
+}
+
+func mergeStringSet(groups ...[]string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, group := range groups {
+		for _, value := range group {
+			value = strings.TrimSpace(value)
+			if value == "" || seen[value] {
+				continue
+			}
+			seen[value] = true
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func newLocalPairingToken() string {
+	buf := make([]byte, 32)
+	if _, err := crand.Read(buf); err != nil {
+		return uuid.NewString()
+	}
+	return base64.RawURLEncoding.EncodeToString(buf)
 }
 
 // extractRequestIDFromApproveLatest parses the JSON output from
@@ -1753,6 +1950,9 @@ func isPairingApprovalRequired(msg string) bool {
 	msg = strings.ToLower(msg)
 	return strings.Contains(msg, "pairing required") ||
 		strings.Contains(msg, "scope upgrade pending approval") ||
+		strings.Contains(msg, "device identity changed and must be re-approved") ||
+		strings.Contains(msg, "device metadata change pending approval") ||
+		strings.Contains(msg, "metadata-upgrade") ||
 		strings.Contains(msg, "pending approval")
 }
 
