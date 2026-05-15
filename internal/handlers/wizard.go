@@ -125,6 +125,20 @@ func (h *WizardHandler) TestModel(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// If apiKey is still redacted or empty for a non-local provider, fall back
+	// to verifying provider connectivity through the gateway's models.list RPC.
+	if req.Provider != "ollama" && (req.APIKey == "" || isRedactedAPIKey(req.APIKey)) {
+		if ok, msg := h.testProviderViaGW(req.Provider, req.Model); ok {
+			web.OK(w, r, map[string]interface{}{
+				"status":  "ok",
+				"message": msg,
+			})
+			return
+		}
+		web.Fail(w, r, "MODEL_NO_API_KEY", "Please enter an API Key and try again.", http.StatusBadRequest)
+		return
+	}
+
 	// non-local providers require an API key
 	if req.Provider != "ollama" && req.APIKey == "" {
 		web.Fail(w, r, "MODEL_NO_API_KEY", "Please enter an API Key and try again.", http.StatusBadRequest)
@@ -213,6 +227,22 @@ func (h *WizardHandler) TestProviderSmart(w http.ResponseWriter, r *http.Request
 		} else if fallbackKey := h.resolveProviderAPIKeyViaEnv(req.Provider); fallbackKey != "" {
 			req.APIKey = fallbackKey
 		}
+	}
+
+	// If apiKey is still redacted or empty for a non-local provider, fall back
+	// to verifying provider connectivity through the gateway's models.list RPC.
+	if req.Provider != "ollama" && (req.APIKey == "" || isRedactedAPIKey(req.APIKey)) {
+		if ok, msg := h.testProviderViaGW(req.Provider, req.Model); ok {
+			web.OK(w, r, SmartTestResult{
+				Status:  "ok",
+				Message: msg,
+				Model:   req.Model,
+				APIType: req.APIType,
+			})
+			return
+		}
+		web.Fail(w, r, "MODEL_NO_API_KEY", "Please enter an API Key and try again.", http.StatusBadRequest)
+		return
 	}
 
 	if req.Provider != "ollama" && req.APIKey == "" {
@@ -345,6 +375,20 @@ func (h *WizardHandler) DiscoverModels(w http.ResponseWriter, r *http.Request) {
 			req.APIKey = localKey
 		} else if fallbackKey := h.resolveProviderAPIKeyViaEnv(req.Provider); fallbackKey != "" {
 			req.APIKey = fallbackKey
+		}
+	}
+
+	// If apiKey is still redacted or empty for a non-local provider, fall back
+	// to discovering models through the gateway's models.list RPC. The gateway
+	// holds the real credentials and can query provider catalogs directly.
+	if req.Provider != "ollama" && (req.APIKey == "" || isRedactedAPIKey(req.APIKey)) {
+		if models, err := h.discoverModelsViaGW(req.Provider); err == nil && len(models) > 0 {
+			web.OK(w, r, map[string]interface{}{
+				"models": models,
+				"count":  len(models),
+				"source": "gateway",
+			})
+			return
 		}
 	}
 
@@ -972,6 +1016,160 @@ func (h *WizardHandler) resolveProviderAPIKeyViaLocalConfig(provider string) str
 	return h.resolveAPIKeyReference(key)
 }
 
+// hasRedactedTokens returns true if any token value in the map is a redacted
+// placeholder from config.get.
+func hasRedactedTokens(tokens map[string]string) bool {
+	for _, v := range tokens {
+		if isRedactedAPIKey(v) {
+			return true
+		}
+	}
+	return false
+}
+
+// testChannelViaGW tests a channel connection through the gateway's
+// channels.status RPC with probe=true. The gateway uses the real (unredacted)
+// credentials from its on-disk config, so this works even when ClawDeckX
+// cannot resolve the tokens locally (e.g. remote gateway).
+func (h *WizardHandler) testChannelViaGW(channel string) (bool, map[string]interface{}) {
+	if h.gwClient == nil || !h.gwClient.IsConnected() {
+		return false, nil
+	}
+	raw, err := h.gwClient.RequestWithTimeout("channels.status", map[string]interface{}{
+		"channel": channel,
+		"probe":   true,
+	}, 25*time.Second)
+	if err != nil {
+		logger.Doctor.Warn().Err(err).Str("channel", channel).Msg("testChannelViaGW: channels.status RPC failed")
+		return false, nil
+	}
+
+	var resp struct {
+		Channels map[string]interface{} `json:"channels"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return false, nil
+	}
+
+	chData, ok := resp.Channels[channel]
+	if !ok {
+		return false, nil
+	}
+	chMap, ok := chData.(map[string]interface{})
+	if !ok {
+		return false, nil
+	}
+
+	// Check if any account has a successful probe
+	accounts, _ := chMap["accounts"].(map[string]interface{})
+	if accounts == nil {
+		// Try root-level status fields
+		if lastErr, _ := chMap["lastError"].(string); lastErr != "" {
+			return true, map[string]interface{}{
+				"status":  "fail",
+				"message": fmt.Sprintf("Channel %s probe failed via gateway: %s", channel, lastErr),
+			}
+		}
+		return true, map[string]interface{}{
+			"status":  "ok",
+			"message": fmt.Sprintf("Channel %s is configured on the gateway", channel),
+		}
+	}
+
+	for acctID, acctData := range accounts {
+		acctMap, ok := acctData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if lastErr, _ := acctMap["lastError"].(string); lastErr != "" {
+			return true, map[string]interface{}{
+				"status":  "fail",
+				"message": fmt.Sprintf("Channel %s/%s probe failed: %s", channel, acctID, lastErr),
+			}
+		}
+		// No error means probe passed
+		return true, map[string]interface{}{
+			"status":  "ok",
+			"message": fmt.Sprintf("Channel %s is reachable via gateway (account: %s)", channel, acctID),
+		}
+	}
+
+	return true, map[string]interface{}{
+		"status":  "ok",
+		"message": fmt.Sprintf("Channel %s is configured on the gateway", channel),
+	}
+}
+
+// discoverModelsViaGW discovers available models for a provider by querying
+// the gateway's models.list RPC with view=all. The gateway uses the real
+// (unredacted) API keys from its on-disk config, so this works even when
+// ClawDeckX cannot resolve the key locally (e.g. remote gateway).
+func (h *WizardHandler) discoverModelsViaGW(provider string) ([]DiscoveredModel, error) {
+	if h.gwClient == nil || !h.gwClient.IsConnected() {
+		return nil, fmt.Errorf("gateway not connected")
+	}
+	raw, err := h.gwClient.RequestWithTimeout("models.list", map[string]interface{}{
+		"view": "all",
+	}, 25*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Models []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Provider string `json:"provider"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	target := strings.ToLower(strings.TrimSpace(provider))
+	var out []DiscoveredModel
+	for _, m := range resp.Models {
+		mp := strings.ToLower(strings.TrimSpace(m.Provider))
+		if mp == target {
+			id := strings.TrimSpace(m.ID)
+			if id == "" {
+				continue
+			}
+			// Strip "provider/" prefix if present since config uses bare model IDs.
+			if strings.HasPrefix(id, provider+"/") {
+				id = id[len(provider)+1:]
+			}
+			name := strings.TrimSpace(m.Name)
+			out = append(out, DiscoveredModel{ID: id, Name: name})
+		}
+	}
+	return dedupeModels(out), nil
+}
+
+// testProviderViaGW verifies that a provider is reachable by checking whether
+// the gateway's models.list RPC returns models for that provider. If the
+// optional targetModel is non-empty, it also checks whether that specific model
+// is in the catalog.
+func (h *WizardHandler) testProviderViaGW(provider string, targetModel string) (bool, string) {
+	models, err := h.discoverModelsViaGW(provider)
+	if err != nil {
+		logger.Doctor.Warn().Err(err).Str("provider", provider).Msg("testProviderViaGW: models.list RPC failed")
+		return false, ""
+	}
+	if len(models) == 0 {
+		return false, ""
+	}
+	if targetModel != "" {
+		target := strings.ToLower(strings.TrimSpace(targetModel))
+		for _, m := range models {
+			if strings.ToLower(strings.TrimSpace(m.ID)) == target {
+				return true, fmt.Sprintf("Provider %s is reachable via gateway (model %s confirmed, %d models available)", provider, targetModel, len(models))
+			}
+		}
+		// Model not found but provider has other models — still a pass
+		return true, fmt.Sprintf("Provider %s is reachable via gateway (%d models available, model %s not in catalog)", provider, len(models), targetModel)
+	}
+	return true, fmt.Sprintf("Provider %s is reachable via gateway (%d models available)", provider, len(models))
+}
+
 // extractErrorDetail extracts a human-readable error from an API response body.
 func extractErrorDetail(body []byte) string {
 	var parsed map[string]interface{}
@@ -1139,6 +1337,18 @@ func (h *WizardHandler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	if req.Channel == "" {
 		web.FailErr(w, r, web.ErrInvalidParam)
 		return
+	}
+
+	// If any token value is redacted (loaded from config.get which always
+	// redacts secrets), fall back to the gateway's channels.status RPC with
+	// probe=true. The gateway holds the real credentials.
+	if hasRedactedTokens(req.Tokens) {
+		if ok, result := h.testChannelViaGW(req.Channel); ok {
+			web.OK(w, r, result)
+			return
+		}
+		// Gateway probe failed or unavailable — continue with validation
+		// which will likely fail on the redacted values.
 	}
 
 	// basic token format validation

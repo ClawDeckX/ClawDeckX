@@ -46,11 +46,32 @@ func RunCLI(ctx context.Context, args ...string) (string, error) {
 	}
 	c := exec.CommandContext(ctx, cmd, args...)
 	executil.HideWindow(c)
+	c.Env = appendOpenClawEnv(os.Environ())
 	out, err := c.CombinedOutput()
 	if err != nil {
 		return strings.TrimSpace(string(out)), fmt.Errorf("%s %s: %s", cmd, strings.Join(args, " "), strings.TrimSpace(string(out)))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func appendOpenClawEnv(env []string) []string {
+	if stateDir := ResolveStateDir(); stateDir != "" && envValue(env, "OPENCLAW_STATE_DIR") == "" {
+		env = append(env, "OPENCLAW_STATE_DIR="+stateDir)
+	}
+	if cfgPath := ResolveConfigPath(); cfgPath != "" && envValue(env, "OPENCLAW_CONFIG_PATH") == "" {
+		env = append(env, "OPENCLAW_CONFIG_PATH="+cfgPath)
+	}
+	return env
+}
+
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(entry, prefix))
+		}
+	}
+	return ""
 }
 
 func ConfigGet(key string) (string, error) {

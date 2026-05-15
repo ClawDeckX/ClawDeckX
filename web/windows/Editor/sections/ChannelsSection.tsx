@@ -989,6 +989,8 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     const p = (f: string[]) => [...base, ...f];
     const g = (f: string[]) => getField(p(f));
     const s = (f: string[], v: any) => setField(p(f), v);
+    const d = (f: string[]) => deleteField(p(f));
+    const isAccountScoped = base[0] === 'channels' && base[1] === ch && base[2] === 'accounts';
     const labelToken = es.chToken;
     const labelBotToken = es.botToken;
     const labelAppToken = es.appToken;
@@ -1672,7 +1674,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
             <NumberField label={es.feishuDynamicAgentMax || 'Max Agents'} value={g(['dynamicAgentCreation', 'maxAgents'])} onChange={v => s(['dynamicAgentCreation', 'maxAgents'], v)} placeholder="100" tooltip={es.tipFeishuDynamicAgent} />
 
             {/* Feishu Multi-Account */}
-            <FeishuAccountsSection g={g} s={s} deleteField={deleteField} es={es} ch={ch} />
+            {!isAccountScoped && <FeishuAccountsSection g={g} s={s} deleteField={d} es={es} ch={ch} />}
           </>
         )}
 

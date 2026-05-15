@@ -197,7 +197,7 @@ func resolvePreferredModel(pref string, providers map[string]interface{}) *LLMCo
 
 	apiKey, _ := pCfg["apiKey"].(string)
 	apiKey = strings.TrimSpace(apiKey)
-	if apiKey == "" {
+	if apiKey == "" || isRedactedValue(apiKey) {
 		return nil
 	}
 	// Resolve env var references
@@ -266,7 +266,7 @@ func extractProviderConfig(pid string, providers map[string]interface{}) *LLMCon
 	}
 	apiKey, _ := pCfg["apiKey"].(string)
 	apiKey = strings.TrimSpace(apiKey)
-	if apiKey == "" {
+	if apiKey == "" || isRedactedValue(apiKey) {
 		return nil
 	}
 	// Resolve env var references like ${OPENAI_API_KEY}
@@ -317,6 +317,19 @@ func extractProviderConfig(pid string, providers map[string]interface{}) *LLMCon
 		APIType:  apiType,
 		Provider: pid,
 	}
+}
+
+// isRedactedValue returns true if the value is a redacted placeholder from
+// OpenClaw's config.get RPC (e.g. __OPENCLAW_REDACTED__, ***REDACTED***).
+func isRedactedValue(v string) bool {
+	s := strings.TrimSpace(v)
+	if s == "" {
+		return false
+	}
+	if s == "***REDACTED***" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(s), "redacted")
 }
 
 func resolveEnvFromFile(key string) string {
