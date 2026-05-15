@@ -1311,7 +1311,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         abortedLastRun: s.abortedLastRun ?? undefined,
         estimatedCostUsd: s.estimatedCostUsd ?? undefined,
         runner: s.runner || s.harnessId || '',
-        agentRuntime: s.agentRuntime || s.agentRuntimeId || '',
+        agentRuntime: (typeof s.agentRuntime === 'object' && s.agentRuntime ? s.agentRuntime.id : s.agentRuntime) || s.agentRuntimeId || '',
       }));
       // Clean up expired patch grace entries and deleted-key entries
       const nowMs = Date.now();
@@ -3431,7 +3431,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                     <div><span className="font-bold text-text-secondary">Provider:</span> <span className="text-text-muted">{String(describeData.modelProvider)}</span></div>
                   )}
                   {(describeData.agentRuntime || describeData.agentRuntimeId) && (
-                    <div><span className="font-bold text-text-secondary">Runtime:</span> <span className="text-teal-600 dark:text-teal-400 font-bold">{String(describeData.agentRuntime || describeData.agentRuntimeId)}</span></div>
+                    <div><span className="font-bold text-text-secondary">Runtime:</span> <span className="text-teal-600 dark:text-teal-400 font-bold">{(() => { const rt = describeData.agentRuntime || describeData.agentRuntimeId; return typeof rt === 'object' && rt ? `${(rt as any).id || ''}${(rt as any).source ? ` (${(rt as any).source})` : ''}` : String(rt); })()}</span></div>
                   )}
                   {describeData.totalTokens != null && (
                     <div><span className="font-bold text-text-secondary">Tokens:</span> <span className="text-text-muted font-mono">{Number(describeData.totalTokens).toLocaleString()}</span></div>
