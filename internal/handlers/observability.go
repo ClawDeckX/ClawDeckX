@@ -1,14 +1,18 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
+	"ClawDeckX/internal/executil"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/openclaw"
 	"ClawDeckX/internal/version"
@@ -271,7 +275,23 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	// 1. Read current config
+	// 1. Ensure the diagnostics-prometheus plugin is installed.
+	// Since 2026.5.x it is an external plugin — config.set alone won't help
+	// if the package isn't downloaded to the extensions/ directory.
+	if !h.isPluginInstalled() {
+		logger.Log.Info().Msg("diagnostics-prometheus not installed — auto-installing via CLI")
+		if err := h.installPrometheusPlugin(); err != nil {
+			logger.Log.Warn().Err(err).Msg("auto-install diagnostics-prometheus failed")
+			web.Fail(w, r, "PLUGIN_INSTALL_FAILED",
+				"diagnostics-prometheus plugin is not installed. Auto-install failed: "+err.Error()+
+					". Install manually: openclaw plugins install @openclaw/diagnostics-prometheus",
+				http.StatusInternalServerError)
+			return
+		}
+		logger.Log.Info().Msg("diagnostics-prometheus installed successfully")
+	}
+
+	// 2. Read current config
 	data, err := h.gwClient.RequestWithTimeout("config.get", map[string]interface{}{}, 5*time.Second)
 	if err != nil {
 		web.Fail(w, r, "CONFIG_GET_FAILED", err.Error(), http.StatusBadGateway)
@@ -614,5 +634,85 @@ func parseLabels(s string, out map[string]string) {
 		if len(s) > 0 && s[0] == ',' {
 			s = s[1:]
 		}
+	}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helpers: diagnostics-prometheus plugin installation
+// ────────────────────────────────────────────────────────────────────────────
+
+// isPluginInstalled checks if the diagnostics-prometheus plugin is installed
+// by querying config.get and looking at plugins.installs.
+func (h *ObservabilityHandler) isPluginInstalled() bool {
+	if h.gwClient == nil {
+		return false
+	}
+	data, err := h.gwClient.RequestWithTimeout("config.get", map[string]interface{}{}, 5*time.Second)
+	if err != nil {
+		return false
+	}
+	var wrapper map[string]interface{}
+	if json.Unmarshal(data, &wrapper) != nil {
+		return false
+	}
+	configObj := wrapper
+	if cfg, ok := wrapper["config"].(map[string]interface{}); ok {
+		configObj = cfg
+	}
+	plugins, _ := configObj["plugins"].(map[string]interface{})
+	if plugins == nil {
+		return false
+	}
+	// Check plugins.installs for diagnostics-prometheus
+	if installs, ok := plugins["installs"].(map[string]interface{}); ok {
+		if _, found := installs["diagnostics-prometheus"]; found {
+			return true
+		}
+	}
+	// Fallback: check plugins.entries (plugin might be registered without install record)
+	if entries, ok := plugins["entries"].(map[string]interface{}); ok {
+		if _, found := entries["diagnostics-prometheus"]; found {
+			return true
+		}
+	}
+	return false
+}
+
+// installPrometheusPlugin runs `openclaw plugins install @openclaw/diagnostics-prometheus`.
+func (h *ObservabilityHandler) installPrometheusPlugin() error {
+	spec := "@openclaw/diagnostics-prometheus"
+	cliArgs := []string{"plugins", "install", spec}
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd.exe", append([]string{"/c", "openclaw"}, cliArgs...)...)
+	} else {
+		cmd = exec.Command("openclaw", cliArgs...)
+	}
+	executil.HideWindow(cmd)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Run() }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			errMsg := stderr.String()
+			if errMsg == "" {
+				errMsg = stdout.String()
+			}
+			if errMsg == "" {
+				errMsg = err.Error()
+			}
+			return fmt.Errorf("%s", errMsg)
+		}
+		return nil
+	case <-time.After(3 * time.Minute):
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		return fmt.Errorf("plugin install timed out after 3 minutes")
 	}
 }
