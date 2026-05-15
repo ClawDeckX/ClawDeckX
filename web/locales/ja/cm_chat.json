@@ -124,6 +124,7 @@
     "runRunning": "ツール実行中",
     "runError": "エラー",
     "runIdle": "待機中",
+    "runBackground": "バックグラウンド",
     "toolRunning": "実行中",
     "toolDone": "完了",
     "toolError": "エラー",

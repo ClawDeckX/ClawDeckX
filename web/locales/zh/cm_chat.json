@@ -128,6 +128,7 @@
     "runRunning": "执行工具",
     "runError": "异常",
     "runIdle": "空闲",
+    "runBackground": "后台运行",
     "toolRunning": "运行中",
     "toolDone": "完成",
     "toolError": "错误",

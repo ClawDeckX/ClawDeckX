@@ -124,6 +124,7 @@
     "runRunning": "도구 실행 중",
     "runError": "오류",
     "runIdle": "대기",
+    "runBackground": "백그라운드",
     "toolRunning": "실행 중",
     "toolDone": "완료",
     "toolError": "오류",

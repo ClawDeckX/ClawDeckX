@@ -820,12 +820,21 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         textClass: 'text-red-500',
       };
     }
+    // Check if current session has a background run active (gateway reports running but we're idle locally)
+    const cur = sessions.find(s => s.key === sessionKey);
+    if (cur && (cur.activeRun || cur.isStreaming || cur.status === 'running')) {
+      return {
+        text: c.runBackground || 'Background',
+        dot: 'bg-primary animate-[glow-breathe_2s_ease-in-out_infinite]',
+        textClass: 'text-primary animate-pulse',
+      };
+    }
     return {
       text: c.runIdle || 'Idle',
       dot: 'bg-mac-green',
       textClass: 'text-mac-green',
     };
-  }, [runPhase, waitingPhrase, liveElapsed, c.runSending, c.runWaiting, c.runStreaming, c.runRunning, c.runError, c.runIdle]);
+  }, [runPhase, waitingPhrase, liveElapsed, sessions, sessionKey, c.runSending, c.runWaiting, c.runStreaming, c.runRunning, c.runError, c.runIdle, c.runBackground]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
