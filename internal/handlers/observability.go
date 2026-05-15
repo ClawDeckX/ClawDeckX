@@ -333,21 +333,6 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 		pluginsObj["entries"] = entries
 	}
 
-	// Ensure plugins.installs has a record so the gateway config validator
-	// doesn't warn "plugin not installed". The system npm fallback copies files
-	// to extensions/ but doesn't create an installs record.
-	installs, _ := pluginsObj["installs"].(map[string]interface{})
-	if installs == nil {
-		installs = map[string]interface{}{}
-		pluginsObj["installs"] = installs
-	}
-	if _, hasInstall := installs["diagnostics-prometheus"]; !hasInstall {
-		installs["diagnostics-prometheus"] = map[string]interface{}{
-			"spec":   "@openclaw/diagnostics-prometheus",
-			"source": "npm",
-		}
-	}
-
 	entry, _ := entries["diagnostics-prometheus"].(map[string]interface{})
 	if entry == nil {
 		entry = map[string]interface{}{}
@@ -367,29 +352,25 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 			web.OK(w, r, map[string]interface{}{"already_enabled": true, "metrics_available": true})
 			return
 		}
-		// Metrics endpoint not available — force a config toggle (disable→enable)
-		// to trigger the gateway to reload the plugin.
-		logger.Log.Info().Msg("diagnostics-prometheus enabled in config but metrics endpoint not responding — forcing config toggle")
-		entry["enabled"] = false
-		entries["diagnostics-prometheus"] = entry
-		if toggleJSON, err := json.Marshal(configObj); err == nil {
-			toggleParams := map[string]interface{}{"raw": string(toggleJSON)}
-			if baseHash != "" {
-				toggleParams["baseHash"] = baseHash
+		logger.Log.Info().Msg("diagnostics-prometheus enabled in config but metrics endpoint not responding — restarting gateway to load plugin")
+		restartTriggered := false
+		restartRequired := true
+		if h.gwSvc != nil && !h.gwSvc.IsRemote() {
+			if err := h.restartGatewayForPluginLoad(); err != nil {
+				web.Fail(w, r, "GATEWAY_RESTART_FAILED", err.Error(), http.StatusBadGateway)
+				return
 			}
-			cfgBudget.waitForSlot()
-			if toggleResp, err := h.gwClient.RequestWithTimeout("config.set", toggleParams, 15*time.Second); err == nil {
-				cfgBudget.recordWrite()
-				// Read updated baseHash from toggle response
-				var toggleWrapper map[string]interface{}
-				if json.Unmarshal(toggleResp, &toggleWrapper) == nil {
-					if newHash, ok := toggleWrapper["hash"].(string); ok && newHash != "" {
-						baseHash = newHash
-					}
-				}
-			}
-			time.Sleep(500 * time.Millisecond)
+			restartTriggered = true
+			restartRequired = false
 		}
+		web.OK(w, r, map[string]interface{}{
+			"enabled":           true,
+			"already_enabled":   true,
+			"metrics_available": false,
+			"restart_triggered": restartTriggered,
+			"restart_required":  restartRequired,
+		})
+		return
 	}
 
 	// Set enabled = true (either first time or after toggle-off)
@@ -397,41 +378,49 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 	entries["diagnostics-prometheus"] = entry
 	diagnosticsObj["enabled"] = true
 
-	// 3. Write back with baseHash
-	cfgJSON, err := json.Marshal(configObj)
+	// 3. Patch only the relevant keys. Avoid writing full config because plugin
+	// installation/restart can race with other gateway config writes.
+	patch := map[string]interface{}{
+		"plugins": map[string]interface{}{
+			"entries": map[string]interface{}{
+				"diagnostics-prometheus": entry,
+			},
+		},
+		"diagnostics": diagnosticsObj,
+	}
+	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		web.Fail(w, r, "CONFIG_MARSHAL_FAILED", err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	setParams := map[string]interface{}{
-		"raw": string(cfgJSON),
+		"raw": string(patchJSON),
 	}
 	if baseHash != "" {
 		setParams["baseHash"] = baseHash
 	}
 
 	cfgBudget.waitForSlot()
-	_, err = h.gwClient.RequestWithTimeout("config.set", setParams, 15*time.Second)
+	_, err = h.gwClient.RequestWithTimeout("config.patch", setParams, 30*time.Second)
 	if err != nil {
-		web.Fail(w, r, "CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
+		web.Fail(w, r, "CONFIG_PATCH_FAILED", err.Error(), http.StatusBadGateway)
 		return
 	}
 	cfgBudget.recordWrite()
 
 	restartTriggered := false
-	restartRequired := true
-	if h.gwSvc != nil && !h.gwSvc.IsRemote() {
-		if err := h.gwSvc.Restart(); err != nil {
+	restartRequired := false
+	if runtime.GOOS == "windows" && h.gwSvc != nil && !h.gwSvc.IsRemote() {
+		if err := h.restartGatewayForPluginLoad(); err != nil {
 			web.Fail(w, r, "GATEWAY_RESTART_FAILED", err.Error(), http.StatusBadGateway)
 			return
 		}
 		restartTriggered = true
-		restartRequired = false
 	}
 
 	if alreadyEnabled {
-		logger.Log.Info().Msg("toggled diagnostics-prometheus plugin (off→on) to force gateway reload")
+		logger.Log.Info().Msg("diagnostics-prometheus plugin already enabled")
 	} else {
 		logger.Log.Info().Msg("auto-enabled diagnostics-prometheus plugin via observability handler")
 	}
@@ -469,6 +458,20 @@ func (h *ObservabilityHandler) probeMetricsEndpoint(gwCfg openclaw.GWClientConfi
 	}
 	resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
+}
+
+func (h *ObservabilityHandler) restartGatewayForPluginLoad() error {
+	if h.gwSvc == nil {
+		return fmt.Errorf("gateway service unavailable")
+	}
+	if h.gwSvc.IsRemote() {
+		return fmt.Errorf("gateway restart required")
+	}
+	if runtime.GOOS == "windows" {
+		_ = h.gwSvc.Stop()
+		return h.gwSvc.Start()
+	}
+	return h.gwSvc.Restart()
 }
 
 // ────────────────────────────────────────────────────────────────────────────
