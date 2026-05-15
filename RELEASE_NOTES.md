@@ -10,6 +10,7 @@
 
 ### 🐛 Bug Fixes / 修复
 
+- retry pairing auto-approve with discovery on stale hint
 - auto-approve scope upgrade pairing
 - confirm deployed agent workspaces
 - normalize single-agent workflow preview

@@ -14,6 +14,7 @@ _2026-05-16_
 
 ### 🐛 Bug Fixes / 修复
 
+- retry pairing auto-approve with discovery on stale hint
 - auto-approve scope upgrade pairing
 - confirm deployed agent workspaces
 - normalize single-agent workflow preview
@@ -1833,6 +1834,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 
