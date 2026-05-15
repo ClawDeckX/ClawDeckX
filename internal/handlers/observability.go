@@ -333,6 +333,21 @@ func (h *ObservabilityHandler) EnablePlugin(w http.ResponseWriter, r *http.Reque
 		pluginsObj["entries"] = entries
 	}
 
+	// Ensure plugins.installs has a record so the gateway config validator
+	// doesn't warn "plugin not installed". The system npm fallback copies files
+	// to extensions/ but doesn't create an installs record.
+	installs, _ := pluginsObj["installs"].(map[string]interface{})
+	if installs == nil {
+		installs = map[string]interface{}{}
+		pluginsObj["installs"] = installs
+	}
+	if _, hasInstall := installs["diagnostics-prometheus"]; !hasInstall {
+		installs["diagnostics-prometheus"] = map[string]interface{}{
+			"spec":   "@openclaw/diagnostics-prometheus",
+			"source": "npm",
+		}
+	}
+
 	entry, _ := entries["diagnostics-prometheus"].(map[string]interface{})
 	if entry == nil {
 		entry = map[string]interface{}{}
@@ -788,6 +803,18 @@ func (h *ObservabilityHandler) trySystemNpmInstall() error {
 			return fmt.Errorf("npm install failed: %s", errMsg)
 		}
 		logger.Log.Info().Str("output", stdout.String()).Msg("system npm install diagnostics-prometheus succeeded")
+
+		// After npm install, copy from node_modules to extensions/ directory
+		// which is where the gateway actually resolves plugins from.
+		srcDir := filepath.Join(npmRoot, "node_modules", "@openclaw", "diagnostics-prometheus")
+		extDir := filepath.Join(homeDir, ".openclaw", "extensions", "diagnostics-prometheus")
+
+		// Remove stale extensions dir if exists
+		_ = os.RemoveAll(extDir)
+		if err := copyDir(srcDir, extDir); err != nil {
+			return fmt.Errorf("npm install succeeded but failed to copy to extensions: %w", err)
+		}
+		logger.Log.Info().Str("src", srcDir).Str("dst", extDir).Msg("copied plugin to extensions directory")
 		return nil
 	case <-time.After(3 * time.Minute):
 		if cmd.Process != nil {
@@ -795,4 +822,41 @@ func (h *ObservabilityHandler) trySystemNpmInstall() error {
 		}
 		return fmt.Errorf("npm install timed out after 3 minutes")
 	}
+}
+
+// copyDir recursively copies a directory tree from src to dst.
+func copyDir(src, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			data, err := os.ReadFile(srcPath)
+			if err != nil {
+				return err
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(dstPath, data, info.Mode()); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
