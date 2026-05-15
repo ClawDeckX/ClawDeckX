@@ -14,6 +14,7 @@ _2026-05-16_
 
 ### 🐛 Bug Fixes / 修复
 
+- auto-approve scope upgrade pairing
 - confirm deployed agent workspaces
 - normalize single-agent workflow preview
 - use standalone mode for single agents
@@ -1832,6 +1833,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 
