@@ -10,6 +10,7 @@
 
 ### 🐛 Bug Fixes / 修复
 
+- scope-upgrade auto-approve targets ClawDeckX device only
 - retry pairing auto-approve with discovery on stale hint
 - auto-approve scope upgrade pairing
 - confirm deployed agent workspaces
