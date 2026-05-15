@@ -152,6 +152,8 @@
     "cleanupRun": "정리",
     "cleanupDone": "{count}개 파일 정리 완료",
     "cleanupFailed": "정리 실패",
+    "sessionInfo": "세션 정보",
+    "sessionInfoUnavailable": "세션 정보를 사용할 수 없습니다",
     "cmdDiagnostics": "게이트웨이 진단 및 피드백 업로드 옵션 설명",
     "ctxCompacted": "압축됨",
     "usage": "사용량",

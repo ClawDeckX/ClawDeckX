@@ -152,6 +152,8 @@
     "cleanupRun": "Clean Up",
     "cleanupDone": "{count} file(s) cleaned up",
     "cleanupFailed": "Cleanup failed",
+    "sessionInfo": "Session Info",
+    "sessionInfoUnavailable": "Session info unavailable",
     "cmdDiagnostics": "Explain Gateway diagnostics and feedback upload options",
     "ctxCompacted": "Compacted",
     "usage": "Usage",

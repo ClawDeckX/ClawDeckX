@@ -152,6 +152,8 @@
     "cleanupRun": "クリーンアップ",
     "cleanupDone": "{count} 個のファイルをクリーンアップしました",
     "cleanupFailed": "クリーンアップに失敗",
+    "sessionInfo": "セッション情報",
+    "sessionInfoUnavailable": "セッション情報を取得できません",
     "cmdDiagnostics": "ゲートウェイ診断とフィードバックアップロードオプションの説明",
     "ctxCompacted": "圧縮済み",
     "usage": "使用量",

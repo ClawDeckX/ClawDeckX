@@ -57,6 +57,7 @@ interface GwSession {
   abortedLastRun?: boolean;
   estimatedCostUsd?: number;
   runner?: string;
+  agentRuntime?: string;
 }
 
 interface ChatMsg {
@@ -333,7 +334,8 @@ function areSessionsEquivalent(a: GwSession[], b: GwSession[]): boolean {
       session.status === next.status &&
       session.startedAt === next.startedAt &&
       session.runtimeMs === next.runtimeMs &&
-      session.estimatedCostUsd === next.estimatedCostUsd;
+      session.estimatedCostUsd === next.estimatedCostUsd &&
+      session.agentRuntime === next.agentRuntime;
   });
 }
 
@@ -599,6 +601,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [compactionExpandedId, setCompactionExpandedId] = useState<string | null>(null);
   const [compactionDetail, setCompactionDetail] = useState<{ summary?: string } | null>(null);
   const [compactionDetailLoading, setCompactionDetailLoading] = useState(false);
+
+  // Session describe / info panel
+  const [describeOpen, setDescribeOpen] = useState(false);
+  const [describeLoading, setDescribeLoading] = useState(false);
+  const [describeData, setDescribeData] = useState<Record<string, unknown> | null>(null);
 
   // Session repair
   const [repairOpen, setRepairOpen] = useState(false);
@@ -1304,6 +1311,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         abortedLastRun: s.abortedLastRun ?? undefined,
         estimatedCostUsd: s.estimatedCostUsd ?? undefined,
         runner: s.runner || s.harnessId || '',
+        agentRuntime: s.agentRuntime || s.agentRuntimeId || '',
       }));
       // Clean up expired patch grace entries and deleted-key entries
       const nowMs = Date.now();
@@ -2294,6 +2302,21 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionKey, gwReady, toast]);
 
+  // Session describe: fetch metadata via RPC
+  const handleDescribe = useCallback(async () => {
+    if (!gwReady || !sessionKey.trim()) return;
+    setDescribeOpen(true);
+    setDescribeLoading(true);
+    setDescribeData(null);
+    try {
+      const res = await gwApi.sessionsDescribe(sessionKey.trim()) as any;
+      setDescribeData(res?.session || res || null);
+    } catch {
+      setDescribeData(null);
+    }
+    setDescribeLoading(false);
+  }, [sessionKey, gwReady]);
+
   // Session repair: scan all sessions for issues
   const handleRepairScan = useCallback(async () => {
     setRepairScanning(true);
@@ -2424,6 +2447,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setIsSwitchingSession(true);
     }
     setSessionKey(key);
+    // Close describe panel when switching sessions
+    setDescribeOpen(false);
+    setDescribeData(null);
     // Restore draft for new session
     setInput(loadDraft(key));
     // Clear unread
@@ -2958,6 +2984,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                       {s.model && (
                         <span className="text-[10px] text-slate-300 dark:text-white/15 font-mono truncate">{s.model}</span>
                       )}
+                      {s.agentRuntime && (
+                        <span className="text-[9px] font-bold px-1 py-px rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 truncate max-w-[70px]" title={`Runtime: ${s.agentRuntime}`}>{s.agentRuntime}</span>
+                      )}
                       {s.runner && (
                         <span className="text-[9px] font-bold px-1 py-px rounded bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 truncate max-w-[60px]" title={s.runner}>{s.runner}</span>
                       )}
@@ -3097,6 +3126,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               className={`p-2 rounded-lg transition-colors ${settingsOpen ? 'text-primary bg-primary/10' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-600'}`}
               title={c.overrides || 'Overrides'}>
               <span className="material-symbols-outlined text-[18px]">tune</span>
+            </button>
+            <button onClick={handleDescribe} disabled={!gwReady || !sessionKey.trim()}
+              className={`p-2 rounded-lg transition-colors ${describeOpen ? 'text-primary bg-primary/10' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-600'} disabled:opacity-30`}
+              title={c.sessionInfo || 'Session Info'}>
+              <span className="material-symbols-outlined text-[18px]">info</span>
             </button>
             <button onClick={() => { setMsgSearchOpen(v => !v); if (!msgSearchOpen) setTimeout(() => msgSearchRef.current?.focus(), 100); }}
               className={`p-2 rounded-lg transition-colors ${msgSearchOpen ? 'text-primary bg-primary/10' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-600'}`}
@@ -3360,6 +3394,94 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                   )}
                 </label>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Collapsible Session Describe / Info Panel */}
+        {describeOpen && (
+          <div className="shrink-0 border-b border-slate-200/60 dark:border-white/[0.06] bg-slate-50/50 dark:bg-white/[0.015] px-4 py-3 animate-fade-in">
+            <div className="max-w-6xl mx-auto">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px] text-primary">info</span>
+                  {c.sessionInfo || 'Session Info'}
+                </h3>
+                <button onClick={() => setDescribeOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white/60 rounded transition-colors">
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                </button>
+              </div>
+              {describeLoading ? (
+                <div className="flex items-center gap-2 py-2">
+                  <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                  <span className="text-[10px] text-text-secondary">Loading…</span>
+                </div>
+              ) : describeData ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-[10px]">
+                  {describeData.key && (
+                    <div className="col-span-2 md:col-span-3 flex items-center gap-1 mb-1">
+                      <span className="font-bold text-text-secondary">Key:</span>
+                      <span className="font-mono text-text-muted truncate">{String(describeData.key)}</span>
+                    </div>
+                  )}
+                  {describeData.model && (
+                    <div><span className="font-bold text-text-secondary">Model:</span> <span className="text-text-muted font-mono">{String(describeData.model)}</span></div>
+                  )}
+                  {describeData.modelProvider && (
+                    <div><span className="font-bold text-text-secondary">Provider:</span> <span className="text-text-muted">{String(describeData.modelProvider)}</span></div>
+                  )}
+                  {(describeData.agentRuntime || describeData.agentRuntimeId) && (
+                    <div><span className="font-bold text-text-secondary">Runtime:</span> <span className="text-teal-600 dark:text-teal-400 font-bold">{String(describeData.agentRuntime || describeData.agentRuntimeId)}</span></div>
+                  )}
+                  {describeData.totalTokens != null && (
+                    <div><span className="font-bold text-text-secondary">Tokens:</span> <span className="text-text-muted font-mono">{Number(describeData.totalTokens).toLocaleString()}</span></div>
+                  )}
+                  {describeData.maxContextTokens != null && Number(describeData.maxContextTokens) > 0 && (
+                    <div><span className="font-bold text-text-secondary">Context:</span> <span className="text-text-muted font-mono">{Number(describeData.maxContextTokens).toLocaleString()}</span></div>
+                  )}
+                  {describeData.transcriptBytes != null && (
+                    <div><span className="font-bold text-text-secondary">Transcript:</span> <span className="text-text-muted font-mono">{(Number(describeData.transcriptBytes) / 1024).toFixed(1)} KB</span></div>
+                  )}
+                  {describeData.compacted != null && (
+                    <div><span className="font-bold text-text-secondary">Compacted:</span> <span className={describeData.compacted ? 'text-amber-500 font-bold' : 'text-text-muted'}>{describeData.compacted ? 'Yes' : 'No'}</span></div>
+                  )}
+                  {describeData.compactionCount != null && Number(describeData.compactionCount) > 0 && (
+                    <div><span className="font-bold text-text-secondary">Compactions:</span> <span className="text-text-muted font-mono">{String(describeData.compactionCount)}</span></div>
+                  )}
+                  {describeData.storePath && (
+                    <div className="col-span-2 md:col-span-3"><span className="font-bold text-text-secondary">Store:</span> <span className="text-text-muted font-mono truncate">{String(describeData.storePath)}</span></div>
+                  )}
+                  {describeData.chatType && (
+                    <div><span className="font-bold text-text-secondary">Type:</span> <span className="text-text-muted">{String(describeData.chatType)}</span></div>
+                  )}
+                  {describeData.kind && (
+                    <div><span className="font-bold text-text-secondary">Kind:</span> <span className="text-text-muted">{String(describeData.kind)}</span></div>
+                  )}
+                  {describeData.sendPolicy && (
+                    <div><span className="font-bold text-text-secondary">Policy:</span> <span className="text-text-muted">{String(describeData.sendPolicy)}</span></div>
+                  )}
+                  {describeData.thinkingLevel && (
+                    <div><span className="font-bold text-text-secondary">Thinking:</span> <span className="text-text-muted">{String(describeData.thinkingLevel)}</span></div>
+                  )}
+                  {describeData.updatedAt && (
+                    <div><span className="font-bold text-text-secondary">Updated:</span> <span className="text-text-muted">{new Date(String(describeData.updatedAt)).toLocaleString()}</span></div>
+                  )}
+                  {describeData.createdAt && (
+                    <div><span className="font-bold text-text-secondary">Created:</span> <span className="text-text-muted">{new Date(String(describeData.createdAt)).toLocaleString()}</span></div>
+                  )}
+                  {describeData.estimatedCostUsd != null && Number(describeData.estimatedCostUsd) > 0 && (
+                    <div><span className="font-bold text-text-secondary">Cost:</span> <span className="text-text-muted font-mono">${Number(describeData.estimatedCostUsd) < 0.01 ? Number(describeData.estimatedCostUsd).toFixed(4) : Number(describeData.estimatedCostUsd).toFixed(2)}</span></div>
+                  )}
+                  {describeData.parentKey && (
+                    <div><span className="font-bold text-text-secondary">Parent:</span> <span className="text-text-muted font-mono truncate">{String(describeData.parentKey)}</span></div>
+                  )}
+                  {describeData.lastTo && (
+                    <div><span className="font-bold text-text-secondary">Last To:</span> <span className="text-text-muted font-mono truncate">{String(describeData.lastTo)}</span></div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[10px] text-text-muted">{c.sessionInfoUnavailable || 'Session info unavailable'}</p>
+              )}
             </div>
           </div>
         )}

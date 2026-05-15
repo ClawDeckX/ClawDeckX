@@ -152,6 +152,8 @@
     "cleanupRun": "清理",
     "cleanupDone": "已清理 {count} 个文件",
     "cleanupFailed": "清理失败",
+    "sessionInfo": "会话信息",
+    "sessionInfoUnavailable": "会话信息不可用",
     "cmdDiagnostics": "查看网关诊断与反馈上传选项",
     "ctxCompacted": "已压缩",
     "usage": "用量",
