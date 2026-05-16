@@ -110,7 +110,6 @@ type NodeFilter = 'all' | 'online' | 'offline';
 type SortKey = 'name' | 'status' | 'platform' | 'lastSeen' | 'lastUsed' | 'connectedAt';
 type GroupKey = 'none' | 'platform' | 'status' | 'version';
 type ViewMode = 'grid' | 'list' | 'compact';
-type NodeJoinMode = 'install' | 'run';
 type NodeWizardPanel = 'connect' | 'approve';
 
 // --- Utility helpers ---
@@ -273,7 +272,6 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   const [nodeWizardHost, setNodeWizardHost] = useState('127.0.0.1');
   const [nodeWizardPort, setNodeWizardPort] = useState('18789');
   const [nodeWizardTls, setNodeWizardTls] = useState(false);
-  const [nodeWizardMode, setNodeWizardMode] = useState<NodeJoinMode>('run');
   const [nodeWizardNodeId, setNodeWizardNodeId] = useState('');
   const [nodeWizardName, setNodeWizardName] = useState('');
   const [nodeWizardRunning, setNodeWizardRunning] = useState(false);
@@ -1078,26 +1076,25 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   ];
 
   const nodeWizardCommand = useMemo(() => {
-    const parts = ['openclaw', 'node', nodeWizardMode];
+    const parts = ['openclaw', 'node', 'install'];
     const host = nodeWizardHost.trim() || '127.0.0.1';
     const port = nodeWizardPort.trim() || '18789';
     parts.push('--host', quoteCliArg(host), '--port', port);
     if (nodeWizardTls) parts.push('--tls');
     if (nodeWizardNodeId.trim()) parts.push('--node-id', quoteCliArg(nodeWizardNodeId.trim()));
     if (nodeWizardName.trim()) parts.push('--display-name', quoteCliArg(nodeWizardName.trim()));
-    if (nodeWizardMode === 'install') parts.push('--force');
+    parts.push('--force');
     return parts.join(' ');
-  }, [nodeWizardHost, nodeWizardMode, nodeWizardName, nodeWizardNodeId, nodeWizardPort, nodeWizardTls]);
+  }, [nodeWizardHost, nodeWizardName, nodeWizardNodeId, nodeWizardPort, nodeWizardTls]);
 
   const nodeWizardArgs = useMemo(() => {
-    const args = ['node', nodeWizardMode, '--host', nodeWizardHost.trim() || '127.0.0.1', '--port', nodeWizardPort.trim() || '18789'];
+    const args = ['node', 'install', '--host', nodeWizardHost.trim() || '127.0.0.1', '--port', nodeWizardPort.trim() || '18789'];
     if (nodeWizardTls) args.push('--tls');
     if (nodeWizardNodeId.trim()) args.push('--node-id', nodeWizardNodeId.trim());
     if (nodeWizardName.trim()) args.push('--display-name', nodeWizardName.trim());
-    if (nodeWizardMode === 'install') args.push('--force');
-    if (nodeWizardMode === 'install') args.push('--json');
+    args.push('--force', '--json');
     return args;
-  }, [nodeWizardHost, nodeWizardMode, nodeWizardName, nodeWizardNodeId, nodeWizardPort, nodeWizardTls]);
+  }, [nodeWizardHost, nodeWizardName, nodeWizardNodeId, nodeWizardPort, nodeWizardTls]);
 
   const handleCopyNodeWizardCommand = useCallback(() => {
     copyToClipboard(nodeWizardCommand)
@@ -1116,7 +1113,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
         setNodeWizardResult(null);
         try {
           const res = await llmApi.exec('openclaw', nodeWizardArgs, 60000);
-          const startRes = res.exitCode === 0 && nodeWizardMode === 'install'
+          const startRes = res.exitCode === 0
             ? await llmApi.exec('openclaw', ['node', 'start', '--json'], 60000)
             : res;
           const finalRes = startRes || res;
@@ -1125,7 +1122,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
             ok,
             text: ok ? (ndRef.current?.nodeWizardRunOk || 'Node operation started') : (finalRes.stderr || finalRes.stdout || res.stderr || res.stdout || ndRef.current?.nodeWizardRunFailed || 'Node operation failed'),
           });
-          setEventLog(prev => [`[${new Date().toLocaleTimeString()}] node.${nodeWizardMode} → ${nodeWizardHost}:${nodeWizardPort}`, ...prev.slice(0, 49)]);
+          setEventLog(prev => [`[${new Date().toLocaleTimeString()}] node.install → ${nodeWizardHost}:${nodeWizardPort}`, ...prev.slice(0, 49)]);
           setTimeout(() => { fetchDevices(); fetchNodes(); }, 800);
         } catch (err: any) {
           setNodeWizardResult({ ok: false, text: err?.message || ndRef.current?.nodeWizardRunFailed || 'Node operation failed' });
@@ -1134,7 +1131,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
         }
       },
     });
-  }, [fetchDevices, fetchNodes, nodeWizardArgs, nodeWizardHost, nodeWizardMode, nodeWizardPort]);
+  }, [fetchDevices, fetchNodes, nodeWizardArgs, nodeWizardHost, nodeWizardPort]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-[#0f1115]">
@@ -1717,9 +1714,10 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                             className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
                         </div>
                         <div className="space-y-2">
-                          <CustomSelect value={nodeWizardMode} onChange={v => setNodeWizardMode(v as NodeJoinMode)}
-                            options={[{ value: 'install', label: nd.nodeWizardInstall || 'Install service' }, { value: 'run', label: nd.nodeWizardRun || 'Foreground run' }]}
-                            className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] font-bold theme-text-secondary" />
+                          <div className="h-9 px-3 bg-primary/10 border border-primary/20 rounded-lg text-[12px] font-bold text-primary flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[15px]">verified</span>
+                            {nd.nodeWizardInstallRecommended || 'Recommended: install service'}
+                          </div>
                           <button onClick={() => setNodeWizardTls(v => !v)}
                             className={`w-full h-9 px-3 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${nodeWizardTls ? 'bg-sky-500/10 border-sky-500/30 text-sky-500' : 'bg-white dark:bg-black/20 border-slate-200 dark:border-white/10 theme-text-secondary'}`}>
                             <span className="material-symbols-outlined text-[14px]">{nodeWizardTls ? 'lock' : 'lock_open'}</span>
@@ -1748,7 +1746,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={handleRunNodeWizard} disabled={nodeWizardRunning || nodeWizardMode === 'run'}
+                        <button onClick={handleRunNodeWizard} disabled={nodeWizardRunning}
                           className="h-9 px-4 bg-primary text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1.5">
                           <span className={`material-symbols-outlined text-[14px] ${nodeWizardRunning ? 'animate-spin' : ''}`}>{nodeWizardRunning ? 'progress_activity' : 'rocket_launch'}</span>
                           {nodeWizardRunning ? (nd.nodeWizardRunning || 'Running...') : (nd.nodeWizardStartLocal || 'Install local node service')}
@@ -1757,9 +1755,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                           className="h-9 px-4 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-[14px]">content_copy</span>{nd.copyCommand || 'Copy command'}
                         </button>
-                        {nodeWizardMode === 'run' && (
-                          <span className="text-[10px] theme-text-muted flex items-center">{nd.nodeWizardRunManualHint || 'Foreground run is interactive; copy the command and run it in a terminal.'}</span>
-                        )}
+                        <span className="text-[10px] theme-text-muted flex items-center">{nd.nodeWizardManualHint || 'Use the command only when you need to run this setup manually.'}</span>
                       </div>
 
                       {nodeWizardResult && (
