@@ -147,8 +147,8 @@ func TestRPCError(t *testing.T) {
 
 func TestConnectParams(t *testing.T) {
 	params := ConnectParams{
-		MinProtocol: 1,
-		MaxProtocol: 1,
+		MinProtocol: GatewayMinProtocol,
+		MaxProtocol: GatewayMaxProtocol,
 		Client: ConnectClient{
 			ID:          "test-client",
 			DisplayName: "Test Client",
@@ -161,10 +161,16 @@ func TestConnectParams(t *testing.T) {
 		Caps:   []string{"events"},
 	}
 
-	assert.Equal(t, 1, params.MinProtocol)
+	assert.Equal(t, 3, params.MinProtocol)
+	assert.Equal(t, 4, params.MaxProtocol)
 	assert.Equal(t, "test-client", params.Client.ID)
 	assert.Equal(t, "manager", params.Role)
 	assert.Contains(t, params.Scopes, "read")
+}
+
+func TestGatewayProtocolRangeSupportsCurrentGateway(t *testing.T) {
+	assert.LessOrEqual(t, GatewayMinProtocol, 4)
+	assert.GreaterOrEqual(t, GatewayMaxProtocol, 4)
 }
 
 func TestDefaultOperatorScopes(t *testing.T) {

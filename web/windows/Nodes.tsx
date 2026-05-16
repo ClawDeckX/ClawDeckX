@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
-import { gwApi, hostInfoApi } from '../services/api';
+import { gwApi, hostInfoApi, llmApi } from '../services/api';
 import { fmtAgoCompact } from '../utils/time';
 import { useToast } from '../components/Toast';
 import { useGatewayEvents } from '../hooks/useGatewayEvents';
@@ -107,13 +107,16 @@ interface NodeAlert {
 
 type TabId = 'nodes' | 'devices' | 'bindings';
 type NodeFilter = 'all' | 'online' | 'offline';
-type SortKey = 'name' | 'status' | 'lastUsed' | 'connectedAt';
+type SortKey = 'name' | 'status' | 'platform' | 'lastSeen' | 'lastUsed' | 'connectedAt';
 type GroupKey = 'none' | 'platform' | 'status' | 'version';
-type ViewMode = 'grid' | 'list';
+type ViewMode = 'grid' | 'list' | 'compact';
+type NodeJoinMode = 'install' | 'run';
+type NodeWizardPanel = 'connect' | 'approve';
 
 // --- Utility helpers ---
 
 const fmtAge = (seconds?: number | null) => fmtAgoCompact(seconds ?? undefined, undefined, 'seconds') || '-';
+// ...
 
 function fmtTs(ms?: number | null): string {
   if (!ms) return '-';
@@ -170,6 +173,10 @@ function groupNodes(list: NodeEntry[], key: GroupKey, nd: any): { label: string;
   return Array.from(groups.entries()).map(([label, nodes]) => ({ label, nodes }));
 }
 
+function quoteCliArg(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
 const Nodes: React.FC<NodesProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const nd = (t as any).nd;
@@ -194,6 +201,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   const [deviceSearch, setDeviceSearch] = useState('');
   const [showEventLog, setShowEventLog] = useState(false);
   const [showPairFlow, setShowPairFlow] = useState(false);
+  const [showAdvancedPairTools, setShowAdvancedPairTools] = useState(false);
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [devicesError, setDevicesError] = useState('');
   const [nodePending, setNodePending] = useState<any[]>([]);
@@ -260,6 +268,16 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; desc: string; onOk: () => void; variant?: 'danger' | 'success' } | null>(null);
   const [pairNodeIdError, setPairNodeIdError] = useState('');
   const [verifyTokenError, setVerifyTokenError] = useState('');
+  const [showNodeWizard, setShowNodeWizard] = useState(false);
+  const [nodeWizardPanel, setNodeWizardPanel] = useState<NodeWizardPanel>('connect');
+  const [nodeWizardHost, setNodeWizardHost] = useState('127.0.0.1');
+  const [nodeWizardPort, setNodeWizardPort] = useState('18789');
+  const [nodeWizardTls, setNodeWizardTls] = useState(false);
+  const [nodeWizardMode, setNodeWizardMode] = useState<NodeJoinMode>('run');
+  const [nodeWizardNodeId, setNodeWizardNodeId] = useState('');
+  const [nodeWizardName, setNodeWizardName] = useState('');
+  const [nodeWizardRunning, setNodeWizardRunning] = useState(false);
+  const [nodeWizardResult, setNodeWizardResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   // === NEW: Bindings tab enhancements ===
   const [bindingTestResults, setBindingTestResults] = useState<Record<string, { ok: boolean; ms?: number; error?: string; loading?: boolean }>>({});
@@ -1059,6 +1077,65 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     { id: 'bindings', label: nd.bindingsSection, icon: 'link' },
   ];
 
+  const nodeWizardCommand = useMemo(() => {
+    const parts = ['openclaw', 'node', nodeWizardMode];
+    const host = nodeWizardHost.trim() || '127.0.0.1';
+    const port = nodeWizardPort.trim() || '18789';
+    parts.push('--host', quoteCliArg(host), '--port', port);
+    if (nodeWizardTls) parts.push('--tls');
+    if (nodeWizardNodeId.trim()) parts.push('--node-id', quoteCliArg(nodeWizardNodeId.trim()));
+    if (nodeWizardName.trim()) parts.push('--display-name', quoteCliArg(nodeWizardName.trim()));
+    if (nodeWizardMode === 'install') parts.push('--force');
+    return parts.join(' ');
+  }, [nodeWizardHost, nodeWizardMode, nodeWizardName, nodeWizardNodeId, nodeWizardPort, nodeWizardTls]);
+
+  const nodeWizardArgs = useMemo(() => {
+    const args = ['node', nodeWizardMode, '--host', nodeWizardHost.trim() || '127.0.0.1', '--port', nodeWizardPort.trim() || '18789'];
+    if (nodeWizardTls) args.push('--tls');
+    if (nodeWizardNodeId.trim()) args.push('--node-id', nodeWizardNodeId.trim());
+    if (nodeWizardName.trim()) args.push('--display-name', nodeWizardName.trim());
+    if (nodeWizardMode === 'install') args.push('--force');
+    if (nodeWizardMode === 'install') args.push('--json');
+    return args;
+  }, [nodeWizardHost, nodeWizardMode, nodeWizardName, nodeWizardNodeId, nodeWizardPort, nodeWizardTls]);
+
+  const handleCopyNodeWizardCommand = useCallback(() => {
+    copyToClipboard(nodeWizardCommand)
+      .then(() => toast('success', ndRef.current?.copied || 'Copied'))
+      .catch(() => toast('error', 'Copy failed'));
+  }, [nodeWizardCommand, toast]);
+
+  const handleRunNodeWizard = useCallback(() => {
+    setConfirmDialog({
+      title: ndRef.current?.nodeWizardRunConfirmTitle || 'Start Node',
+      desc: ndRef.current?.nodeWizardRunConfirmDesc || 'Run this OpenClaw node operation on this computer?',
+      variant: 'success',
+      onOk: async () => {
+        setConfirmDialog(null);
+        setNodeWizardRunning(true);
+        setNodeWizardResult(null);
+        try {
+          const res = await llmApi.exec('openclaw', nodeWizardArgs, 60000);
+          const startRes = res.exitCode === 0 && nodeWizardMode === 'install'
+            ? await llmApi.exec('openclaw', ['node', 'start', '--json'], 60000)
+            : res;
+          const finalRes = startRes || res;
+          const ok = res.exitCode === 0 && finalRes.exitCode === 0;
+          setNodeWizardResult({
+            ok,
+            text: ok ? (ndRef.current?.nodeWizardRunOk || 'Node operation started') : (finalRes.stderr || finalRes.stdout || res.stderr || res.stdout || ndRef.current?.nodeWizardRunFailed || 'Node operation failed'),
+          });
+          setEventLog(prev => [`[${new Date().toLocaleTimeString()}] node.${nodeWizardMode} → ${nodeWizardHost}:${nodeWizardPort}`, ...prev.slice(0, 49)]);
+          setTimeout(() => { fetchDevices(); fetchNodes(); }, 800);
+        } catch (err: any) {
+          setNodeWizardResult({ ok: false, text: err?.message || ndRef.current?.nodeWizardRunFailed || 'Node operation failed' });
+        } finally {
+          setNodeWizardRunning(false);
+        }
+      },
+    });
+  }, [fetchDevices, fetchNodes, nodeWizardArgs, nodeWizardHost, nodeWizardMode, nodeWizardPort]);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-[#0f1115]">
       {/* 顶部 */}
@@ -1568,6 +1645,11 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                     <span className="material-symbols-outlined text-[14px]">help_outline</span>
                     <span className="hidden sm:inline">{nd.pairFlow}</span>
                   </button>
+                  <button onClick={() => setShowNodeWizard(v => !v)}
+                    className={`h-8 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${showNodeWizard ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/70 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
+                    <span className="material-symbols-outlined text-[14px]">route</span>
+                    <span className="hidden sm:inline">{nd.nodeWizard || 'Node Wizard'}</span>
+                  </button>
                   <button onClick={fetchDevices} disabled={devicesLoading}
                     className="h-8 px-3 flex items-center gap-1.5 theme-field hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold theme-text-secondary disabled:opacity-50">
                     <span className={`material-symbols-outlined text-[14px] ${devicesLoading ? 'animate-spin' : ''}`}>{devicesLoading ? 'progress_activity' : 'refresh'}</span>
@@ -1593,6 +1675,151 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                     <span className="material-symbols-outlined text-[14px]">content_copy</span>
                     <span className="hidden sm:inline">{nd.copy || 'Copy'}</span>
                   </button>
+                </div>
+              )}
+
+              {showNodeWizard && (
+                <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] to-sky-500/[0.04] dark:from-primary/[0.10] dark:to-sky-500/[0.06] p-4 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-primary text-[20px]">hub</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-bold text-slate-800 dark:text-white">{nd.nodeWizard || 'Node Wizard'}</h3>
+                      <p className="text-[11px] text-slate-500 dark:text-white/45 mt-1">{nd.nodeWizardDesc || 'Connect this computer as a node to another OpenClaw gateway, then approve the request below.'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-1">
+                    {[
+                      { value: 'connect' as NodeWizardPanel, icon: 'outgoing_mail', label: nd.nodeWizardConnectTab || 'Connect as node' },
+                      { value: 'approve' as NodeWizardPanel, icon: 'approval_delegation', label: nd.nodeWizardApproveTab || 'Approve node requests' },
+                    ].map(item => (
+                      <button key={item.value} onClick={() => setNodeWizardPanel(item.value)}
+                        className={`h-9 px-3 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${nodeWizardPanel === item.value ? 'bg-primary text-white shadow-sm' : 'theme-text-secondary hover:bg-slate-100 dark:hover:bg-white/10'}`}>
+                        <span className="material-symbols-outlined text-[14px]">{item.icon}</span>
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {nodeWizardPanel === 'connect' && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <input value={nodeWizardHost} onChange={e => setNodeWizardHost(e.target.value)} placeholder={nd.nodeWizardHost || nd.host}
+                            className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
+                          <NumberStepper value={nodeWizardPort} onChange={v => setNodeWizardPort(v.replace(/[^0-9]/g, ''))} min={1} max={65535}
+                            className="h-9 bg-white dark:bg-black/20" inputClassName="text-[12px]" />
+                          <input value={nodeWizardNodeId} onChange={e => setNodeWizardNodeId(e.target.value)} placeholder={nd.nodeWizardNodeId || nd.pairNodeId}
+                            className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] font-mono text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
+                          <input value={nodeWizardName} onChange={e => setNodeWizardName(e.target.value)} placeholder={nd.nodeWizardName || nd.pairDisplayName}
+                            className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
+                        </div>
+                        <div className="space-y-2">
+                          <CustomSelect value={nodeWizardMode} onChange={v => setNodeWizardMode(v as NodeJoinMode)}
+                            options={[{ value: 'install', label: nd.nodeWizardInstall || 'Install service' }, { value: 'run', label: nd.nodeWizardRun || 'Foreground run' }]}
+                            className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] font-bold theme-text-secondary" />
+                          <button onClick={() => setNodeWizardTls(v => !v)}
+                            className={`w-full h-9 px-3 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${nodeWizardTls ? 'bg-sky-500/10 border-sky-500/30 text-sky-500' : 'bg-white dark:bg-black/20 border-slate-200 dark:border-white/10 theme-text-secondary'}`}>
+                            <span className="material-symbols-outlined text-[14px]">{nodeWizardTls ? 'lock' : 'lock_open'}</span>
+                            {nodeWizardTls ? (nd.nodeWizardTlsOn || 'TLS on') : (nd.nodeWizardTlsOff || 'TLS off')}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {[
+                          { icon: 'settings_ethernet', title: nd.nodeWizardStep1 || 'Configure target', text: nd.nodeWizardStep1Desc || 'Enter the target OpenClaw gateway host and port.' },
+                          { icon: 'play_circle', title: nd.nodeWizardStep2 || 'Start local node', text: nd.nodeWizardStep2Desc || 'Install/start the node service on this computer, or run foreground manually.' },
+                        ].map(item => (
+                          <div key={item.title} className="rounded-lg bg-white/50 dark:bg-black/10 border border-white/50 dark:border-white/10 px-3 py-2 flex items-start gap-2">
+                            <span className="material-symbols-outlined text-primary text-[16px] mt-0.5">{item.icon}</span>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-bold theme-text">{item.title}</p>
+                              <p className="text-[10px] theme-text-muted leading-relaxed">{item.text}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="rounded-xl bg-slate-950 text-slate-100 p-3 font-mono text-[11px] break-all select-all">
+                        {nodeWizardCommand}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={handleRunNodeWizard} disabled={nodeWizardRunning || nodeWizardMode === 'run'}
+                          className="h-9 px-4 bg-primary text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1.5">
+                          <span className={`material-symbols-outlined text-[14px] ${nodeWizardRunning ? 'animate-spin' : ''}`}>{nodeWizardRunning ? 'progress_activity' : 'rocket_launch'}</span>
+                          {nodeWizardRunning ? (nd.nodeWizardRunning || 'Running...') : (nd.nodeWizardStartLocal || 'Install local node service')}
+                        </button>
+                        <button onClick={handleCopyNodeWizardCommand}
+                          className="h-9 px-4 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[14px]">content_copy</span>{nd.copyCommand || 'Copy command'}
+                        </button>
+                        {nodeWizardMode === 'run' && (
+                          <span className="text-[10px] theme-text-muted flex items-center">{nd.nodeWizardRunManualHint || 'Foreground run is interactive; copy the command and run it in a terminal.'}</span>
+                        )}
+                      </div>
+
+                      {nodeWizardResult && (
+                        <div className={`px-3 py-2 rounded-lg text-[11px] ${nodeWizardResult.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-mac-red/10 text-mac-red'}`}>
+                          {nodeWizardResult.text}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {nodeWizardPanel === 'approve' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px] text-purple-500">hub</span>
+                        <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{nd.nodeWizardApproveTab || 'Approve node requests'}</h3>
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold">{nodePending.length}</span>
+                        <span className="flex-1" />
+                        <button onClick={() => { fetchDevices(); fetchNodes(); }}
+                          className="h-8 px-3 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[14px]">refresh</span>{nd.nodeWizardRefreshPending || nd.refresh}
+                        </button>
+                      </div>
+                      {nodePending.length === 0 ? (
+                        <div className="rounded-xl bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-6 text-center">
+                          <span className="material-symbols-outlined text-[28px] text-slate-300 dark:text-white/20">inbox</span>
+                          <p className="text-[12px] font-bold theme-text mt-2">{nd.nodeWizardApproveEmpty || 'No pending node requests'}</p>
+                          <p className="text-[10px] theme-text-muted mt-1">{nd.nodeWizardApproveDesc || 'Requests from other OpenClaw nodes will appear here for approval.'}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {nodePending.map((req: any) => (
+                            <div key={req.nodeId || req.requestId} className="bg-purple-50 dark:bg-purple-500/[0.04] border border-purple-200/50 dark:border-purple-500/10 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined text-purple-500 text-[20px]">dns</span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-[12px] text-slate-800 dark:text-white truncate">{req.displayName || req.nodeId}</h4>
+                                <p className="text-[10px] text-slate-400 dark:text-white/40 font-mono truncate">{req.nodeId}</p>
+                                <div className="flex flex-wrap gap-2 mt-1 text-[11px] text-slate-400 dark:text-white/35">
+                                  {req.platform && <span>{nd.platform}: {req.platform}</span>}
+                                  {req.remoteIp && <span>{nd.ip}: {req.remoteIp}</span>}
+                                  {req.ts && <span>{nd.requested} {fmtTs(req.ts)}</span>}
+                                </div>
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => handleNodePairApprove(req.requestId, req.displayName || req.nodeId)}
+                                  className="h-8 px-4 bg-mac-green text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">check</span>{nd.approve}
+                                </button>
+                                <button onClick={() => handleNodePairReject(req.requestId, req.displayName || req.nodeId)}
+                                  className="h-8 px-4 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 text-[10px] font-bold rounded-lg hover:bg-mac-red/10 hover:text-mac-red transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">close</span>{nd.reject}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1655,56 +1882,69 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                 </div>
               )}
 
-              {/* Pair Request + Verify */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3 space-y-2">
-                  <h3 className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase flex items-center gap-1" title={nd.pairRequestHelp}>
-                    <span className="material-symbols-outlined text-[12px]">add_link</span>{nd.pairRequest}
-                    <span className="material-symbols-outlined text-[10px] text-slate-300 dark:text-white/20 ms-auto cursor-help">info</span>
-                  </h3>
-                  <div>
-                    <input value={pairNodeId} onChange={e => { setPairNodeId(e.target.value); if (pairNodeIdError) validatePairNodeId(e.target.value); }} placeholder={nd.pairNodeId}
-                      onBlur={e => validatePairNodeId(e.target.value)}
-                      className={`w-full h-8 px-2.5 bg-slate-50 dark:bg-black/20 border rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none focus:border-primary/50 ${pairNodeIdError ? 'border-mac-red/50' : 'border-slate-200 dark:border-white/10'}`} />
-                    {pairNodeIdError && <p className="text-[10px] text-mac-red mt-0.5">{pairNodeIdError}</p>}
+              {/* Advanced Pair Tools */}
+              <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white/70 dark:bg-white/[0.03] overflow-hidden">
+                <button onClick={() => setShowAdvancedPairTools(v => !v)}
+                  className="w-full px-3 py-2.5 flex items-center gap-2 text-start hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-colors">
+                  <span className="material-symbols-outlined text-[15px] text-slate-400 dark:text-white/35">tune</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold theme-text">{nd.advancedPairTools || 'Advanced node pairing tools'}</p>
+                    <p className="text-[10px] theme-text-muted truncate">{nd.advancedPairToolsDesc || 'Manual request and token verification tools for diagnostics.'}</p>
                   </div>
-                  <input value={pairName} onChange={e => setPairName(e.target.value)} placeholder={nd.pairDisplayName}
-                    className="w-full h-8 px-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] text-slate-700 dark:text-white/70 outline-none focus:border-primary/50" />
-                  <button onClick={() => { if (validatePairNodeId(pairNodeId)) handlePairRequest(); }} disabled={pairing || !pairNodeId.trim()}
-                    className="w-full h-8 bg-primary text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center justify-center gap-1.5 hover:bg-primary/90 transition-colors">
-                    <span className="material-symbols-outlined text-[14px]">{pairing ? 'progress_activity' : 'link'}</span>
-                    {pairing ? nd.pairRequesting : nd.pairRequest}
-                  </button>
-                  {pairResult && (
-                    <div className={`px-2.5 py-1.5 rounded-lg text-[11px] ${pairResult.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-red-50 dark:bg-red-500/5 text-red-500'}`}>{pairResult.text}</div>
-                  )}
-                </div>
-                <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3 space-y-2">
-                  <h3 className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase flex items-center gap-1" title={nd.pairVerifyHelp}>
-                    <span className="material-symbols-outlined text-[12px]">verified</span>{nd.pairVerify}
-                    <span className="material-symbols-outlined text-[10px] text-slate-300 dark:text-white/20 ms-auto cursor-help">info</span>
-                  </h3>
-                  <input value={verifyNodeId} onChange={e => setVerifyNodeId(e.target.value)} placeholder={nd.pairNodeId}
-                    className="w-full h-8 px-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none focus:border-sky-500/50" />
-                  <div>
-                    <input value={verifyToken} onChange={e => { setVerifyToken(e.target.value); if (verifyTokenError) validateVerifyToken(e.target.value); }} placeholder={nd.pairToken}
-                      onBlur={e => validateVerifyToken(e.target.value)}
-                      className={`w-full h-8 px-2.5 bg-slate-50 dark:bg-black/20 border rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none focus:border-sky-500/50 ${verifyTokenError ? 'border-mac-red/50' : 'border-slate-200 dark:border-white/10'}`} />
-                    {verifyTokenError && <p className="text-[10px] text-mac-red mt-0.5">{verifyTokenError}</p>}
+                  <span className={`material-symbols-outlined text-[16px] theme-text-muted transition-transform ${showAdvancedPairTools ? 'rotate-180' : ''}`}>expand_more</span>
+                </button>
+                {showAdvancedPairTools && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-slate-200/60 dark:border-white/[0.06] p-3">
+                    <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3 space-y-2">
+                      <h3 className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase flex items-center gap-1" title={nd.pairRequestHelp}>
+                        <span className="material-symbols-outlined text-[12px]">add_link</span>{nd.pairRequest}
+                        <span className="material-symbols-outlined text-[10px] text-slate-300 dark:text-white/20 ms-auto cursor-help">info</span>
+                      </h3>
+                      <div>
+                        <input value={pairNodeId} onChange={e => { setPairNodeId(e.target.value); if (pairNodeIdError) validatePairNodeId(e.target.value); }} placeholder={nd.pairNodeId}
+                          onBlur={e => validatePairNodeId(e.target.value)}
+                          className={`w-full h-8 px-2.5 bg-slate-50 dark:bg-black/20 border rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none focus:border-primary/50 ${pairNodeIdError ? 'border-mac-red/50' : 'border-slate-200 dark:border-white/10'}`} />
+                        {pairNodeIdError && <p className="text-[10px] text-mac-red mt-0.5">{pairNodeIdError}</p>}
+                      </div>
+                      <input value={pairName} onChange={e => setPairName(e.target.value)} placeholder={nd.pairDisplayName}
+                        className="w-full h-8 px-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] text-slate-700 dark:text-white/70 outline-none focus:border-primary/50" />
+                      <button onClick={() => { if (validatePairNodeId(pairNodeId)) handlePairRequest(); }} disabled={pairing || !pairNodeId.trim()}
+                        className="w-full h-8 bg-primary text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center justify-center gap-1.5 hover:bg-primary/90 transition-colors">
+                        <span className="material-symbols-outlined text-[14px]">{pairing ? 'progress_activity' : 'link'}</span>
+                        {pairing ? nd.pairRequesting : nd.pairRequest}
+                      </button>
+                      {pairResult && (
+                        <div className={`px-2.5 py-1.5 rounded-lg text-[11px] ${pairResult.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-red-50 dark:bg-red-500/5 text-red-500'}`}>{pairResult.text}</div>
+                      )}
+                    </div>
+                    <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3 space-y-2">
+                      <h3 className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase flex items-center gap-1" title={nd.pairVerifyHelp}>
+                        <span className="material-symbols-outlined text-[12px]">verified</span>{nd.pairVerify}
+                        <span className="material-symbols-outlined text-[10px] text-slate-300 dark:text-white/20 ms-auto cursor-help">info</span>
+                      </h3>
+                      <input value={verifyNodeId} onChange={e => setVerifyNodeId(e.target.value)} placeholder={nd.pairNodeId}
+                        className="w-full h-8 px-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none focus:border-sky-500/50" />
+                      <div>
+                        <input value={verifyToken} onChange={e => { setVerifyToken(e.target.value); if (verifyTokenError) validateVerifyToken(e.target.value); }} placeholder={nd.pairToken}
+                          onBlur={e => validateVerifyToken(e.target.value)}
+                          className={`w-full h-8 px-2.5 bg-slate-50 dark:bg-black/20 border rounded-lg text-[11px] font-mono text-slate-700 dark:text-white/70 outline-none focus:border-sky-500/50 ${verifyTokenError ? 'border-mac-red/50' : 'border-slate-200 dark:border-white/10'}`} />
+                        {verifyTokenError && <p className="text-[10px] text-mac-red mt-0.5">{verifyTokenError}</p>}
+                      </div>
+                      <button onClick={() => { if (validateVerifyToken(verifyToken)) handlePairVerify(); }} disabled={verifying || !verifyNodeId.trim() || !verifyToken.trim()}
+                        className="w-full h-8 bg-sky-500 text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center justify-center gap-1.5 hover:bg-sky-500/90 transition-colors">
+                        <span className="material-symbols-outlined text-[14px]">{verifying ? 'progress_activity' : 'verified'}</span>
+                        {verifying ? nd.pairVerifying : nd.pairVerify}
+                      </button>
+                      {verifyResult && (
+                        <div className={`px-2.5 py-1.5 rounded-lg text-[11px] ${verifyResult.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-red-50 dark:bg-red-500/5 text-red-500'}`}>{verifyResult.text}</div>
+                      )}
+                    </div>
                   </div>
-                  <button onClick={() => { if (validateVerifyToken(verifyToken)) handlePairVerify(); }} disabled={verifying || !verifyNodeId.trim() || !verifyToken.trim()}
-                    className="w-full h-8 bg-sky-500 text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center justify-center gap-1.5 hover:bg-sky-500/90 transition-colors">
-                    <span className="material-symbols-outlined text-[14px]">{verifying ? 'progress_activity' : 'verified'}</span>
-                    {verifying ? nd.pairVerifying : nd.pairVerify}
-                  </button>
-                  {verifyResult && (
-                    <div className={`px-2.5 py-1.5 rounded-lg text-[11px] ${verifyResult.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-red-50 dark:bg-red-500/5 text-red-500'}`}>{verifyResult.text}</div>
-                  )}
-                </div>
+                )}
               </div>
 
               {/* 待审批节点配对 */}
-              {nodePending.length > 0 && (
+              {nodePending.length > 0 && !showNodeWizard && (
                 <div>
                   <div className="flex items-center gap-2 mb-3">
                     <span className="material-symbols-outlined text-[16px] text-purple-500">hub</span>

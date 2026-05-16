@@ -390,6 +390,8 @@ func (h *WizardHandler) DiscoverModels(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		web.Fail(w, r, "MODEL_NO_API_KEY", "Please enter an API Key and try again.", http.StatusBadRequest)
+		return
 	}
 
 	models, source, err := discoverModels(req)

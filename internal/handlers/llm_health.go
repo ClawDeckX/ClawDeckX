@@ -561,6 +561,8 @@ func validateCLIExecArgs(args []string) error {
 		return nil
 	case validateLogsArgs(args):
 		return nil
+	case validateNodeServiceArgs(args):
+		return nil
 	default:
 		return fmt.Errorf("command shape not allowed")
 	}
@@ -596,6 +598,29 @@ func validateLogsArgs(args []string) bool {
 	return parseBoundedInt(args[2], 1, 200)
 }
 
+func validateNodeServiceArgs(args []string) bool {
+	if len(args) < 2 || args[0] != "node" {
+		return false
+	}
+	switch args[1] {
+	case "status", "start", "restart":
+		return len(args) == 3 && args[2] == "--json"
+	case "install":
+		return validateFlags(args[2:], map[string]func(string) bool{
+			"--host":         validateSafeHost,
+			"--port":         func(v string) bool { return parseBoundedInt(v, 1, 65535) },
+			"--tls":          nil,
+			"--node-id":      validateSafeNodeArg,
+			"--display-name": validateSafeDisplayName,
+			"--runtime":      func(v string) bool { return v == "node" || v == "bun" },
+			"--force":        nil,
+			"--json":         nil,
+		})
+	default:
+		return false
+	}
+}
+
 func validateFlags(args []string, allowed map[string]func(string) bool) bool {
 	seen := make(map[string]struct{}, len(args))
 	for i := 0; i < len(args); i++ {
@@ -620,11 +645,31 @@ func validateFlags(args []string, allowed map[string]func(string) bool) bool {
 }
 
 func parseBoundedInt(raw string, min, max int) bool {
-	v, err := strconv.Atoi(raw)
-	if err != nil {
+	n, err := strconv.Atoi(raw)
+	return err == nil && n >= min && n <= max
+}
+
+func validateSafeHost(v string) bool {
+	if v == "" || len(v) > 255 || strings.ContainsAny(v, " \t\r\n\"'`;$|&<>") {
 		return false
 	}
-	return v >= min && v <= max
+	return true
+}
+
+func validateSafeNodeArg(v string) bool {
+	if v == "" || len(v) > 128 {
+		return false
+	}
+	for _, r := range v {
+		if !(r == '-' || r == '_' || r == '.' || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')) {
+			return false
+		}
+	}
+	return true
+}
+
+func validateSafeDisplayName(v string) bool {
+	return v != "" && len(v) <= 80 && !strings.ContainsAny(v, "\r\n")
 }
 
 func equalStringSlices(a, b []string) bool {

@@ -129,12 +129,6 @@ export const ToolsSection: React.FC<SectionProps> = ({ config, schema, setField,
         <SwitchField label={es.asyncDirectSend || 'Async Completion: Direct Send'} tooltip={tip('tools.media.asyncCompletion.directSend')} value={g(['media', 'asyncCompletion', 'directSend']) === true} onChange={v => s(['media', 'asyncCompletion', 'directSend'], v)} />
       </ConfigSection>
 
-      <ConfigSection title={es.pdfConfig || 'PDF'} icon="picture_as_pdf" iconColor="text-red-400" defaultOpen={false}>
-        <TextField label={es.pdfModel || 'PDF Model'} tooltip={tip('tools.pdf.model')} value={g(['pdf', 'model']) || ''} onChange={v => s(['pdf', 'model'], v)} placeholder="gpt-4o-mini" />
-        <NumberField label={es.pdfMaxBytes || 'PDF Max Bytes'} tooltip={tip('tools.pdf.maxBytes')} value={g(['pdf', 'maxBytes'])} onChange={v => s(['pdf', 'maxBytes'], v)} placeholder="10485760" />
-        <NumberField label={es.pdfMaxPages || 'PDF Max Pages'} tooltip={tip('tools.pdf.maxPages')} value={g(['pdf', 'maxPages'])} onChange={v => s(['pdf', 'maxPages'], v)} placeholder="50" />
-      </ConfigSection>
-
       <ConfigSection title={es.perplexityWebSearch || 'Perplexity Web Search'} icon="travel_explore" iconColor="text-cyan-500" defaultOpen={false}>
         <SwitchField label={es.enabled} tooltip={tip('tools.webSearch.enabled')} value={g(['webSearch', 'enabled']) === true} onChange={v => s(['webSearch', 'enabled'], v)} />
         <TextField label={es.perplexityModel || 'Model'} tooltip={tip('tools.webSearch.model')} value={g(['webSearch', 'model']) || ''} onChange={v => s(['webSearch', 'model'], v)} placeholder="sonar" />

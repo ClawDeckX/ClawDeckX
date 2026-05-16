@@ -13,9 +13,6 @@ export const MemorySection: React.FC<SectionProps> = ({ config, schema, setField
   const def = (key: string) => schemaDefault(key, schema);
   const g = (p: string[]) => getField(['memory', ...p]);
   const s = (p: string[], v: any) => setField(['memory', ...p], v);
-  // Search config lives under agents.defaults.memorySearch.* (top-level memory schema rejects unknown keys).
-  const gSearch = (p: string[]) => getField(['agents', 'defaults', 'memorySearch', ...p]);
-  const sSearch = (p: string[], v: any) => setField(['agents', 'defaults', 'memorySearch', ...p], v);
   // Dreaming config lives under plugins.entries['memory-core'].config.dreaming.*
   const dreamBase = ['plugins', 'entries', 'memory-core', 'config', 'dreaming'];
   const gDream = (p: string[]) => getField([...dreamBase, ...p]);
@@ -29,14 +26,11 @@ export const MemorySection: React.FC<SectionProps> = ({ config, schema, setField
       <ConfigSection title={es.memoryConfig} icon="neurology" iconColor="text-sky-500">
         <SelectField label={es.memoryProvider} tooltip={tip('memory.backend')} value={g(['backend']) || 'builtin'} onChange={v => s(['backend'], v)} options={BACKEND_OPTIONS} />
         <SelectField label={es.citations} tooltip={tip('memory.citations')} value={g(['citations']) || 'auto'} onChange={v => s(['citations'], v)} options={CITATIONS_OPTIONS} />
-        <TextField label={es.memSearchProvider || 'Search Provider'} tooltip={tip('agents.defaults.memorySearch.provider')} value={gSearch(['provider']) || ''} onChange={v => sSearch(['provider'], v)} placeholder="openai/text-embedding-3-small" />
-        <TextField label={es.memSearchFallback || 'Search Fallback'} tooltip={tip('agents.defaults.memorySearch.fallback')} value={gSearch(['fallback']) || ''} onChange={v => sSearch(['fallback'], v)} placeholder="none" />
       </ConfigSection>
 
       <ConfigSection title={es.dreaming || 'Dreaming'} icon="bedtime" iconColor="text-indigo-500" defaultOpen={false}>
         <SwitchField label={es.dreamingEnabled || 'Enabled'} tooltip={tip('plugins.entries.memory-core.config.dreaming.enabled')} value={gDream(['enabled']) === true} onChange={v => sDream(['enabled'], v)} />
         <TextField label={es.dreamingFrequency || 'Frequency'} tooltip={tip('plugins.entries.memory-core.config.dreaming.frequency')} value={gDream(['frequency']) || ''} onChange={v => sDream(['frequency'], v)} placeholder="0 3 * * *" />
-        <NumberField label={es.dreamingRecencyHalfLife || 'Recency Half-Life (days)'} tooltip={tip('plugins.entries.memory-core.config.dreaming.phases.deep.recencyHalfLifeDays')} value={gDream(['phases', 'deep', 'recencyHalfLifeDays'])} onChange={v => sDream(['phases', 'deep', 'recencyHalfLifeDays'], v)} min={0} placeholder={def('plugins.entries.memory-core.config.dreaming.phases.deep.recencyHalfLifeDays')} />
         <NumberField label={es.dreamingMaxAge || 'Max Age (days)'} tooltip={tip('plugins.entries.memory-core.config.dreaming.phases.deep.maxAgeDays')} value={gDream(['phases', 'deep', 'maxAgeDays'])} onChange={v => sDream(['phases', 'deep', 'maxAgeDays'], v)} min={1} placeholder={def('plugins.entries.memory-core.config.dreaming.phases.deep.maxAgeDays')} />
       </ConfigSection>
 

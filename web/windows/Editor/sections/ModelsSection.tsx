@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { SectionProps } from '../sectionTypes';
-import { ConfigSection, ConfigCard, TextField, PasswordField, SelectField, ArrayField, KeyValueField, EmptyState } from '../fields';
+import { ConfigSection, ConfigCard, TextField, PasswordField, SelectField, SwitchField, NumberField, ArrayField, KeyValueField, EmptyState } from '../fields';
+
 import NumberStepper from '../../../components/NumberStepper';
 import { post } from '../../../services/request';
 import { getTranslation } from '../../../locales';
@@ -308,6 +309,34 @@ const AccordionStep: React.FC<AccordionStepProps> = ({ stepNum, icon, title, sum
   </div>
 );
 
+interface CollapsibleModelGroupProps {
+  icon: string;
+  title: string;
+  summary?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+const CollapsibleModelGroup: React.FC<CollapsibleModelGroupProps> = ({ icon, title, summary, open, onToggle, children }) => (
+  <div className={`rounded-xl border transition-colors ${open ? 'border-primary/30 theme-panel overflow-visible' : 'border-slate-200 dark:border-white/[0.06] theme-panel overflow-hidden'}`}>
+    <button
+      type="button"
+      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-start transition-colors ${open ? '' : 'hover:bg-slate-100 dark:hover:bg-white/[0.03]'}`}
+      onClick={onToggle}
+      aria-expanded={open}
+    >
+      <span className={`material-symbols-outlined text-[16px] ${open ? 'text-primary' : 'theme-text-muted'}`}>{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className={`block text-xs font-bold ${open ? 'text-[var(--color-text)] dark:text-white' : 'theme-text-secondary'}`}>{title}</span>
+        {!open && summary && <span className="block text-[10px] theme-text-muted truncate">{summary}</span>}
+      </span>
+      <span className={`material-symbols-outlined text-[16px] theme-text-muted transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
+    </button>
+    {open && <div className="space-y-2 px-3 pb-3 pt-2 border-t border-slate-100 dark:border-white/[0.04]">{children}</div>}
+  </div>
+);
+
 // ============================================================================
 // 模型路径搜索组件（provider/model-id 自动补全）
 // ============================================================================
@@ -403,6 +432,24 @@ const ModelPathSearch: React.FC<ModelPathSearchProps> = ({ value, onChange, opti
   );
 };
 
+function joinModelPath(provider: unknown, model: unknown): string {
+  const p = typeof provider === 'string' ? provider.trim() : '';
+  const m = typeof model === 'string' ? model.trim() : '';
+  if (!p) return m;
+  if (!m || p.includes('/')) return p;
+  return `${p}/${m}`;
+}
+
+function splitModelPath(path: string): { provider: string; model: string } {
+  const value = path.trim();
+  const slash = value.indexOf('/');
+  if (slash < 0) return { provider: value, model: '' };
+  return {
+    provider: value.slice(0, slash).trim(),
+    model: value.slice(slash + 1).trim(),
+  };
+}
+
 // ============================================================================
 // ModelsSection
 // ============================================================================
@@ -486,6 +533,7 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, schema, setField
   const modelListRef = useRef<HTMLDivElement>(null);
   const [providerTestResults, setProviderTestResults] = useState<Record<string, ProviderTestResult>>({});
   const [testAllRunning, setTestAllRunning] = useState(false);
+  const [expandedModelGroups, setExpandedModelGroups] = useState<Record<string, boolean>>({});
   const [addModelDiscovering, setAddModelDiscovering] = useState(false);
   const [addModelDiscovered, setAddModelDiscovered] = useState<{ id: string; name?: string }[]>([]);
   const [addModelSearchOpen, setAddModelSearchOpen] = useState(false);
@@ -1506,6 +1554,124 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, schema, setField
                   placeholder={es.phProviderModelId}
                 />
               </div>
+
+              <CollapsibleModelGroup
+                icon="auto_awesome"
+                title={es.mediaGenerationModels || 'Media Generation Models'}
+                summary={es.mediaGenerationModelsDesc}
+                open={expandedModelGroups.mediaGeneration === true}
+                onToggle={() => setExpandedModelGroups(prev => ({ ...prev, mediaGeneration: !prev.mediaGeneration }))}
+              >
+                {[
+                  { key: 'imageGenerationModel', label: es.imageGenerationModel || 'Image Generation Model', desc: es.imageGenerationModelDesc },
+                  { key: 'videoGenerationModel', label: es.videoGenerationModel || 'Video Generation Model', desc: es.videoGenerationModelDesc },
+                  { key: 'musicGenerationModel', label: es.musicGenerationModel || 'Music Generation Model', desc: es.musicGenerationModelDesc },
+                ].map(item => (
+                  <div key={item.key} className="space-y-1">
+                    <div className="flex items-start gap-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 whitespace-nowrap shrink-0">{item.label}</label>
+                      {item.desc && <span className="text-[11px] text-slate-400 leading-4 min-w-0">— {item.desc}</span>}
+                    </div>
+                    <ModelPathSearch
+                      value={getField(['agents', 'defaults', item.key, 'primary']) || ''}
+                      onChange={v => setField(['agents', 'defaults', item.key, 'primary'], v)}
+                      options={allModelPaths}
+                      placeholder={es.phProviderModelId}
+                    />
+                  </div>
+                ))}
+                <SwitchField
+                  label={es.mediaGenerationAutoProviderFallback || 'Auto Provider Fallback'}
+                  tooltip={tip('agents.defaults.mediaGenerationAutoProviderFallback')}
+                  value={getField(['agents', 'defaults', 'mediaGenerationAutoProviderFallback']) !== false}
+                  onChange={v => setField(['agents', 'defaults', 'mediaGenerationAutoProviderFallback'], v)}
+                />
+              </CollapsibleModelGroup>
+
+              <CollapsibleModelGroup
+                icon="picture_as_pdf"
+                title={es.pdfModel || 'PDF Model'}
+                summary={es.pdfModelDesc}
+                open={expandedModelGroups.pdf === true}
+                onToggle={() => setExpandedModelGroups(prev => ({ ...prev, pdf: !prev.pdf }))}
+              >
+                <ModelPathSearch
+                  value={getField(['agents', 'defaults', 'pdfModel', 'primary']) || ''}
+                  onChange={v => setField(['agents', 'defaults', 'pdfModel', 'primary'], v)}
+                  options={allModelPaths}
+                  placeholder={es.phProviderModelId}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <NumberField label={es.pdfMaxBytesMb || 'PDF Max Size (MB)'} tooltip={tip('agents.defaults.pdfMaxBytesMb')} value={getField(['agents', 'defaults', 'pdfMaxBytesMb'])} onChange={v => setField(['agents', 'defaults', 'pdfMaxBytesMb'], v)} min={1} placeholder={def('agents.defaults.pdfMaxBytesMb')} />
+                  <NumberField label={es.pdfMaxPages || 'PDF Max Pages'} tooltip={tip('agents.defaults.pdfMaxPages')} value={getField(['agents', 'defaults', 'pdfMaxPages'])} onChange={v => setField(['agents', 'defaults', 'pdfMaxPages'], v)} min={1} placeholder={def('agents.defaults.pdfMaxPages')} />
+                </div>
+              </CollapsibleModelGroup>
+
+              <CollapsibleModelGroup
+                icon="hub"
+                title={es.embeddingModels || 'Embedding / Memory Search'}
+                summary={es.embeddingModelsDesc}
+                open={expandedModelGroups.embedding === true}
+                onToggle={() => setExpandedModelGroups(prev => ({ ...prev, embedding: !prev.embedding }))}
+              >
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <div className="flex items-start gap-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 whitespace-nowrap shrink-0">{es.memSearchModel || 'Embedding Model'}</label>
+                      <span className="text-[11px] text-slate-400 leading-4 min-w-0">— {es.memSearchProvider || 'Search Provider'} / {es.memSearchModel || 'Embedding Model'}</span>
+                    </div>
+                    <ModelPathSearch
+                      value={joinModelPath(
+                        getField(['agents', 'defaults', 'memorySearch', 'provider']),
+                        getField(['agents', 'defaults', 'memorySearch', 'model']),
+                      )}
+                      onChange={v => {
+                        const parsed = splitModelPath(v);
+                        setField(['agents', 'defaults', 'memorySearch', 'provider'], parsed.provider);
+                        setField(['agents', 'defaults', 'memorySearch', 'model'], parsed.model);
+                      }}
+                      options={allModelPaths}
+                      placeholder="openai/text-embedding-3-small"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <TextField label={es.memSearchFallback || 'Search Fallback'} tooltip={tip('agents.defaults.memorySearch.fallback')} value={getField(['agents', 'defaults', 'memorySearch', 'fallback']) || ''} onChange={v => setField(['agents', 'defaults', 'memorySearch', 'fallback'], v)} placeholder="none" />
+                  <NumberField label={es.outputDimensionality || 'Output Dimensionality'} tooltip={tip('agents.defaults.memorySearch.outputDimensionality')} value={getField(['agents', 'defaults', 'memorySearch', 'outputDimensionality'])} onChange={v => setField(['agents', 'defaults', 'memorySearch', 'outputDimensionality'], v)} min={1} placeholder="1536" />
+                  <TextField label={es.remoteBaseUrl || 'Remote Base URL'} tooltip={tip('agents.defaults.memorySearch.remote.baseUrl')} value={getField(['agents', 'defaults', 'memorySearch', 'remote', 'baseUrl']) || ''} onChange={v => setField(['agents', 'defaults', 'memorySearch', 'remote', 'baseUrl'], v)} placeholder={es.phOpenAIBaseUrl} />
+                  <PasswordField label={es.remoteApiKey || 'Remote API Key'} tooltip={tip('agents.defaults.memorySearch.remote.apiKey')} value={getField(['agents', 'defaults', 'memorySearch', 'remote', 'apiKey']) || ''} onChange={v => setField(['agents', 'defaults', 'memorySearch', 'remote', 'apiKey'], v)} placeholder={es.phApiKeySk} />
+                  <TextField label={es.localModelPath || 'Local Model Path'} tooltip={tip('agents.defaults.memorySearch.local.modelPath')} value={getField(['agents', 'defaults', 'memorySearch', 'local', 'modelPath']) || ''} onChange={v => setField(['agents', 'defaults', 'memorySearch', 'local', 'modelPath'], v)} placeholder="C:\\models\\embedding.gguf" />
+                  <TextField label={es.localModelCacheDir || 'Local Model Cache Dir'} tooltip={tip('agents.defaults.memorySearch.local.modelCacheDir')} value={getField(['agents', 'defaults', 'memorySearch', 'local', 'modelCacheDir']) || ''} onChange={v => setField(['agents', 'defaults', 'memorySearch', 'local', 'modelCacheDir'], v)} placeholder="~/.openclaw/models" />
+                </div>
+              </CollapsibleModelGroup>
+
+              <CollapsibleModelGroup
+                icon="compress"
+                title={es.compactionModels || 'Compaction Models'}
+                summary={es.compactionModelsDesc}
+                open={expandedModelGroups.compaction === true}
+                onToggle={() => setExpandedModelGroups(prev => ({ ...prev, compaction: !prev.compaction }))}
+              >
+                <div className="space-y-2">
+                  {[
+                    { path: ['agents', 'defaults', 'compaction', 'model'], label: es.compactionModel || 'Compaction Model', desc: tip('agents.defaults.compaction.model') },
+                    { path: ['agents', 'defaults', 'compaction', 'memoryFlush', 'model'], label: es.compactionMemoryFlushModel || 'Pre-compaction Memory Flush Model', desc: es.compactionMemoryFlushModelDesc },
+                  ].map(item => (
+                    <div key={item.path.join('.')} className="space-y-1">
+                      <div className="flex items-start gap-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 whitespace-nowrap shrink-0">{item.label}</label>
+                        {item.desc && <span className="text-[11px] text-slate-400 leading-4 min-w-0">— {item.desc}</span>}
+                      </div>
+                      <ModelPathSearch
+                        value={getField(item.path) || ''}
+                        onChange={v => setField(item.path, v)}
+                        options={allModelPaths}
+                        placeholder={es.phProviderModelId}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleModelGroup>
             </div>
           );
         })()}

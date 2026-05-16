@@ -62,7 +62,7 @@ func dialRemoteGateway(ctx context.Context, req remoteOpenClawRequest) (*remoteG
 		return nil, err
 	}
 	rpc := &remoteGatewayRPC{conn: conn}
-	_, err = rpc.call("connect", openclaw.ConnectParams{MinProtocol: 1, MaxProtocol: 1, Role: "operator", Scopes: []string{"config:read", "files:read"}, Caps: []string{"config", "files"}, Auth: &openclaw.ConnectAuth{Token: req.Token}, Client: openclaw.ConnectClient{ID: "clawdeckx-remote-migrate", DisplayName: "ClawDeckX Remote Migration", Version: "1", Platform: "clawdeckx", Mode: "migration"}})
+	_, err = rpc.call("connect", openclaw.ConnectParams{MinProtocol: openclaw.GatewayMinProtocol, MaxProtocol: openclaw.GatewayMaxProtocol, Role: "operator", Scopes: []string{"config:read", "files:read"}, Caps: []string{"config", "files"}, Auth: &openclaw.ConnectAuth{Token: req.Token}, Client: openclaw.ConnectClient{ID: "clawdeckx-remote-migrate", DisplayName: "ClawDeckX Remote Migration", Version: "1", Platform: "clawdeckx", Mode: "migration"}})
 	if err != nil {
 		conn.Close()
 		return nil, err

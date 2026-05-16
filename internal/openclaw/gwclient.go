@@ -94,6 +94,11 @@ type ConnectParams struct {
 	Permissions map[string]interface{} `json:"permissions,omitempty"`
 }
 
+const (
+	GatewayMinProtocol = 3
+	GatewayMaxProtocol = 4
+)
+
 var defaultOperatorScopes = []string{
 	"operator.admin",
 	"operator.read",
@@ -1307,8 +1312,8 @@ func (c *GWClient) readLoop(conn *websocket.Conn) error {
 
 func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 	params := ConnectParams{
-		MinProtocol: 3,
-		MaxProtocol: 3,
+		MinProtocol: GatewayMinProtocol,
+		MaxProtocol: GatewayMaxProtocol,
 		Client: ConnectClient{
 			ID:          "gateway-client",
 			DisplayName: "ClawDeckX",
