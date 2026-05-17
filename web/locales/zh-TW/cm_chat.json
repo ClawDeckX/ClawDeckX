@@ -193,6 +193,8 @@
     "bindSaved": "代理綁定已儲存",
     "bindRemoved": "代理綁定已移除",
     "bindFailed": "儲存代理綁定失敗",
+    "realPeerId": "真實群組 ID",
+    "realPeerIdUnavailable": "未取得真實群組 ID，目前顯示歸一化會話 ID",
     "saveSession": "儲存",
     "remaining": "剩餘",
     "cacheRead": "快取讀取",

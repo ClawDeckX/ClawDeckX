@@ -48,6 +48,8 @@ interface GwSession {
   isStreaming?: boolean;
   fastMode?: boolean;
   lastTo?: string;
+  deliveryContext?: Record<string, unknown>;
+  origin?: Record<string, unknown>;
   parentKey?: string;
   spawnedBy?: string;
   status?: 'running' | 'done' | 'failed' | 'killed' | 'timeout';
@@ -92,14 +94,51 @@ interface LiveToolCall {
  *  lastTo format is typically "channel:<peerId>" (e.g. "channel:wrG05CBgAAdaBosTJfzemv-S9FYE66yQ").
  *  Returns the peerId portion preserving original casing, or null if not extractable.
  */
-function extractPeerIdFromLastTo(lastTo: string | undefined): string | null {
+function extractPeerIdFromLastTo(lastTo: string | undefined, peer?: { channel: string; peerKind: string }): string | null {
   if (!lastTo) return null;
-  // Format: "channel:<peerId>" or "room:<peerId>" — extract after first ":"
-  const idx = lastTo.indexOf(':');
-  if (idx >= 0 && idx < lastTo.length - 1) {
-    return lastTo.slice(idx + 1).trim() || null;
+  const trimmed = lastTo.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split(':').filter(Boolean);
+  if (parts.length >= 3) {
+    const head = parts[0]?.toLowerCase();
+    const second = parts[1]?.toLowerCase();
+    if (peer && head === peer.channel && second === peer.peerKind) {
+      return parts.slice(2).join(':').trim() || null;
+    }
   }
-  return lastTo.trim() || null;
+  if (parts.length >= 2) {
+    const head = parts[0]?.toLowerCase();
+    const second = parts[1]?.toLowerCase();
+    if (peer && head === peer.channel) {
+      return parts.slice(1).join(':').trim() || null;
+    }
+    if (second === 'group' || second === 'channel' || second === 'direct') {
+      return parts.slice(2).join(':').trim() || null;
+    }
+    if (head === 'channel' || head === 'room' || head === 'group' || head === 'chat') {
+      return parts.slice(1).join(':').trim() || null;
+    }
+  }
+  return trimmed;
+}
+
+function extractPeerIdFromSessionRoute(sessionData: GwSession | undefined, peer: { channel: string; peerKind: string }): string | null {
+  const deliveryContext = sessionData?.deliveryContext as Record<string, unknown> | undefined;
+  const origin = sessionData?.origin as Record<string, unknown> | undefined;
+  const target = deliveryContext?.target as Record<string, unknown> | undefined;
+  const candidates = [
+    sessionData?.lastTo,
+    typeof deliveryContext?.to === 'string' ? deliveryContext.to : undefined,
+    typeof target?.to === 'string' ? target.to : undefined,
+    typeof target?.rawTo === 'string' ? target.rawTo : undefined,
+    typeof origin?.to === 'string' ? origin.to : undefined,
+    typeof origin?.rawTo === 'string' ? origin.rawTo : undefined,
+  ];
+  for (const candidate of candidates) {
+    const extracted = extractPeerIdFromLastTo(candidate, peer);
+    if (extracted) return extracted;
+  }
+  return null;
 }
 
 /** Parse peer info from an agent session key. Format: agent:<agentId>:<rest> where rest can be:
@@ -109,18 +148,18 @@ function extractPeerIdFromLastTo(lastTo: string | undefined): string | null {
  *  - main (main session, no peer)
  */
 function parseSessionKeyPeer(sessionKey: string): { channel: string; peerKind: string; peerId: string; accountId: string } | null {
-  const parts = sessionKey.trim().toLowerCase().split(':').filter(Boolean);
-  // agent:<agentId>:<channel>:<peerKind>:<peerId...>
+  const rawParts = sessionKey.trim().split(':').filter(Boolean);
+  const parts = rawParts.map(part => part.toLowerCase());
   if (parts.length < 5 || parts[0] !== 'agent') return null;
-  const channel = parts[2];
-  const peerKind = parts[3];
+  const peerKindIndex = parts.findIndex((part, index) => index >= 3 && ['group', 'channel', 'direct'].includes(part));
+  if (peerKindIndex < 3) return null;
+  const channel = parts[peerKindIndex - 1];
+  const peerKind = parts[peerKindIndex];
   if (!channel || !peerKind) return null;
-  if (!['group', 'channel', 'direct'].includes(peerKind)) return null;
-  // peerId may contain colons (e.g. thread suffixes), take everything after peerKind
-  const peerId = parts.slice(4).join(':');
+  const peerId = rawParts.slice(peerKindIndex + 1).join(':');
   if (!peerId) return null;
   // Strip thread suffix if present
-  const threadIdx = peerId.indexOf(':thread:');
+  const threadIdx = peerId.toLowerCase().indexOf(':thread:');
   const cleanPeerId = threadIdx >= 0 ? peerId.slice(0, threadIdx) : peerId;
   return { channel, peerKind, peerId: cleanPeerId, accountId: 'default' };
 }
@@ -1310,7 +1349,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         maxContextTokens: s.maxContextTokens || s.contextWindow || s.maxTokens || 0,
         compacted: !!s.compacted,
         fastMode: s.fastMode ?? undefined,
-        lastTo: s.lastTo || s.deliveryContext?.to || '',
+        lastTo: s.lastTo || s.deliveryContext?.to || s.deliveryContext?.target?.to || s.origin?.to || '',
+        deliveryContext: s.deliveryContext || undefined,
+        origin: s.origin || undefined,
         parentKey: s.parentKey || s.parentSessionKey || '',
         spawnedBy: s.spawnedBy || s.ownerKey || '',
         status: s.status || undefined,
@@ -2505,7 +2546,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     if (peer && (peer.peerKind === 'group' || peer.peerKind === 'channel')) {
       // Extract original-case peer ID from session's lastTo (preserves casing from channel plugin)
       const sessionData = sessionsRef.current.find(s => s.key === key);
-      const originalPeerId = extractPeerIdFromLastTo(sessionData?.lastTo);
+      const originalPeerId = extractPeerIdFromSessionRoute(sessionData, peer);
       setBindPeerIdOriginal(originalPeerId || '');
       Promise.all([
         gwApi.agents().catch(() => null),
@@ -2519,7 +2560,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         const bindings: any[] = Array.isArray(parsed.bindings) ? parsed.bindings : [];
         const existing = bindings.find((b: any) =>
           b.match?.channel?.toLowerCase() === peer.channel &&
-          b.match?.peer?.id?.toLowerCase() === peer.peerId &&
+          b.match?.peer?.id?.toLowerCase() === peer.peerId.toLowerCase() &&
           ['group', 'channel'].includes(b.match?.peer?.kind?.toLowerCase() || '')
         );
         const boundId = existing?.agentId || '';
@@ -2548,7 +2589,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
           // Remove existing peer binding for this channel+peer (case-insensitive match)
           let updated = allBindings.filter((b: any) => !(
             b.match?.channel?.toLowerCase() === peer.channel &&
-            b.match?.peer?.id?.toLowerCase() === peer.peerId &&
+            b.match?.peer?.id?.toLowerCase() === peer.peerId.toLowerCase() &&
             ['group', 'channel'].includes(b.match?.peer?.kind?.toLowerCase() || '')
           ));
           // Add new binding if agent selected
@@ -4378,6 +4419,38 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               <p className="text-[10px] text-slate-400 dark:text-white/30 mt-1.5">
                 Key: <code className="font-mono bg-slate-100 dark:bg-white/5 px-1 rounded">{renameKey}</code>
               </p>
+              {(() => {
+                const peer = parseSessionKeyPeer(renameKey);
+                if (!peer || (peer.peerKind !== 'group' && peer.peerKind !== 'channel')) return null;
+                const realPeerId = bindPeerIdOriginal || '';
+                const normalizedPeerId = peer.peerId;
+                const hasRealPeerId = Boolean(realPeerId);
+                const displayPeerId = realPeerId || normalizedPeerId;
+                return (
+                  <div className={`mt-2 rounded-lg border px-2.5 py-2 ${
+                    hasRealPeerId
+                      ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
+                      : 'border-amber-500/20 bg-amber-500/[0.04]'
+                  }`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className={`material-symbols-outlined text-[13px] ${hasRealPeerId ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {hasRealPeerId ? 'verified' : 'warning'}
+                      </span>
+                      <span className={`text-[10px] font-bold uppercase ${hasRealPeerId ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                        {c.realPeerId || 'Real Group ID'}
+                      </span>
+                    </div>
+                    <code className="block font-mono text-[10px] text-slate-700 dark:text-white/70 break-all">
+                      {displayPeerId}
+                    </code>
+                    {!hasRealPeerId && (
+                      <p className="text-[9px] text-amber-600/80 dark:text-amber-400/80 mt-1">
+                        {c.realPeerIdUnavailable || 'Real ID not found; showing normalized session ID'}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Bind Agent — only for group/channel sessions */}

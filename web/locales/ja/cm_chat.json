@@ -193,6 +193,8 @@
     "bindSaved": "エージェントバインドを保存しました",
     "bindRemoved": "エージェントバインドを削除しました",
     "bindFailed": "エージェントバインドの保存に失敗しました",
+    "realPeerId": "実際のグループ ID",
+    "realPeerIdUnavailable": "実際のグループ ID が見つかりません。正規化されたセッション ID を表示しています",
     "saveSession": "保存",
     "remaining": "残り",
     "cacheRead": "キャッシュ読取",

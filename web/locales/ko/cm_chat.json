@@ -193,6 +193,8 @@
     "bindSaved": "에이전트 바인딩이 저장되었습니다",
     "bindRemoved": "에이전트 바인딩이 제거되었습니다",
     "bindFailed": "에이전트 바인딩 저장 실패",
+    "realPeerId": "실제 그룹 ID",
+    "realPeerIdUnavailable": "실제 그룹 ID를 찾지 못했습니다. 정규화된 세션 ID를 표시합니다",
     "saveSession": "저장",
     "remaining": "남음",
     "cacheRead": "캐시 읽기",
