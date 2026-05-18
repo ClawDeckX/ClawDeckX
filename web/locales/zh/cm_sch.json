@@ -198,7 +198,12 @@
     "confirmEnableMsg": "启用任务“{name}”？",
     "confirmDisableTitle": "禁用任务",
     "confirmDisableMsg": "禁用任务“{name}”？",
-    "tokens": "Token"
+    "tokens": "Token",
+    "bgOverview": "任务概览",
+    "bgDuration": "耗时",
+    "bgTimeline": "时间线",
+    "bgElapsed": "已耗时",
+    "bgTotalTasks": "总计"
   },
   "cron": {
     "title": "定时任务",

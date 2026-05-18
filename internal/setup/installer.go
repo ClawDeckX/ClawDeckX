@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -368,16 +369,21 @@ func (i *Installer) installViaNpm(ctx context.Context) error {
 // before extracting the new version). When another process still holds a file
 // handle, or AV/Defender momentarily scans a freshly-written file, npm returns
 // EBUSY / EPERM / UNKNOWN errno -4094 / "operation not permitted" / "rename".
-func isWindowsLockError(err error) bool {
-	if err == nil {
+func isNpmRetireRenameError(err error, extraOutput string) bool {
+	if err == nil && strings.TrimSpace(extraOutput) == "" {
 		return false
 	}
-	msg := strings.ToLower(err.Error())
+	msg := strings.ToLower(extraOutput)
+	if err != nil {
+		msg += "\n" + strings.ToLower(err.Error())
+	}
 	for _, marker := range []string{
 		"ebusy",
 		"eperm",
+		"enotempty",
 		"errno -4094",
 		"unknown error, rename",
+		"directory not empty, rename",
 		"operation not permitted, rename",
 		"resource busy or locked",
 		"the process cannot access the file",
@@ -388,6 +394,52 @@ func isWindowsLockError(err error) bool {
 		}
 	}
 	return false
+}
+
+func recentSetupInstallLog() string {
+	path := setupInstallLogPath()
+	if path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	text := string(data)
+	if len(text) > 64*1024 {
+		text = text[len(text)-64*1024:]
+	}
+	return text
+}
+
+func forceRemoveNpmPackageDirsFromOutput(output, pkg string) []error {
+	if strings.TrimSpace(output) == "" {
+		return nil
+	}
+	re := regexp.MustCompile(`['"]([^'"]*[\\/]node_modules[\\/]` + regexp.QuoteMeta(pkg) + `)['"]`)
+	seen := map[string]struct{}{}
+	var errs []error
+	for _, match := range re.FindAllStringSubmatch(output, -1) {
+		if len(match) < 2 {
+			continue
+		}
+		dir := filepath.Clean(match[1])
+		if _, ok := seen[dir]; ok {
+			continue
+		}
+		seen[dir] = struct{}{}
+		if err := os.RemoveAll(dir); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", dir, err))
+		}
+		parent := filepath.Dir(dir)
+		entries, _ := os.ReadDir(parent)
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), "."+pkg+"-") {
+				_ = os.RemoveAll(filepath.Join(parent, entry.Name()))
+			}
+		}
+	}
+	return errs
 }
 
 // WaitForOpenClawUnlocked polls until the npm-global node_modules/openclaw
@@ -451,11 +503,12 @@ func (i *Installer) runNpmInstallWithLockRetry(ctx context.Context, sc *StreamCo
 		if err == nil {
 			return nil
 		}
-		if !isWindowsLockError(err) {
+		recentOutput := recentSetupInstallLog()
+		if !isNpmRetireRenameError(err, recentOutput) {
 			return err
 		}
 		if attempt < maxAttempts {
-			i.emitter.EmitLog(fmt.Sprintf("⟳ npm reported a Windows file-lock error (attempt %d/%d). Killing leftover processes and retrying...", attempt, maxAttempts))
+			i.emitter.EmitLog(fmt.Sprintf("⟳ npm reported a package retire/rename error (attempt %d/%d). Killing leftover processes and retrying...", attempt, maxAttempts))
 			openclaw.ForceKillTree()
 			if waitErr := WaitForOpenClawUnlocked(15 * time.Second); waitErr != nil {
 				i.emitter.EmitLog("⚠ Files still locked after kill: " + waitErr.Error())
@@ -467,17 +520,21 @@ func (i *Installer) runNpmInstallWithLockRetry(ctx context.Context, sc *StreamCo
 	// Final fallback: force-remove leftover npm package + .pkg-XXXX retire dirs,
 	// then retry npm install once. This handles the case where a previous npm
 	// run left a half-renamed tree that subsequent installs cannot recover from.
-	if isWindowsLockError(err) {
+	recentOutput := recentSetupInstallLog()
+	if isNpmRetireRenameError(err, recentOutput) {
 		i.emitter.EmitLog("⟳ Cleaning leftover npm files (ForceRemoveOpenClaw) and retrying once...")
 		openclaw.ForceKillTree()
 		_ = WaitForOpenClawUnlocked(5 * time.Second)
 		if rerr := openclaw.ForceRemoveOpenClaw(pkg); rerr != nil {
 			i.emitter.EmitLog("⚠ ForceRemoveOpenClaw failed: " + rerr.Error())
 		}
+		for _, rerr := range forceRemoveNpmPackageDirsFromOutput(recentOutput, pkg) {
+			i.emitter.EmitLog("⚠ Direct npm path cleanup failed: " + rerr.Error())
+		}
 		if err = sc.RunShell(ctx, cmd); err == nil {
 			return nil
 		}
-		if isWindowsLockError(err) {
+		if isNpmRetireRenameError(err, recentSetupInstallLog()) {
 			i.emitter.EmitLog("✗ npm install still failing with file-lock errors. " +
 				"Common causes: Windows Defender real-time scan, antivirus, OneDrive sync, or VS Code/File Explorer holding files in the npm global folder. " +
 				"Try: 1) close VS Code & File Explorer windows showing %APPDATA%\\npm; " +

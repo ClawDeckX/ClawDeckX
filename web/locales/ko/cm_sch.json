@@ -198,7 +198,12 @@
     "confirmEnableMsg": "작업 \"{name}\"을(를) 활성화할까요?",
     "confirmDisableTitle": "작업 비활성화",
     "confirmDisableMsg": "작업 \"{name}\"을(를) 비활성화할까요?",
-    "tokens": "토큰"
+    "tokens": "토큰",
+    "bgOverview": "작업 개요",
+    "bgDuration": "소요 시간",
+    "bgTimeline": "타임라인",
+    "bgElapsed": "경과",
+    "bgTotalTasks": "합계"
   },
   "cron": {
     "title": "예약 작업",

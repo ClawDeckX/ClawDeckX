@@ -84,6 +84,14 @@ function cronToHuman(expr: string, s?: any): string {
   return expr;
 }
 
+function fmtDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '-';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 3600000) return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
+  return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
+}
+
 function renderRunDebug(run: any, s: any) {
   const diagnostics = run.diagnostics?.entries || run.diagnostics || [];
   const entries = Array.isArray(diagnostics) ? diagnostics.slice(-4) : [];
@@ -1246,6 +1254,38 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
 
       {/* Background Tasks Tab */}
       {activeTab === 'tasks' && <div className="space-y-4 max-w-6xl">
+        {/* Stats Overview */}
+        {bgTasks.length > 0 && (() => {
+          const counts = { running: 0, queued: 0, succeeded: 0, errored: 0 };
+          for (const t of bgTasks) {
+            if (t.status === 'running') counts.running++;
+            else if (t.status === 'queued') counts.queued++;
+            else if (t.status === 'succeeded') counts.succeeded++;
+            else counts.errored++;
+          }
+          const stats = [
+            { label: s.bgTotalTasks || 'Total', count: bgTasks.length, icon: 'task_alt', color: 'text-primary', bg: 'bg-primary/10' },
+            { label: s.bgRunning || 'Running', count: counts.running, icon: 'play_circle', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+            { label: s.bgSucceeded || 'Succeeded', count: counts.succeeded, icon: 'check_circle', color: 'text-mac-green', bg: 'bg-mac-green/10' },
+            { label: s.bgFailed || 'Failed', count: counts.errored, icon: 'error', color: 'text-mac-red', bg: 'bg-mac-red/10' },
+          ];
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {stats.map(st => (
+                <div key={st.label} className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-3 flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-lg ${st.bg} flex items-center justify-center shrink-0`}>
+                    <span className={`material-symbols-outlined text-[18px] ${st.color}`}>{st.icon}</span>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-slate-700 dark:text-white/70 leading-none">{st.count}</p>
+                    <p className="text-[10px] theme-text-muted font-bold mt-0.5">{st.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Filters */}
         <div className="flex items-center gap-2 flex-wrap">
           <CustomSelect value={bgRuntimeFilter} onChange={v => setBgRuntimeFilter(v)}
@@ -1268,71 +1308,138 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
             <p className="text-[10px] text-center">{s.bgNoTasksHint || 'Background tasks will appear here when agents run scheduled or spawned work'}</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {bgTasks.map((task: any) => {
               const isExpanded = bgExpandedId === task.taskId;
               const isCancelling = bgCancelBusy.has(task.taskId);
-              const statusColors: Record<string, string> = {
-                running: 'bg-blue-500', queued: 'bg-slate-400', succeeded: 'bg-mac-green',
-                failed: 'bg-mac-red', cancelled: 'bg-slate-300 dark:bg-slate-600', lost: 'bg-mac-yellow', timed_out: 'bg-mac-red',
-              };
-              const statusTextColors: Record<string, string> = {
-                running: 'text-blue-600 dark:text-blue-400', queued: 'text-slate-500', succeeded: 'text-mac-green',
-                failed: 'text-mac-red', cancelled: 'text-slate-400', lost: 'text-mac-yellow', timed_out: 'text-mac-red',
-              };
+              const sIcon: Record<string, string> = { running: 'play_circle', queued: 'hourglass_top', succeeded: 'check_circle', failed: 'cancel', cancelled: 'block', lost: 'help', timed_out: 'timer_off' };
+              const sBg: Record<string, string> = { running: 'bg-blue-500/10', queued: 'bg-amber-500/10', succeeded: 'bg-mac-green/10', failed: 'bg-mac-red/10', cancelled: 'bg-slate-400/10', lost: 'bg-mac-yellow/10', timed_out: 'bg-mac-red/10' };
+              const sClr: Record<string, string> = { running: 'text-blue-500', queued: 'text-amber-500', succeeded: 'text-mac-green', failed: 'text-mac-red', cancelled: 'text-slate-400', lost: 'text-mac-yellow', timed_out: 'text-mac-red' };
+              const sPill: Record<string, string> = { running: 'bg-blue-500/10 text-blue-600 dark:text-blue-400', queued: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', succeeded: 'bg-mac-green/10 text-mac-green', failed: 'bg-mac-red/10 text-mac-red', cancelled: 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-white/40', lost: 'bg-mac-yellow/10 text-mac-yellow', timed_out: 'bg-mac-red/10 text-mac-red' };
+              const sLabel: Record<string, string> = { running: s.bgRunning || 'Running', queued: s.bgQueued || 'Queued', succeeded: s.bgSucceeded || 'Succeeded', failed: s.bgFailed || 'Failed', cancelled: s.bgCancelled || 'Cancelled', lost: s.bgLost || 'Lost', timed_out: s.bgTimedOut || 'Timed out' };
               const rtIcons: Record<string, string> = { cron: 'schedule', subagent: 'smart_toy', acp: 'extension', cli: 'terminal' };
-              const age = task.createdAt ? Math.round((Date.now() - task.createdAt) / 60000) : null;
+              const elapsed = task.startedAt && task.endedAt ? task.endedAt - task.startedAt : task.startedAt && task.status === 'running' ? Date.now() - task.startedAt : null;
+              const dlvOk = task.deliveryStatus === 'delivered';
               return (
-                <div key={task.taskId} className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] transition-all">
-                  <div className="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-white/[0.01] rounded-xl" onClick={() => expandBgTask(task.taskId)}>
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${statusColors[task.status] || 'bg-slate-300'} ${task.status === 'running' ? 'animate-pulse' : ''}`} />
-                    <span className="material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30">{rtIcons[task.runtime] || 'task'}</span>
+                <div key={task.taskId} className={`rounded-xl border bg-white dark:bg-white/[0.02] transition-all overflow-hidden ${task.status === 'running' ? 'border-blue-300/60 dark:border-blue-500/20' : 'border-slate-200/60 dark:border-white/[0.06]'}`}>
+                  {task.status === 'running' && <div className="h-0.5 bg-blue-200 dark:bg-blue-900/40 overflow-hidden"><div className="h-full w-1/3 bg-blue-500 rounded-full animate-pulse" /></div>}
+                  <div className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-white/[0.01]" onClick={() => expandBgTask(task.taskId)}>
+                    <div className={`mt-0.5 w-8 h-8 rounded-lg ${sBg[task.status] || 'bg-slate-100 dark:bg-white/5'} flex items-center justify-center shrink-0`}>
+                      <span className={`material-symbols-outlined text-[16px] ${sClr[task.status] || 'text-slate-400'}`}>{sIcon[task.status] || 'task'}</span>
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold uppercase ${statusTextColors[task.status] || 'text-slate-400'}`}>{task.status}</span>
-                        <span className="text-[10px] text-slate-400 dark:text-white/30">{task.runtime}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sPill[task.status] || 'bg-slate-100 text-slate-400'}`}>{sLabel[task.status] || task.status}</span>
+                        <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 font-mono">
+                          <span className="material-symbols-outlined text-[10px]">{rtIcons[task.runtime] || 'task'}</span>{task.runtime}
+                        </span>
+                        {task.agentId && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold truncate max-w-[120px]">{task.agentId}</span>}
                         {task.label && <span className="text-[10px] text-slate-500 dark:text-white/50 font-semibold truncate">{task.label}</span>}
                       </div>
-                      <p className="text-[11px] text-slate-500 dark:text-white/40 truncate mt-0.5">{task.progressSummary || task.terminalSummary || task.task}</p>
+                      <p className="text-[11px] text-slate-600 dark:text-white/50 mt-1.5 line-clamp-2">{task.progressSummary || task.terminalSummary || task.task || '-'}</p>
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        {elapsed != null && <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-white/30"><span className="material-symbols-outlined text-[11px]">timer</span>{fmtDurationMs(elapsed)}</span>}
+                        {task.deliveryStatus && <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold ${dlvOk ? 'text-mac-green' : 'text-mac-red'}`}><span className="material-symbols-outlined text-[11px]">{dlvOk ? 'mark_email_read' : 'mark_email_unread'}</span>{task.deliveryStatus}</span>}
+                        {task.childSessionKey && <button onClick={e => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'sessions' } })); }} className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline" title={task.childSessionKey}><span className="material-symbols-outlined text-[11px]">chat</span>{s.bgSession || 'Session'}</button>}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {task.status === 'running' && (
-                        <button onClick={e => { e.stopPropagation(); cancelBgTask(task.taskId); }} disabled={isCancelling}
-                          className="text-[10px] px-2 py-0.5 rounded bg-mac-red/10 text-mac-red font-bold disabled:opacity-30">{s.bgTaskCancel || 'Cancel'}</button>
-                      )}
-                      {task.childSessionKey && (
-                        <button onClick={e => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'sessions' } })); }}
-                          className="text-[10px] text-primary hover:underline" title={task.childSessionKey}>
-                          <span className="material-symbols-outlined text-[12px]">chat</span>
-                        </button>
-                      )}
-                      <span className="text-[10px] text-slate-400 dark:text-white/20">{age != null ? (age < 60 ? `${age}m` : `${Math.round(age / 60)}h`) : na}</span>
-                      <span className={`material-symbols-outlined text-[14px] text-slate-300 dark:text-white/20 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                    <div className="shrink-0 flex flex-col items-end gap-1.5 mt-0.5">
+                      <span className="text-[10px] text-slate-400 dark:text-white/25">{task.createdAt ? new Date(task.createdAt).toLocaleString() : na}</span>
+                      <div className="flex items-center gap-1.5">
+                        {task.status === 'running' && <button onClick={e => { e.stopPropagation(); cancelBgTask(task.taskId); }} disabled={isCancelling} className="text-[10px] px-2 py-0.5 rounded-lg bg-mac-red/10 text-mac-red font-bold disabled:opacity-30 hover:bg-mac-red/20 transition-colors">{s.bgTaskCancel || 'Cancel'}</button>}
+                        <span className={`material-symbols-outlined text-[14px] text-slate-300 dark:text-white/20 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                      </div>
                     </div>
                   </div>
                   {isExpanded && (
-                    <div className="px-3.5 pb-3 pt-1 border-t border-slate-100 dark:border-white/5">
+                    <div className="border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.01]">
                       {!bgExpandedDetail ? (
-                        <div className="flex items-center gap-2 py-2 text-[10px] text-slate-400"><span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>{s.loading || 'Loading...'}</div>
+                        <div className="flex items-center gap-2 py-4 px-4 text-[10px] text-slate-400"><span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>{s.loading || 'Loading...'}</div>
                       ) : (
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-                          <div><span className="font-bold text-slate-400 dark:text-white/30">Task ID</span> <span className="text-slate-600 dark:text-white/60 font-mono">{bgExpandedDetail.taskId}</span></div>
-                          <div><span className="font-bold text-slate-400 dark:text-white/30">Run ID</span> <span className="text-slate-600 dark:text-white/60 font-mono">{bgExpandedDetail.runId || na}</span></div>
-                          <div><span className="font-bold text-slate-400 dark:text-white/30">{s.bgDelivery || 'Delivery'}</span> <span className="text-slate-600 dark:text-white/60">{bgExpandedDetail.deliveryStatus || na}</span></div>
-                          <div><span className="font-bold text-slate-400 dark:text-white/30">{s.bgNotify || 'Notify'}</span> <span className="text-slate-600 dark:text-white/60">{bgExpandedDetail.notifyPolicy || na}</span></div>
-                          <div><span className="font-bold text-slate-400 dark:text-white/30">{s.bgOwner || 'Owner'}</span> <span className="text-slate-600 dark:text-white/60 truncate">{bgExpandedDetail.ownerKey || na}</span></div>
-                          <div><span className="font-bold text-slate-400 dark:text-white/30">{s.bgSession || 'Session'}</span>
-                            {bgExpandedDetail.childSessionKey ? (
-                              <button onClick={() => window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'sessions' } }))}
-                                className="text-primary hover:underline ms-1">{bgExpandedDetail.childSessionKey}</button>
-                            ) : <span className="text-slate-600 dark:text-white/60 ms-1">{na}</span>}
+                        <div className="p-4 space-y-3">
+                          {/* Identity */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2">
+                              <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase">Task ID</p>
+                              <p className="text-[11px] font-mono text-slate-600 dark:text-white/60 mt-0.5 break-all">{bgExpandedDetail.taskId}</p>
+                            </div>
+                            <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2">
+                              <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase">Run ID</p>
+                              <p className="text-[11px] font-mono text-slate-600 dark:text-white/60 mt-0.5 break-all">{bgExpandedDetail.runId || na}</p>
+                            </div>
                           </div>
-                          {bgExpandedDetail.agentId && <div><span className="font-bold text-slate-400 dark:text-white/30">Agent</span> <span className="text-slate-600 dark:text-white/60">{bgExpandedDetail.agentId}</span></div>}
-                          <div><span className="font-bold text-slate-400 dark:text-white/30">{s.bgCreated || 'Created'}</span> <span className="text-slate-600 dark:text-white/60">{bgExpandedDetail.createdAt ? new Date(bgExpandedDetail.createdAt).toLocaleString() : na}</span></div>
-                          {bgExpandedDetail.startedAt && <div><span className="font-bold text-slate-400 dark:text-white/30">{s.bgStarted || 'Started'}</span> <span className="text-slate-600 dark:text-white/60">{new Date(bgExpandedDetail.startedAt).toLocaleString()}</span></div>}
-                          {bgExpandedDetail.endedAt && <div><span className="font-bold text-slate-400 dark:text-white/30">{s.bgEnded || 'Ended'}</span> <span className="text-slate-600 dark:text-white/60">{new Date(bgExpandedDetail.endedAt).toLocaleString()}</span></div>}
-                          {bgExpandedDetail.error && <div className="col-span-2"><span className="font-bold text-mac-red">{s.error || 'Error'}</span> <span className="text-mac-red">{bgExpandedDetail.error}</span></div>}
-                          {bgExpandedDetail.terminalSummary && <div className="col-span-2"><span className="font-bold text-slate-400 dark:text-white/30">{s.bgResult || 'Result'}</span> <span className="text-slate-600 dark:text-white/60">{bgExpandedDetail.terminalSummary}</span></div>}
+                          {/* Timeline */}
+                          <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2.5">
+                            <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase mb-2 flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">timeline</span>{s.bgTimeline || 'Timeline'}</p>
+                            <div className="space-y-0">
+                              {[
+                                { time: bgExpandedDetail.createdAt, label: s.bgCreated || 'Created', dot: 'bg-slate-400', show: true },
+                                { time: bgExpandedDetail.startedAt, label: s.bgStarted || 'Started', dot: 'bg-blue-500', show: !!bgExpandedDetail.startedAt },
+                                { time: bgExpandedDetail.endedAt, label: s.bgEnded || 'Ended', dot: 'bg-mac-green', show: !!bgExpandedDetail.endedAt },
+                              ].filter(e => e.show).map((entry, idx, arr) => (
+                                <div key={entry.label} className="flex items-stretch gap-2.5 text-[10px]">
+                                  <div className="flex flex-col items-center w-3">
+                                    <div className={`w-2 h-2 rounded-full shrink-0 mt-1 ${entry.dot}`} />
+                                    {idx < arr.length - 1 && <div className="w-px flex-1 bg-slate-200 dark:bg-white/10 my-0.5" />}
+                                  </div>
+                                  <div className="pb-2">
+                                    <span className="text-slate-400 dark:text-white/30 font-semibold">{entry.label}</span>
+                                    <span className="ms-2 text-slate-600 dark:text-white/60">{entry.time ? new Date(entry.time).toLocaleString() : na}</span>
+                                    {entry.label === (s.bgEnded || 'Ended') && bgExpandedDetail.startedAt && bgExpandedDetail.endedAt && (
+                                      <span className="ms-2 text-slate-400 dark:text-white/30">({fmtDurationMs(bgExpandedDetail.endedAt - bgExpandedDetail.startedAt)} {s.bgElapsed || 'elapsed'})</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Execution Info */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {bgExpandedDetail.agentId && (
+                              <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2">
+                                <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase">Agent</p>
+                                <p className="text-[11px] text-slate-600 dark:text-white/60 mt-0.5 truncate">{bgExpandedDetail.agentId}</p>
+                              </div>
+                            )}
+                            <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2">
+                              <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase">{s.bgDelivery || 'Delivery'}</p>
+                              <p className={`text-[11px] mt-0.5 font-semibold ${bgExpandedDetail.deliveryStatus === 'delivered' ? 'text-mac-green' : 'text-slate-600 dark:text-white/60'}`}>{bgExpandedDetail.deliveryStatus || na}</p>
+                            </div>
+                            <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2">
+                              <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase">{s.bgNotify || 'Notify'}</p>
+                              <p className="text-[11px] text-slate-600 dark:text-white/60 mt-0.5">{bgExpandedDetail.notifyPolicy || na}</p>
+                            </div>
+                            <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2">
+                              <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase">{s.bgOwner || 'Owner'}</p>
+                              <p className="text-[11px] text-slate-600 dark:text-white/60 mt-0.5 truncate">{bgExpandedDetail.ownerKey || na}</p>
+                            </div>
+                            <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2">
+                              <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase">{s.bgSession || 'Session'}</p>
+                              {bgExpandedDetail.childSessionKey ? (
+                                <button onClick={() => window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'sessions' } }))} className="text-[11px] text-primary hover:underline mt-0.5 truncate block max-w-full">{bgExpandedDetail.childSessionKey}</button>
+                              ) : <p className="text-[11px] text-slate-600 dark:text-white/60 mt-0.5">{na}</p>}
+                            </div>
+                            {bgExpandedDetail.startedAt && bgExpandedDetail.endedAt && (
+                              <div className="rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04] px-3 py-2">
+                                <p className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase">{s.bgDuration || 'Duration'}</p>
+                                <p className="text-[11px] text-slate-600 dark:text-white/60 mt-0.5 font-mono">{fmtDurationMs(bgExpandedDetail.endedAt - bgExpandedDetail.startedAt)}</p>
+                              </div>
+                            )}
+                          </div>
+                          {/* Error */}
+                          {bgExpandedDetail.error && (
+                            <div className="rounded-lg bg-mac-red/5 border border-mac-red/20 px-3 py-2.5">
+                              <p className="text-[9px] font-bold text-mac-red uppercase mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">error</span>{s.error || 'Error'}</p>
+                              <p className="text-[11px] text-mac-red/80 break-all">{bgExpandedDetail.error}</p>
+                            </div>
+                          )}
+                          {/* Result */}
+                          {bgExpandedDetail.terminalSummary && (
+                            <div className="rounded-lg bg-mac-green/5 border border-mac-green/20 px-3 py-2.5">
+                              <p className="text-[9px] font-bold text-mac-green uppercase mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-[11px]">check_circle</span>{s.bgResult || 'Result'}</p>
+                              <p className="text-[11px] text-slate-600 dark:text-white/60">{bgExpandedDetail.terminalSummary}</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -198,7 +198,12 @@
     "confirmEnableMsg": "Enable job \"{name}\"?",
     "confirmDisableTitle": "Disable Job",
     "confirmDisableMsg": "Disable job \"{name}\"?",
-    "tokens": "Tokens"
+    "tokens": "Tokens",
+    "bgOverview": "Task Overview",
+    "bgDuration": "Duration",
+    "bgTimeline": "Timeline",
+    "bgElapsed": "elapsed",
+    "bgTotalTasks": "Total"
   },
   "cron": {
     "title": "Scheduled Tasks",

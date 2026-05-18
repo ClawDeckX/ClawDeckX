@@ -101,22 +101,10 @@ func resolveStateDir() string {
 }
 
 func discoverAgentMarkdownResources(stateDir string) []ResourceDefinition {
-	agentsDir := filepath.Join(stateDir, "agents")
-	entries, err := os.ReadDir(agentsDir)
-	if err != nil {
-		return nil
-	}
-
 	items := make([]ResourceDefinition, 0)
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		agentName := strings.TrimSpace(e.Name())
-		if agentName == "" {
-			continue
-		}
-		agentID := sanitizeResourceSegment(agentName)
+	seen := map[string]bool{}
+	for _, agent := range discoverAgentWorkspaceCandidates(stateDir) {
+		agentID := sanitizeResourceSegment(agent.id)
 		if agentID == "" {
 			continue
 		}
@@ -136,24 +124,110 @@ func discoverAgentMarkdownResources(stateDir string) []ResourceDefinition {
 			{fileName: "TOOLS.md", idSuffix: "tools_md", displayName: "TOOLS.md"},
 			{fileName: "BOOTSTRAP.md", idSuffix: "bootstrap_md", displayName: "BOOTSTRAP.md"},
 		} {
-			fullPath := filepath.Join(agentsDir, agentName, spec.fileName)
+			fullPath := filepath.Join(agent.workspace, spec.fileName)
 			if !isRegularFile(fullPath) {
 				continue
 			}
-			logicalPath := filepath.ToSlash(filepath.Join("files", "agents", agentName, spec.fileName))
+			logicalPath := filepath.ToSlash(filepath.Join("files", "agents", agent.id, spec.fileName))
+			if seen[logicalPath] {
+				continue
+			}
+			seen[logicalPath] = true
+			p := fullPath
 			items = append(items, ResourceDefinition{
 				ID:          fmt.Sprintf("agent.%s.%s", agentID, spec.idSuffix),
 				Type:        "markdown",
-				DisplayName: fmt.Sprintf("Agent %s %s", agentName, spec.displayName),
+				DisplayName: fmt.Sprintf("Agent %s %s", agent.id, spec.displayName),
 				LogicalPath: logicalPath,
 				RestoreMode: RestoreModeFile,
 				Required:    false,
 				Scope:       BackupScopeOpenClaw,
-				ResolvePath: func() string { return fullPath },
+				ResolvePath: func() string { return p },
 			})
 		}
 	}
 	return items
+}
+
+type agentWorkspaceCandidate struct {
+	id        string
+	workspace string
+}
+
+func discoverAgentWorkspaceCandidates(stateDir string) []agentWorkspaceCandidate {
+	candidates := make([]agentWorkspaceCandidate, 0)
+	seen := map[string]bool{}
+	add := func(id, workspace string) {
+		id = strings.TrimSpace(id)
+		workspace = expandOpenClawPath(strings.TrimSpace(workspace), stateDir)
+		if id == "" || workspace == "" {
+			return
+		}
+		workspace = filepath.Clean(workspace)
+		key := id + "\x00" + workspace
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		candidates = append(candidates, agentWorkspaceCandidate{id: id, workspace: workspace})
+	}
+
+	configPath := filepath.Join(stateDir, "openclaw.json")
+	data, err := os.ReadFile(configPath)
+	if err == nil {
+		var raw struct {
+			Agents struct {
+				Defaults map[string]any   `json:"defaults"`
+				List     []map[string]any `json:"list"`
+			} `json:"agents"`
+		}
+		if json.Unmarshal(data, &raw) == nil {
+			defaultWorkspace, _ := raw.Agents.Defaults["workspace"].(string)
+			for _, entry := range raw.Agents.List {
+				id, _ := entry["id"].(string)
+				if id == "" {
+					id, _ = entry["name"].(string)
+				}
+				workspace, _ := entry["workspace"].(string)
+				if workspace == "" {
+					workspace = defaultWorkspace
+				}
+				workspace = strings.ReplaceAll(workspace, "{id}", id)
+				workspace = strings.ReplaceAll(workspace, "{name}", id)
+				add(id, workspace)
+			}
+		}
+	}
+
+	agentsDir := filepath.Join(stateDir, "agents")
+	entries, err := os.ReadDir(agentsDir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				add(entry.Name(), filepath.Join(agentsDir, entry.Name()))
+			}
+		}
+	}
+	return candidates
+}
+
+func expandOpenClawPath(pathValue, stateDir string) string {
+	if pathValue == "" {
+		return ""
+	}
+	pathValue = os.ExpandEnv(pathValue)
+	if pathValue == "~" || strings.HasPrefix(pathValue, "~/") || strings.HasPrefix(pathValue, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			if pathValue == "~" {
+				return home
+			}
+			return filepath.Join(home, pathValue[2:])
+		}
+	}
+	if filepath.IsAbs(pathValue) {
+		return pathValue
+	}
+	return filepath.Join(stateDir, filepath.FromSlash(pathValue))
 }
 
 func discoverPersonaResources(stateDir string) []ResourceDefinition {

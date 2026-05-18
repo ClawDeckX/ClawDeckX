@@ -198,7 +198,12 @@
     "confirmEnableMsg": "ジョブ「{name}」を有効化しますか？",
     "confirmDisableTitle": "ジョブを無効化",
     "confirmDisableMsg": "ジョブ「{name}」を無効化しますか？",
-    "tokens": "トークン"
+    "tokens": "トークン",
+    "bgOverview": "タスク概要",
+    "bgDuration": "所要時間",
+    "bgTimeline": "タイムライン",
+    "bgElapsed": "経過",
+    "bgTotalTasks": "合計"
   },
   "cron": {
     "title": "スケジュールタスク",

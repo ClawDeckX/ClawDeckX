@@ -198,7 +198,12 @@
     "confirmEnableMsg": "啟用任務「{name}」？",
     "confirmDisableTitle": "停用任務",
     "confirmDisableMsg": "停用任務「{name}」？",
-    "tokens": "Token"
+    "tokens": "Token",
+    "bgOverview": "任務概覽",
+    "bgDuration": "耗時",
+    "bgTimeline": "時間線",
+    "bgElapsed": "已耗時",
+    "bgTotalTasks": "總計"
   },
   "cron": {
     "title": "定時任務",

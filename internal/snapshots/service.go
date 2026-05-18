@@ -615,11 +615,19 @@ func parseAgentLogicalPath(logicalPath string) (string, string, bool) {
 		return "", "", false
 	}
 	agentID := parts[0]
-	fileName := parts[len(parts)-1]
-	if agentID == "" || fileName == "" {
+	fileName := strings.Join(parts[1:], "/")
+	if agentID == "" || !isSafeSnapshotRelativePath(fileName) {
 		return "", "", false
 	}
 	return agentID, fileName, true
+}
+
+func isSafeSnapshotRelativePath(pathValue string) bool {
+	if pathValue == "" || filepath.IsAbs(pathValue) {
+		return false
+	}
+	clean := filepath.Clean(filepath.FromSlash(pathValue))
+	return clean != "." && clean != ".." && !strings.HasPrefix(clean, ".."+string(filepath.Separator))
 }
 
 func (s *Service) Scan(scope string) (*SnapshotScanResult, error) {
@@ -911,6 +919,9 @@ func resolveLogicalPathDirect(logicalPath string) string {
 	}
 	// files/agents/{agentName}/{filename} → {stateDir}/agents/{agentName}/{filename}
 	if strings.HasPrefix(logicalPath, "files/agents/") {
+		if dest := resolveAgentLogicalPath(logicalPath, stateDir); dest != "" {
+			return dest
+		}
 		rel := strings.TrimPrefix(logicalPath, "files/")
 		return filepath.Join(stateDir, filepath.FromSlash(rel))
 	}
@@ -947,6 +958,25 @@ func resolveLogicalPathDirect(logicalPath string) string {
 	}
 	// Fallback: try registry
 	return logicalPathToSourcePath(logicalPath)
+}
+
+func resolveAgentLogicalPath(logicalPath, stateDir string) string {
+	rel := strings.TrimPrefix(logicalPath, "files/agents/")
+	parts := strings.SplitN(rel, "/", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	agentID := strings.TrimSpace(parts[0])
+	fileName := strings.TrimSpace(parts[1])
+	if agentID == "" || !isSafeSnapshotRelativePath(fileName) {
+		return ""
+	}
+	for _, candidate := range discoverAgentWorkspaceCandidates(stateDir) {
+		if candidate.id == agentID {
+			return filepath.Join(candidate.workspace, filepath.FromSlash(fileName))
+		}
+	}
+	return ""
 }
 
 func writeAtomic(path string, data []byte) error {
