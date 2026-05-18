@@ -1,4 +1,21 @@
-﻿# v0.2.17
+﻿# v0.2.18
+
+_2026-05-18_
+
+## What's Changed
+
+### 🐛 Bug Fixes / 修复
+
+- improve agent backup and task display
+
+---
+**Full Changelog**: [v0.2.17...v0.2.18](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.17...v0.2.18)
+
+
+
+---
+
+# v0.2.17
 
 _2026-05-18_
 
@@ -1878,6 +1895,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 

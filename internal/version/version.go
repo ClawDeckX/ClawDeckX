@@ -5,7 +5,7 @@ package version
 //	go build -ldflags "-X ClawDeckX/internal/version.Version=0.0.3 -X ClawDeckX/internal/version.Build=42"
 //
 // Source of truth: web/package.json -> "version" field.
-var Version = "0.2.17"
+var Version = "0.2.18"
 
 // Build is the build number, injected at compile time.
 var Build = "dev"
