@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Language } from '../types';
+import { Language, dispatchOpenWindow } from '../types';
 import { getTranslation } from '../locales';
-import { gwApi, hostInfoApi, llmApi } from '../services/api';
+import { gwApi, hostInfoApi, llmApi, gatewayProfileApi } from '../services/api';
 import { fmtAgoCompact } from '../utils/time';
 import { useToast } from '../components/Toast';
 import { useGatewayEvents } from '../hooks/useGatewayEvents';
@@ -110,7 +110,7 @@ type NodeFilter = 'all' | 'online' | 'offline';
 type SortKey = 'name' | 'status' | 'platform' | 'lastSeen' | 'lastUsed' | 'connectedAt';
 type GroupKey = 'none' | 'platform' | 'status' | 'version';
 type ViewMode = 'grid' | 'list' | 'compact';
-type NodeWizardPanel = 'connect' | 'approve';
+type NodeWizardPanel = 'connect' | 'approve' | 'status';
 
 // --- Utility helpers ---
 
@@ -274,8 +274,16 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   const [nodeWizardTls, setNodeWizardTls] = useState(false);
   const [nodeWizardNodeId, setNodeWizardNodeId] = useState('');
   const [nodeWizardName, setNodeWizardName] = useState('');
+  const [nodeWizardToken, setNodeWizardToken] = useState('');
   const [nodeWizardRunning, setNodeWizardRunning] = useState(false);
   const [nodeWizardResult, setNodeWizardResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [nodeWizardStep, setNodeWizardStep] = useState<1 | 2 | 3>(1);
+  const [nodeWizardTesting, setNodeWizardTesting] = useState(false);
+  const [nodeWizardTestResult, setNodeWizardTestResult] = useState<{ ok: boolean; http: boolean; ws: boolean; detail?: string } | null>(null);
+  const [nodeWizardShowCmd, setNodeWizardShowCmd] = useState(false);
+  const [nodeServiceStatus, setNodeServiceStatus] = useState<any>(null);
+  const [nodeServiceLoading, setNodeServiceLoading] = useState(false);
+  const [localNodeExpanded, setLocalNodeExpanded] = useState(false);
 
   // === NEW: Bindings tab enhancements ===
   const [bindingTestResults, setBindingTestResults] = useState<Record<string, { ok: boolean; ms?: number; error?: string; loading?: boolean }>>({});
@@ -633,13 +641,12 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
       title: ndRef.current?.confirmApproveTitle || 'Approve',
       desc: (ndRef.current?.confirmApproveDesc || 'Approve pairing request from {name}?').replace('{name}', displayName || requestId),
       variant: 'success',
-      onOk: async () => {
-        try {
-          await gwApi.devicePairApprove(requestId);
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.devicePairApprove(requestId).then(() => {
           toast('success', ndRef.current.approved);
           fetchDevices();
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [fetchDevices, toast]);
@@ -648,13 +655,12 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRejectTitle || 'Reject',
       desc: (ndRef.current?.confirmRejectDesc || 'Reject pairing request from {name}?').replace('{name}', displayName || requestId),
-      onOk: async () => {
-        try {
-          await gwApi.devicePairReject(requestId);
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.devicePairReject(requestId).then(() => {
           toast('success', ndRef.current.rejected);
           fetchDevices();
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [fetchDevices, toast]);
@@ -664,13 +670,12 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
       title: ndRef.current?.confirmApproveTitle || 'Approve',
       desc: (ndRef.current?.confirmApproveDesc || 'Approve pairing request from {name}?').replace('{name}', displayName || requestId),
       variant: 'success',
-      onOk: async () => {
-        try {
-          await gwApi.nodePairApprove(requestId);
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.nodePairApprove(requestId).then(() => {
           toast('success', ndRef.current.approved);
           setTimeout(() => fetchDevices(), 500);
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [fetchDevices, toast]);
@@ -679,13 +684,12 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRejectTitle || 'Reject',
       desc: (ndRef.current?.confirmRejectDesc || 'Reject pairing request from {name}?').replace('{name}', displayName || requestId),
-      onOk: async () => {
-        try {
-          await gwApi.nodePairReject(requestId);
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.nodePairReject(requestId).then(() => {
           toast('success', ndRef.current.rejected);
           setTimeout(() => fetchDevices(), 500);
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [fetchDevices, toast]);
@@ -696,15 +700,14 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRemovePairTitle || ndRef.current?.confirmRemoveTitle || 'Remove Pairing',
       desc: (ndRef.current?.confirmRemovePairDesc || 'Remove pairing record for {name}? The node will need to re-pair.').replace('{name}', displayName || nodeId),
-      onOk: async () => {
-        try {
-          await gwApi.nodePairRemove({ node: nodeId });
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.nodePairRemove({ node: nodeId }).then(() => {
           toast('success', ndRef.current?.pairRemoved || 'Pairing removed');
           setSelectedNode(null);
           setNodeDetail(null);
           setTimeout(() => { fetchNodes(); fetchDevices(); }, 300);
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [fetchNodes, fetchDevices, toast]);
@@ -727,13 +730,12 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRevokeTitle || 'Revoke',
       desc: ndRef.current?.confirmRevokeDesc || ndRef.current.confirmRevoke || 'Revoke this token?',
-      onOk: async () => {
-        try {
-          await gwApi.deviceTokenRevoke(deviceId, role);
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.deviceTokenRevoke(deviceId, role).then(() => {
           toast('success', ndRef.current.revoked);
           fetchDevices();
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [fetchDevices, toast]);
@@ -742,13 +744,12 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRemoveTitle || 'Remove Device',
       desc: (ndRef.current?.confirmRemoveDesc || 'Remove device {name}? All tokens will be revoked and the device will need to re-pair.').replace('{name}', displayName || deviceId),
-      onOk: async () => {
-        try {
-          await gwApi.devicePairRemove(deviceId);
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.devicePairRemove(deviceId).then(() => {
           toast('success', ndRef.current?.deviceRemoved || 'Device removed');
           fetchDevices();
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [fetchDevices, toast]);
@@ -812,15 +813,18 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
       title: ndRef.current?.confirmApproveTitle || 'Approve',
       desc: (ndRef.current?.batchApproveConfirm || 'Approve {count} requests?').replace('{count}', String(selectedPendingIds.size)),
       variant: 'success',
-      onOk: async () => {
-        let ok = 0;
-        for (const rid of selectedPendingIds) {
-          try { await gwApi.devicePairApprove(rid); ok++; } catch { /* skip */ }
-        }
-        toast('success', (ndRef.current?.batchApproveOk || '').replace('{count}', String(ok)));
-        setSelectedPendingIds(new Set());
-        fetchDevices();
+      onOk: () => {
         setConfirmDialog(null);
+        const ids = [...selectedPendingIds];
+        (async () => {
+          let ok = 0;
+          for (const rid of ids) {
+            try { await gwApi.devicePairApprove(rid); ok++; } catch { /* skip */ }
+          }
+          toast('success', (ndRef.current?.batchApproveOk || '').replace('{count}', String(ok)));
+          setSelectedPendingIds(new Set());
+          fetchDevices();
+        })();
       },
     });
   }, [selectedPendingIds, toast, fetchDevices]);
@@ -830,15 +834,18 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRejectTitle || 'Reject',
       desc: (ndRef.current?.batchRejectConfirm || 'Reject {count} requests?').replace('{count}', String(selectedPendingIds.size)),
-      onOk: async () => {
-        let ok = 0;
-        for (const rid of selectedPendingIds) {
-          try { await gwApi.devicePairReject(rid); ok++; } catch { /* skip */ }
-        }
-        toast('success', (ndRef.current?.batchRejectOk || '').replace('{count}', String(ok)));
-        setSelectedPendingIds(new Set());
-        fetchDevices();
+      onOk: () => {
         setConfirmDialog(null);
+        const ids = [...selectedPendingIds];
+        (async () => {
+          let ok = 0;
+          for (const rid of ids) {
+            try { await gwApi.devicePairReject(rid); ok++; } catch { /* skip */ }
+          }
+          toast('success', (ndRef.current?.batchRejectOk || '').replace('{count}', String(ok)));
+          setSelectedPendingIds(new Set());
+          fetchDevices();
+        })();
       },
     });
   }, [selectedPendingIds, toast, fetchDevices]);
@@ -856,14 +863,13 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRevokeTitle || 'Revoke',
       desc: ndRef.current?.confirmRevokeDesc || '',
-      onOk: async () => {
-        try {
-          await gwApi.deviceTokenRevoke(deviceId, role);
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.deviceTokenRevoke(deviceId, role).then(() => {
           toast('success', ndRef.current.revoked);
           setEventLog(prev => [`[${new Date().toLocaleTimeString()}] token.revoke → ${deviceId}:${role}`, ...prev.slice(0, 49)]);
           fetchDevices();
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [toast, fetchDevices]);
@@ -872,17 +878,16 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRotateTitle || 'Rotate',
       desc: ndRef.current?.confirmRotateDesc || '',
-      onOk: async () => {
-        try {
-          const res = await gwApi.deviceTokenRotate(deviceId, role, scopes) as any;
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.deviceTokenRotate(deviceId, role, scopes).then(async (res: any) => {
           if (res?.token) {
             await copyToClipboard(res.token);
             toast('success', ndRef.current.tokenRotated + ' - ' + ndRef.current.copied);
           }
           setEventLog(prev => [`[${new Date().toLocaleTimeString()}] token.rotate → ${deviceId}:${role}`, ...prev.slice(0, 49)]);
           fetchDevices();
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [toast, fetchDevices]);
@@ -891,14 +896,13 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRejectTitle || 'Reject',
       desc: ndRef.current?.confirmRejectDesc || '',
-      onOk: async () => {
-        try {
-          await gwApi.devicePairReject(requestId);
+      onOk: () => {
+        setConfirmDialog(null);
+        gwApi.devicePairReject(requestId).then(() => {
           toast('success', ndRef.current.rejected);
           setEventLog(prev => [`[${new Date().toLocaleTimeString()}] pair.reject → ${deviceName || requestId}`, ...prev.slice(0, 49)]);
           fetchDevices();
-        } catch (e: any) { toast('error', String(e)); }
-        setConfirmDialog(null);
+        }).catch((e: any) => { toast('error', String(e)); });
       },
     });
   }, [toast, fetchDevices]);
@@ -923,19 +927,22 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setConfirmDialog({
       title: ndRef.current?.confirmRotateTitle || 'Rotate',
       desc: (ndRef.current?.batchRotateConfirm || 'Rotate {count} tokens?').replace('{count}', String(paired.length)),
-      onOk: async () => {
-        let ok = 0;
-        for (const d of paired) {
-          const tokens = Array.isArray(d.tokens) ? d.tokens : [];
-          for (const tk of tokens) {
-            if (!tk.revokedAtMs) {
-              try { await gwApi.deviceTokenRotate(d.deviceId, tk.role, tk.scopes); ok++; } catch { /* skip */ }
+      onOk: () => {
+        setConfirmDialog(null);
+        const items = [...paired];
+        (async () => {
+          let ok = 0;
+          for (const d of items) {
+            const tokens = Array.isArray(d.tokens) ? d.tokens : [];
+            for (const tk of tokens) {
+              if (!tk.revokedAtMs) {
+                try { await gwApi.deviceTokenRotate(d.deviceId, tk.role, tk.scopes); ok++; } catch { /* skip */ }
+              }
             }
           }
-        }
-        toast('success', (ndRef.current?.batchRotateOk || '').replace('{count}', String(ok)));
-        fetchDevices();
-        setConfirmDialog(null);
+          toast('success', (ndRef.current?.batchRotateOk || '').replace('{count}', String(ok)));
+          fetchDevices();
+        })();
       },
     });
   }, [paired, toast, fetchDevices]);
@@ -1067,11 +1074,11 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
 
   // === WebSocket: badge notification via health event ===
   const [newPairBadge, setNewPairBadge] = useState(0);
-  useEffect(() => { if (tab === 'devices') setNewPairBadge(0); }, [tab]);
+  useEffect(() => { if (tab === 'nodes') setNewPairBadge(0); }, [tab]);
 
   const tabs: { id: TabId; label: string; icon: string; count?: number; badge?: number }[] = [
-    { id: 'nodes', label: nd.nodesSection, icon: 'hub', count: nodes.length },
-    { id: 'devices', label: nd.devicesSection, icon: 'devices', count: pending.length + paired.length, badge: newPairBadge },
+    { id: 'nodes', label: nd.nodesSection, icon: 'hub', count: nodes.length, badge: newPairBadge },
+    { id: 'devices', label: nd.devicesSection, icon: 'devices', count: pending.length + paired.length },
     { id: 'bindings', label: nd.bindingsSection, icon: 'link' },
   ];
 
@@ -1102,6 +1109,113 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
       .catch(() => toast('error', 'Copy failed'));
   }, [nodeWizardCommand, toast]);
 
+  // Match local node to its gateway-reported entry (for caps/commands display)
+  const localNodeGatewayInfo = useMemo(() => {
+    if (!nodeServiceStatus?.service?.command?.programArguments || nodes.length === 0) return null;
+    const args: string[] = nodeServiceStatus.service.command.programArguments;
+    const nidx = args.indexOf('--node-id');
+    const didx = args.indexOf('--display-name');
+    const hidx = args.indexOf('--host');
+    const localNodeId = nidx >= 0 && nidx + 1 < args.length ? args[nidx + 1] : null;
+    const displayName = didx >= 0 && didx + 1 < args.length ? args[didx + 1] : null;
+    const gatewayHost = hidx >= 0 && hidx + 1 < args.length ? args[hidx + 1] : null;
+    return nodes.find((n: NodeEntry) => n.nodeId === localNodeId) ||
+      nodes.find((n: NodeEntry) => displayName && n.displayName === displayName) ||
+      nodes.find((n: NodeEntry) => gatewayHost && n.remoteIp === gatewayHost) ||
+      nodes.find((n: NodeEntry) => n.connected && n.platform === 'win32') ||
+      null;
+  }, [nodeServiceStatus, nodes]);
+
+  const fetchNodeServiceStatus = useCallback(async () => {
+    setNodeServiceLoading(true);
+    try {
+      const res = await llmApi.exec('openclaw', ['node', 'status', '--json'], 15000);
+      if (res.exitCode === 0 && res.stdout) {
+        try {
+          const idx = res.stdout.indexOf('{');
+          const json = idx >= 0 ? JSON.parse(res.stdout.slice(idx)) : null;
+          setNodeServiceStatus(json);
+        } catch { setNodeServiceStatus({ raw: res.stdout }); }
+      } else {
+        setNodeServiceStatus({ error: res.stderr || res.stdout || 'Unknown error', exitCode: res.exitCode });
+      }
+    } catch (e: any) { setNodeServiceStatus({ error: e?.message || 'Failed to query node status' }); }
+    finally { setNodeServiceLoading(false); }
+  }, []);
+
+  const handleNodeServiceAction = useCallback(async (action: 'start' | 'restart' | 'stop' | 'uninstall') => {
+    setNodeServiceLoading(true);
+    try {
+      await llmApi.exec('openclaw', ['node', action, '--json'], 30000);
+      const msgMap: Record<string, string> = {
+        start: ndRef.current?.nodeServiceStarted || 'Node service started',
+        restart: ndRef.current?.nodeServiceRestarted || 'Node service restarted',
+        stop: ndRef.current?.nodeServiceStopped || 'Node service stopped',
+        uninstall: ndRef.current?.nodeServiceUninstalled || 'Node service uninstalled',
+      };
+      toast('success', msgMap[action] || action);
+    } catch (e: any) {
+      toast('error', e?.message || `Failed to ${action} node service`);
+    }
+    setTimeout(() => fetchNodeServiceStatus(), 1500);
+  }, [fetchNodeServiceStatus, toast]);
+
+  const handleNodeServiceStop = useCallback(() => {
+    setConfirmDialog({
+      title: ndRef.current?.localNodeStopTitle || 'Stop Node Service',
+      desc: ndRef.current?.localNodeStopDesc || 'Stop the local node service? It will no longer respond to gateway commands.',
+      variant: 'danger',
+      onOk: () => { setConfirmDialog(null); handleNodeServiceAction('stop'); },
+    });
+  }, [handleNodeServiceAction]);
+
+  const handleNodeServiceUninstall = useCallback(() => {
+    setConfirmDialog({
+      title: ndRef.current?.localNodeUninstallTitle || 'Uninstall Node Service',
+      desc: ndRef.current?.localNodeUninstallDesc || 'Uninstall the local node service? The service definition will be removed. You can reinstall later via the Node Wizard.',
+      variant: 'danger',
+      onOk: () => { setConfirmDialog(null); handleNodeServiceAction('uninstall'); },
+    });
+  }, [handleNodeServiceAction]);
+
+  // Auto-fetch local node status on mount
+  useEffect(() => { fetchNodeServiceStatus(); }, [fetchNodeServiceStatus]);
+
+  const handleTestNodeConnection = useCallback(async () => {
+    const host = nodeWizardHost.trim() || '127.0.0.1';
+    const port = parseInt(nodeWizardPort.trim() || '18789', 10);
+    if (!host || port <= 0 || port > 65535) {
+      toast('error', ndRef.current?.nodeWizardInvalidHost || 'Invalid host or port');
+      return;
+    }
+    setNodeWizardTesting(true);
+    setNodeWizardTestResult(null);
+    try {
+      const res = await gatewayProfileApi.testConnection({ host, port, token: nodeWizardToken.trim() });
+      const pw = (res as any)?.protocolWarning as string | undefined;
+      if (pw && pw.startsWith('protocol_mismatch:')) {
+        // Parse "protocol_mismatch:local=4,remote=3"
+        const m = pw.match(/local=(\d+),remote=(\d+)/);
+        const local = m?.[1] || '?';
+        const remote = m?.[2] || '?';
+        const detail = (ndRef.current?.nodeWizardProtocolMismatch || 'Protocol version mismatch: local v{local}, remote v{remote}. Please upgrade the target gateway.')
+          .replace('{local}', local).replace('{remote}', remote);
+        setNodeWizardTestResult({ ok: false, http: !!(res as any)?.http, ws: !!(res as any)?.ws, detail });
+        toast('error', ndRef.current?.nodeWizardProtocolMismatchShort || 'Protocol version mismatch — upgrade target gateway');
+      } else {
+        setNodeWizardTestResult({ ok: true, http: !!(res as any)?.http, ws: !!(res as any)?.ws });
+        setNodeWizardStep(2);
+        toast('success', ndRef.current?.nodeWizardTestOk || 'Connection successful');
+      }
+    } catch (err: any) {
+      const detail = err?.message || err?.data?.message || 'Connection failed';
+      setNodeWizardTestResult({ ok: false, http: false, ws: false, detail });
+      toast('error', ndRef.current?.nodeWizardTestFail || 'Connection failed');
+    } finally {
+      setNodeWizardTesting(false);
+    }
+  }, [nodeWizardHost, nodeWizardPort, nodeWizardToken, toast]);
+
   const handleRunNodeWizard = useCallback(() => {
     setConfirmDialog({
       title: ndRef.current?.nodeWizardRunConfirmTitle || 'Start Node',
@@ -1112,9 +1226,11 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
         setNodeWizardRunning(true);
         setNodeWizardResult(null);
         try {
-          const res = await llmApi.exec('openclaw', nodeWizardArgs, 60000);
+          const execEnv: Record<string, string> = {};
+          if (nodeWizardToken.trim()) execEnv['OPENCLAW_GATEWAY_TOKEN'] = nodeWizardToken.trim();
+          const res = await llmApi.exec('openclaw', nodeWizardArgs, 60000, Object.keys(execEnv).length > 0 ? execEnv : undefined);
           const startRes = res.exitCode === 0
-            ? await llmApi.exec('openclaw', ['node', 'start', '--json'], 60000)
+            ? await llmApi.exec('openclaw', ['node', 'start', '--json'], 60000, Object.keys(execEnv).length > 0 ? execEnv : undefined)
             : res;
           const finalRes = startRes || res;
           const ok = res.exitCode === 0 && finalRes.exitCode === 0;
@@ -1122,6 +1238,11 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
             ok,
             text: ok ? (ndRef.current?.nodeWizardRunOk || 'Node operation started') : (finalRes.stderr || finalRes.stdout || res.stderr || res.stdout || ndRef.current?.nodeWizardRunFailed || 'Node operation failed'),
           });
+          if (ok) {
+            setNodeWizardStep(3);
+            setNodeWizardPanel('status');
+            setTimeout(() => fetchNodeServiceStatus(), 2000);
+          }
           setEventLog(prev => [`[${new Date().toLocaleTimeString()}] node.install → ${nodeWizardHost}:${nodeWizardPort}`, ...prev.slice(0, 49)]);
           setTimeout(() => { fetchDevices(); fetchNodes(); }, 800);
         } catch (err: any) {
@@ -1131,7 +1252,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
         }
       },
     });
-  }, [fetchDevices, fetchNodes, nodeWizardArgs, nodeWizardHost, nodeWizardPort]);
+  }, [fetchDevices, fetchNodes, fetchNodeServiceStatus, nodeWizardArgs, nodeWizardHost, nodeWizardPort, nodeWizardToken]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-[#0f1115]">
@@ -1190,6 +1311,12 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                       <span className="material-symbols-outlined text-[14px]">view_list</span>
                     </button>
                   </div>
+                  {/* Node Wizard toggle */}
+                  <button onClick={() => setShowNodeWizard(v => !v)}
+                    className={`h-8 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${showNodeWizard ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/70 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
+                    <span className="material-symbols-outlined text-[14px]">route</span>
+                    <span className="hidden sm:inline">{nd.nodeWizard || 'Node Wizard'}</span>
+                  </button>
                   {/* Refresh button */}
                   <button onClick={() => { fetchNodes(); fetchPresence(); }} disabled={nodesLoading}
                     className="h-8 px-3 flex items-center gap-1.5 theme-field hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold theme-text-secondary disabled:opacity-50">
@@ -1265,6 +1392,559 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Local Node Service Card */}
+              {nodeServiceStatus?.service && (
+                <div className="rounded-xl bg-cyan-50/50 dark:bg-cyan-500/[0.04] border border-cyan-200/50 dark:border-cyan-500/10 p-3 space-y-2">
+                  {/* Summary row */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={() => setLocalNodeExpanded(v => !v)} className="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+                      <span className="material-symbols-outlined text-[16px] text-cyan-500">deployed_code</span>
+                      <span className="text-[11px] font-bold text-cyan-600 dark:text-cyan-400">{nd.localNodeTitle || 'Local Node Service'}</span>
+                      <span className="material-symbols-outlined text-[12px] theme-text-muted">{localNodeExpanded ? 'expand_less' : 'expand_more'}</span>
+                    </button>
+                    {/* Status badge */}
+                    {nodeServiceStatus.service.runtime ? (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${nodeServiceStatus.service.runtime.status === 'running' ? 'bg-mac-green/10 text-mac-green' : 'bg-amber-500/10 text-amber-500'}`}>
+                        {nodeServiceStatus.service.runtime.status === 'running' ? (nd.localNodeRunning || 'Running') : (nd.localNodeStopped || 'Stopped')}
+                      </span>
+                    ) : nodeServiceStatus.service.loaded ? (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200/50 dark:bg-white/10 theme-text-muted">{nd.localNodeRegistered || 'Registered'}</span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200/50 dark:bg-white/10 theme-text-muted">{nd.localNodeNotInstalled || 'Not installed'}</span>
+                    )}
+                    {/* PID */}
+                    {nodeServiceStatus.service.runtime?.pid && (
+                      <span className="text-[10px] font-mono theme-text-muted">PID {nodeServiceStatus.service.runtime.pid}</span>
+                    )}
+                    {/* Connection target */}
+                    {nodeServiceStatus.service.command?.programArguments && (() => {
+                      const args: string[] = nodeServiceStatus.service.command.programArguments;
+                      const hi = args.indexOf('--host');
+                      const pi = args.indexOf('--port');
+                      const host = hi >= 0 && hi + 1 < args.length ? args[hi + 1] : null;
+                      const port = pi >= 0 && pi + 1 < args.length ? args[pi + 1] : null;
+                      if (!host) return null;
+                      const hasTls = args.includes('--tls');
+                      return (
+                        <span className="text-[10px] font-mono theme-text-secondary flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[11px]">{hasTls ? 'lock' : 'link'}</span>
+                          {hasTls ? 'wss' : 'ws'}://{host}:{port || '18789'}
+                        </span>
+                      );
+                    })()}
+                    <span className="flex-1" />
+                    {/* Action buttons */}
+                    {nodeServiceStatus.service.loaded && (
+                      <div className="flex items-center gap-1">
+                        {nodeServiceStatus.service.runtime?.status !== 'running' && (
+                          <button onClick={() => handleNodeServiceAction('start')} disabled={nodeServiceLoading}
+                            className="h-7 px-2.5 bg-mac-green/10 hover:bg-mac-green/20 text-mac-green border border-mac-green/20 rounded-lg text-[10px] font-bold flex items-center gap-1 disabled:opacity-50 transition-colors">
+                            <span className="material-symbols-outlined text-[13px]">play_arrow</span>{nd.localNodeStart || 'Start'}
+                          </button>
+                        )}
+                        {nodeServiceStatus.service.runtime?.status === 'running' && (
+                          <button onClick={handleNodeServiceStop} disabled={nodeServiceLoading}
+                            className="h-7 px-2.5 bg-mac-red/10 hover:bg-mac-red/20 text-mac-red border border-mac-red/20 rounded-lg text-[10px] font-bold flex items-center gap-1 disabled:opacity-50 transition-colors">
+                            <span className="material-symbols-outlined text-[13px]">stop</span>{nd.localNodeStop || 'Stop'}
+                          </button>
+                        )}
+                        <button onClick={() => handleNodeServiceAction('restart')} disabled={nodeServiceLoading}
+                          className="h-7 px-2.5 theme-field hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[10px] font-bold theme-text-secondary flex items-center gap-1 disabled:opacity-50 transition-colors">
+                          <span className="material-symbols-outlined text-[13px]">restart_alt</span>{nd.localNodeRestart || 'Restart'}
+                        </button>
+                      </div>
+                    )}
+                    <button onClick={fetchNodeServiceStatus} disabled={nodeServiceLoading}
+                      className="h-7 w-7 flex items-center justify-center theme-field hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg theme-text-secondary disabled:opacity-50 transition-colors">
+                      <span className={`material-symbols-outlined text-[13px] ${nodeServiceLoading ? 'animate-spin' : ''}`}>{nodeServiceLoading ? 'progress_activity' : 'refresh'}</span>
+                    </button>
+                  </div>
+
+                  {/* Error detail (always visible when present) */}
+                  {nodeServiceStatus.error && (
+                    <div className="rounded-lg bg-mac-red/5 border border-mac-red/20 p-2 flex items-start gap-2">
+                      <span className="material-symbols-outlined text-[13px] text-mac-red mt-0.5">error</span>
+                      <p className="text-[10px] text-mac-red break-all flex-1">{nodeServiceStatus.error}</p>
+                    </div>
+                  )}
+
+                  {/* Runtime detail (e.g. stopped reason) */}
+                  {nodeServiceStatus.service.runtime?.detail && nodeServiceStatus.service.runtime.status !== 'running' && (
+                    <div className="rounded-lg bg-amber-500/5 border border-amber-500/15 p-2 flex items-start gap-2">
+                      <span className="material-symbols-outlined text-[13px] text-amber-500 mt-0.5">info</span>
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400 break-all flex-1">{nodeServiceStatus.service.runtime.detail}</p>
+                    </div>
+                  )}
+
+                  {/* Expanded detail section */}
+                  {localNodeExpanded && (
+                    <div className="space-y-2 pt-1 border-t border-cyan-200/30 dark:border-cyan-500/10">
+                      {/* Service file path */}
+                      {nodeServiceStatus.service.command?.sourcePath && (
+                        <div className="flex items-start gap-2">
+                          <span className="material-symbols-outlined text-[12px] theme-text-muted mt-0.5">description</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-bold theme-text-muted uppercase tracking-wider">{nd.localNodeServiceFile || 'Service file'}</p>
+                            <p className="text-[10px] font-mono theme-text-secondary truncate select-all" title={nodeServiceStatus.service.command.sourcePath}>{nodeServiceStatus.service.command.sourcePath}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Working directory */}
+                      {nodeServiceStatus.service.command?.workingDirectory && (
+                        <div className="flex items-start gap-2">
+                          <span className="material-symbols-outlined text-[12px] theme-text-muted mt-0.5">folder</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-bold theme-text-muted uppercase tracking-wider">{nd.localNodeWorkDir || 'Working directory'}</p>
+                            <p className="text-[10px] font-mono theme-text-secondary truncate select-all" title={nodeServiceStatus.service.command.workingDirectory}>{nodeServiceStatus.service.command.workingDirectory}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Full command */}
+                      {nodeServiceStatus.service.command?.programArguments?.length > 0 && (
+                        <div className="flex items-start gap-2">
+                          <span className="material-symbols-outlined text-[12px] theme-text-muted mt-0.5">terminal</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-bold theme-text-muted uppercase tracking-wider">{nd.localNodeCommand || 'Command'}</p>
+                            <p className="text-[10px] font-mono theme-text-secondary break-all select-all">{nodeServiceStatus.service.command.programArguments.join(' ')}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Environment variables */}
+                      {nodeServiceStatus.service.command?.environment && (() => {
+                        const entries = Object.entries(nodeServiceStatus.service.command.environment as Record<string, string>)
+                          .filter(([k]) => k.startsWith('OPENCLAW_'));
+                        if (entries.length === 0) return null;
+                        return (
+                          <div className="flex items-start gap-2">
+                            <span className="material-symbols-outlined text-[12px] theme-text-muted mt-0.5">data_object</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[9px] font-bold theme-text-muted uppercase tracking-wider">{nd.localNodeEnv || 'Environment'}</p>
+                              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[10px] font-mono mt-0.5">
+                                {entries.map(([k, v]) => (
+                                  <React.Fragment key={k}>
+                                    <span className="theme-text-muted truncate">{k}</span>
+                                    <span className="theme-text-secondary truncate select-all">{k.includes('TOKEN') ? '••••••' : v}</span>
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Service label */}
+                      {nodeServiceStatus.service.label && (
+                        <div className="flex items-start gap-2">
+                          <span className="material-symbols-outlined text-[12px] theme-text-muted mt-0.5">label</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-bold theme-text-muted uppercase tracking-wider">{nd.localNodeServiceLabel || 'Service label'}</p>
+                            <p className="text-[10px] font-mono theme-text-secondary select-all">{nodeServiceStatus.service.label}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Capabilities & commands from gateway (if connected) */}
+                      {localNodeGatewayInfo && (
+                        <div className="flex items-start gap-2">
+                          <span className="material-symbols-outlined text-[12px] theme-text-muted mt-0.5">neurology</span>
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <p className="text-[9px] font-bold theme-text-muted uppercase tracking-wider">{nd.capabilities || 'Capabilities'}</p>
+                            {Array.isArray(localNodeGatewayInfo.caps) && localNodeGatewayInfo.caps.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {localNodeGatewayInfo.caps.map((c: string) => <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-mac-green/10 text-mac-green font-bold">{c}</span>)}
+                              </div>
+                            ) : <p className="text-[10px] theme-text-muted">-</p>}
+                            <p className="text-[9px] font-bold theme-text-muted uppercase tracking-wider mt-1">{nd.commands || 'Commands'}</p>
+                            {Array.isArray(localNodeGatewayInfo.commands) && localNodeGatewayInfo.commands.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {localNodeGatewayInfo.commands.map((c: string) => <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 font-bold font-mono">{c}</span>)}
+                              </div>
+                            ) : <p className="text-[10px] theme-text-muted">{nd.noCommands || '-'}</p>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Config navigation links */}
+                      <div className="flex items-center gap-3 flex-wrap pt-1">
+                        <button onClick={() => dispatchOpenWindow({ id: 'agents', panel: 'tools' })}
+                          className="text-[10px] text-primary font-bold hover:underline flex items-center gap-0.5">
+                          <span className="material-symbols-outlined text-[12px]">security</span>
+                          {nd.localNodeGoToolConfig || 'Agent tool config'}
+                          <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+                        </button>
+                        <button onClick={() => dispatchOpenWindow({ id: 'editor', section: 'tools' })}
+                          className="text-[10px] text-primary font-bold hover:underline flex items-center gap-0.5">
+                          <span className="material-symbols-outlined text-[12px]">edit_note</span>
+                          {nd.localNodeGoGlobalTools || 'Global tools config'}
+                          <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+                        </button>
+                      </div>
+
+                      {/* Danger zone: uninstall */}
+                      {nodeServiceStatus.service.loaded && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <button onClick={handleNodeServiceUninstall} disabled={nodeServiceLoading}
+                            className="h-7 px-2.5 bg-mac-red/5 hover:bg-mac-red/15 text-mac-red border border-mac-red/15 rounded-lg text-[10px] font-bold flex items-center gap-1 disabled:opacity-50 transition-colors">
+                            <span className="material-symbols-outlined text-[13px]">delete_forever</span>{nd.localNodeUninstall || 'Uninstall'}
+                          </button>
+                          <span className="text-[9px] theme-text-muted">{nd.localNodeUninstallHint || 'Remove service definition — reinstall via Node Wizard'}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {showNodeWizard && (
+                <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] to-sky-500/[0.04] dark:from-primary/[0.10] dark:to-sky-500/[0.06] p-4 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-primary text-[20px]">hub</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-bold text-slate-800 dark:text-white">{nd.nodeWizard || 'Node Wizard'}</h3>
+                      <p className="text-[11px] text-slate-500 dark:text-white/45 mt-1">{nd.nodeWizardDesc || 'Install a local node service and connect it to a remote OpenClaw gateway. After installation, the target gateway admin needs to approve this node.'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 rounded-xl bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-1">
+                    {[
+                      { value: 'connect' as NodeWizardPanel, icon: 'outgoing_mail', label: nd.nodeWizardConnectTab || 'Connect as node' },
+                      { value: 'status' as NodeWizardPanel, icon: 'monitor_heart', label: nd.nodeWizardStatusTab || 'Node status' },
+                      { value: 'approve' as NodeWizardPanel, icon: 'approval_delegation', label: nd.nodeWizardApproveTab || 'Approve node requests' },
+                    ].map(item => (
+                      <button key={item.value} onClick={() => setNodeWizardPanel(item.value)}
+                        className={`h-9 px-3 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${nodeWizardPanel === item.value ? 'bg-primary text-white shadow-sm' : 'theme-text-secondary hover:bg-slate-100 dark:hover:bg-white/10'}`}>
+                        <span className="material-symbols-outlined text-[14px]">{item.icon}</span>
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {nodeWizardPanel === 'connect' && (
+                    <>
+                    {/* Step indicator */}
+                    <div className="flex items-center gap-1">
+                      {[
+                        { step: 1 as const, icon: 'settings_ethernet', label: nd.nodeWizardStep1 || 'Configure' },
+                        { step: 2 as const, icon: 'wifi_tethering', label: nd.nodeWizardTestConnect || 'Test' },
+                        { step: 3 as const, icon: 'rocket_launch', label: nd.nodeWizardStep2Short || 'Install' },
+                      ].map((s, i) => (
+                        <React.Fragment key={s.step}>
+                          {i > 0 && <div className={`flex-1 h-px ${nodeWizardStep > s.step - 1 ? 'bg-primary/60' : 'bg-slate-200 dark:bg-white/10'}`} />}
+                          <button onClick={() => { if (s.step <= nodeWizardStep || (s.step === 2 && nodeWizardTestResult?.ok)) setNodeWizardStep(s.step); }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${nodeWizardStep === s.step ? 'bg-primary/15 text-primary border border-primary/30' : nodeWizardStep > s.step ? 'text-mac-green bg-mac-green/5 border border-mac-green/20' : 'theme-text-muted border border-transparent'}`}>
+                            <span className="material-symbols-outlined text-[14px]">{nodeWizardStep > s.step ? 'check_circle' : s.icon}</span>
+                            <span className="hidden sm:inline">{s.label}</span>
+                          </button>
+                        </React.Fragment>
+                      ))}
+                    </div>
+
+                      {nodeWizardStep === 1 && (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-2 gap-y-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider">{nd.nodeWizardHost || 'Host'} *</label>
+                              <input value={nodeWizardHost} onChange={e => { setNodeWizardHost(e.target.value); setNodeWizardTestResult(null); }}
+                                placeholder="192.168.1.100"
+                                className="w-full h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider">{nd.nodeWizardGatewayPort || 'Gateway Port'} *</label>
+                              <NumberStepper value={nodeWizardPort} onChange={v => { setNodeWizardPort(v.replace(/[^0-9]/g, '')); setNodeWizardTestResult(null); }} min={1} max={65535}
+                                className="h-9 bg-white dark:bg-black/20" inputClassName="text-[12px]" />
+                              <p className="text-[9px] theme-text-muted">{nd.nodeWizardPortHint || 'OpenClaw gateway port (default 18789), not the ClawDeckX port'}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider">{nd.nodeWizardGatewayToken || 'Gateway Token'} *</label>
+                              <div className="relative">
+                                <input value={nodeWizardToken} onChange={e => setNodeWizardToken(e.target.value)} placeholder={nd.nodeWizardGatewayTokenHint || 'Paste the target gateway token here'}
+                                  type="password" autoComplete="off"
+                                  className="w-full h-9 px-3 pe-8 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] font-mono text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
+                                <span className="material-symbols-outlined text-[14px] absolute end-2.5 top-1/2 -translate-y-1/2 text-amber-500 dark:text-amber-400">key</span>
+                              </div>
+                              <p className="text-[9px] theme-text-muted">{nd.nodeWizardGatewayTokenDesc || 'Required — copy from the target gateway\'s settings (gateway.auth.token)'}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider">{nd.nodeWizardNodeId || 'Node ID'}</label>
+                              <input value={nodeWizardNodeId} onChange={e => setNodeWizardNodeId(e.target.value)} placeholder={nd.nodeWizardNodeIdHint || 'auto-generated if empty'}
+                                className="w-full h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] font-mono text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider">{nd.nodeWizardName || 'Display name'}</label>
+                              <input value={nodeWizardName} onChange={e => setNodeWizardName(e.target.value)} placeholder={nd.nodeWizardNameHint || 'e.g. office-pc'}
+                                className="w-full h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => setNodeWizardTls(v => !v)}
+                              className={`h-8 px-3 rounded-lg border text-[11px] font-bold flex items-center gap-1.5 transition-colors ${nodeWizardTls ? 'bg-sky-500/10 border-sky-500/30 text-sky-500' : 'bg-white dark:bg-black/20 border-slate-200 dark:border-white/10 theme-text-secondary'}`}>
+                              <span className="material-symbols-outlined text-[14px]">{nodeWizardTls ? 'lock' : 'lock_open'}</span>
+                              {nodeWizardTls ? (nd.nodeWizardTlsOn || 'TLS on') : (nd.nodeWizardTlsOff || 'TLS off')}
+                            </button>
+                            {!nodeWizardTls && nodeWizardHost.trim() && !['127.0.0.1', 'localhost', '::1'].includes(nodeWizardHost.trim().toLowerCase()) && (
+                              <span className="text-[9px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">warning</span>
+                                {nd.nodeWizardInsecureHint || 'Plaintext ws:// to remote host — insecure private network mode will be enabled automatically'}
+                              </span>
+                            )}
+                            <span className="flex-1" />
+                            <button onClick={handleTestNodeConnection} disabled={nodeWizardTesting || !nodeWizardHost.trim()}
+                              className="h-9 px-4 bg-primary text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1.5 hover:bg-primary/90 transition-colors">
+                              <span className={`material-symbols-outlined text-[14px] ${nodeWizardTesting ? 'animate-spin' : ''}`}>{nodeWizardTesting ? 'progress_activity' : 'wifi_tethering'}</span>
+                              {nodeWizardTesting ? (nd.nodeWizardTesting || 'Testing...') : (nd.nodeWizardTestConnect || 'Test connection')}
+                            </button>
+                          </div>
+                          {nodeWizardTestResult && (
+                            <div className={`rounded-lg p-3 ${nodeWizardTestResult.ok ? 'bg-mac-green/5 border border-mac-green/20' : 'bg-mac-red/5 border border-mac-red/20'}`}>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className={`material-symbols-outlined text-[16px] ${nodeWizardTestResult.ok ? 'text-mac-green' : 'text-mac-red'}`}>{nodeWizardTestResult.ok ? 'check_circle' : 'error'}</span>
+                                <span className={`text-[12px] font-bold ${nodeWizardTestResult.ok ? 'text-mac-green' : 'text-mac-red'}`}>
+                                  {nodeWizardTestResult.ok ? (nd.nodeWizardTestOk || 'Connection successful') : (nd.nodeWizardTestFail || 'Connection failed')}
+                                </span>
+                              </div>
+                              {nodeWizardTestResult.ok ? (
+                                <div className="flex gap-3 text-[11px]">
+                                  <span className={`flex items-center gap-1 ${nodeWizardTestResult.http ? 'text-mac-green' : 'text-amber-500'}`}>
+                                    <span className="material-symbols-outlined text-[12px]">{nodeWizardTestResult.http ? 'check' : 'remove'}</span>HTTP
+                                  </span>
+                                  <span className={`flex items-center gap-1 ${nodeWizardTestResult.ws ? 'text-mac-green' : 'text-amber-500'}`}>
+                                    <span className="material-symbols-outlined text-[12px]">{nodeWizardTestResult.ws ? 'check' : 'remove'}</span>WebSocket
+                                  </span>
+                                </div>
+                              ) : (
+                                <p className="text-[11px] text-mac-red/80">{nodeWizardTestResult.detail}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Step 2: Install service */}
+                      {nodeWizardStep === 2 && (
+                        <div className="space-y-3">
+                          <div className="rounded-lg bg-mac-green/5 border border-mac-green/20 p-3 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-mac-green text-[16px]">check_circle</span>
+                            <span className="text-[12px] font-bold text-mac-green">{nd.nodeWizardTestPassed || 'Connection verified'}</span>
+                            <span className="text-[11px] theme-text-muted ms-1">{nodeWizardHost}:{nodeWizardPort}</span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button onClick={handleRunNodeWizard} disabled={nodeWizardRunning}
+                              className="h-9 px-4 bg-primary text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1.5 hover:bg-primary/90 transition-colors">
+                              <span className={`material-symbols-outlined text-[14px] ${nodeWizardRunning ? 'animate-spin' : ''}`}>{nodeWizardRunning ? 'progress_activity' : 'rocket_launch'}</span>
+                              {nodeWizardRunning ? (nd.nodeWizardRunning || 'Installing...') : (nd.nodeWizardStartLocal || 'Install local node service')}
+                            </button>
+                            <button onClick={() => setNodeWizardStep(1)}
+                              className="h-9 px-3 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[14px]">arrow_back</span>{nd.nodeWizardBackConfig || 'Back'}
+                            </button>
+                          </div>
+
+                          {nodeWizardResult && (
+                            <div className={`px-3 py-2 rounded-lg text-[11px] ${nodeWizardResult.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-mac-red/10 text-mac-red'}`}>
+                              {nodeWizardResult.text}
+                            </div>
+                          )}
+
+                          {/* Collapsible command preview */}
+                          <button onClick={() => setNodeWizardShowCmd(v => !v)}
+                            className="flex items-center gap-1.5 text-[10px] theme-text-muted hover:theme-text-secondary transition-colors">
+                            <span className="material-symbols-outlined text-[12px]">{nodeWizardShowCmd ? 'expand_less' : 'expand_more'}</span>
+                            {nd.nodeWizardShowCommand || 'Show command'}
+                          </button>
+                          {nodeWizardShowCmd && (
+                            <div className="space-y-2">
+                              <div className="rounded-xl bg-slate-950 text-slate-100 p-3 font-mono text-[11px] break-all select-all">
+                                {nodeWizardCommand}
+                              </div>
+                              <button onClick={handleCopyNodeWizardCommand}
+                                className="h-8 px-3 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">content_copy</span>{nd.copyCommand || 'Copy command'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Step 3: Done — prompt to approve */}
+                      {nodeWizardStep === 3 && (
+                        <div className="space-y-3">
+                          <div className="rounded-lg bg-mac-green/5 border border-mac-green/20 p-4 text-center">
+                            <span className="material-symbols-outlined text-mac-green text-[28px]">task_alt</span>
+                            <p className="text-[12px] font-bold text-mac-green mt-2">{nd.nodeWizardInstallDone || 'Node service installed'}</p>
+                            <p className="text-[11px] theme-text-muted mt-1">{nd.nodeWizardApproveHint || 'Node request has been sent. The target gateway admin needs to approve this node.'}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => { setNodeWizardStep(1); setNodeWizardTestResult(null); setNodeWizardResult(null); }}
+                              className="h-9 px-3 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[14px]">restart_alt</span>{nd.nodeWizardRestart || 'Start over'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {nodeWizardPanel === 'status' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px] text-cyan-500">monitor_heart</span>
+                        <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{nd.nodeWizardStatusTab || 'Node status'}</h3>
+                        <span className="flex-1" />
+                        <button onClick={fetchNodeServiceStatus} disabled={nodeServiceLoading}
+                          className="h-8 px-3 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5 disabled:opacity-50">
+                          <span className={`material-symbols-outlined text-[14px] ${nodeServiceLoading ? 'animate-spin' : ''}`}>{nodeServiceLoading ? 'progress_activity' : 'refresh'}</span>
+                          {nd.refresh || 'Refresh'}
+                        </button>
+                      </div>
+                      {!nodeServiceStatus && !nodeServiceLoading && (
+                        <div className="rounded-xl bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-6 text-center">
+                          <span className="material-symbols-outlined text-[28px] text-slate-300 dark:text-white/20">info</span>
+                          <p className="text-[12px] font-bold theme-text mt-2">{nd.nodeWizardStatusEmpty || 'Click Refresh to query node service status'}</p>
+                        </div>
+                      )}
+                      {nodeServiceLoading && !nodeServiceStatus && (
+                        <div className="rounded-xl bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-6 text-center">
+                          <span className="material-symbols-outlined text-[28px] text-primary animate-spin">progress_activity</span>
+                          <p className="text-[12px] font-bold theme-text mt-2">{nd.nodeWizardTesting || 'Querying...'}</p>
+                        </div>
+                      )}
+                      {nodeServiceStatus && (
+                        <div className="space-y-2">
+                          {nodeServiceStatus.error && (
+                            <div className="rounded-lg bg-mac-red/5 border border-mac-red/20 p-3">
+                              <p className="text-[11px] font-bold text-mac-red">{nd.nodeWizardStatusError || 'Error'}</p>
+                              <p className="text-[10px] font-mono theme-text-muted mt-1 break-all">{nodeServiceStatus.error}</p>
+                            </div>
+                          )}
+                          {nodeServiceStatus.service && (
+                            <>
+                              <div className="rounded-lg bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-3 space-y-2">
+                                {/* Service installed? */}
+                                <div className="flex items-center gap-2">
+                                  <span className={`material-symbols-outlined text-[14px] ${nodeServiceStatus.service.loaded ? 'text-mac-green' : 'text-mac-red'}`}>
+                                    {nodeServiceStatus.service.loaded ? 'check_circle' : 'cancel'}
+                                  </span>
+                                  <span className="text-[11px] font-bold theme-text">{nd.nodeWizardStatusInstalled || 'Service registered'}</span>
+                                  <span className="text-[10px] theme-text-muted">{nodeServiceStatus.service.loadedText || '-'}</span>
+                                </div>
+                                {/* Runtime status */}
+                                {nodeServiceStatus.service.runtime && (
+                                  <div className="flex items-center gap-2">
+                                    <span className={`material-symbols-outlined text-[14px] ${nodeServiceStatus.service.runtime.status === 'running' ? 'text-mac-green' : 'text-amber-500'}`}>
+                                      {nodeServiceStatus.service.runtime.status === 'running' ? 'play_circle' : 'pause_circle'}
+                                    </span>
+                                    <span className="text-[11px] font-bold theme-text">{nd.nodeWizardStatusRuntime || 'Runtime'}</span>
+                                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${nodeServiceStatus.service.runtime.status === 'running' ? 'bg-mac-green/10 text-mac-green' : 'bg-amber-500/10 text-amber-500'}`}>
+                                      {nodeServiceStatus.service.runtime.status}
+                                    </span>
+                                    {nodeServiceStatus.service.runtime.pid && (
+                                      <span className="text-[10px] theme-text-muted">PID: {nodeServiceStatus.service.runtime.pid}</span>
+                                    )}
+                                  </div>
+                                )}
+                                {nodeServiceStatus.service.runtime?.detail && (
+                                  <p className="text-[10px] theme-text-muted ps-5 break-all">{nodeServiceStatus.service.runtime.detail}</p>
+                                )}
+                              </div>
+                              {/* Connection target from command args */}
+                              {nodeServiceStatus.service.command?.programArguments && (
+                                <div className="rounded-lg bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-3">
+                                  <p className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1">{nd.nodeWizardStatusTarget || 'Connection target'}</p>
+                                  <p className="text-[11px] font-mono theme-text break-all">
+                                    {(() => {
+                                      const args: string[] = nodeServiceStatus.service.command.programArguments;
+                                      const hi = args.indexOf('--host');
+                                      const pi = args.indexOf('--port');
+                                      const host = hi >= 0 && hi + 1 < args.length ? args[hi + 1] : '?';
+                                      const port = pi >= 0 && pi + 1 < args.length ? args[pi + 1] : '?';
+                                      const hasTls = args.includes('--tls');
+                                      return `${hasTls ? 'wss' : 'ws'}://${host}:${port}`;
+                                    })()}
+                                  </p>
+                                </div>
+                              )}
+                              {/* Env info */}
+                              {nodeServiceStatus.service.command?.environment && (
+                                <div className="rounded-lg bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-3">
+                                  <p className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1">{nd.nodeWizardStatusEnv || 'Service environment'}</p>
+                                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] font-mono">
+                                    {Object.entries(nodeServiceStatus.service.command.environment as Record<string, string>)
+                                      .filter(([k]) => k.startsWith('OPENCLAW_'))
+                                      .map(([k, v]) => (
+                                        <React.Fragment key={k}>
+                                          <span className="theme-text-muted truncate">{k}</span>
+                                          <span className="theme-text truncate">{v as string}</span>
+                                        </React.Fragment>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {nodeWizardPanel === 'approve' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px] text-purple-500">hub</span>
+                        <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{nd.nodeWizardApproveTab || 'Approve node requests'}</h3>
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold">{nodePending.length}</span>
+                        <span className="flex-1" />
+                        <button onClick={() => { fetchDevices(); fetchNodes(); }}
+                          className="h-8 px-3 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[14px]">refresh</span>{nd.nodeWizardRefreshPending || nd.refresh}
+                        </button>
+                      </div>
+                      {nodePending.length === 0 ? (
+                        <div className="rounded-xl bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-6 text-center">
+                          <span className="material-symbols-outlined text-[28px] text-slate-300 dark:text-white/20">inbox</span>
+                          <p className="text-[12px] font-bold theme-text mt-2">{nd.nodeWizardApproveEmpty || 'No pending node requests'}</p>
+                          <p className="text-[10px] theme-text-muted mt-1">{nd.nodeWizardApproveDesc || 'Requests from other OpenClaw nodes will appear here for approval.'}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {nodePending.map((req: any) => (
+                            <div key={req.nodeId || req.requestId} className="bg-purple-50 dark:bg-purple-500/[0.04] border border-purple-200/50 dark:border-purple-500/10 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined text-purple-500 text-[20px]">dns</span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-[12px] text-slate-800 dark:text-white truncate">{req.displayName || req.nodeId}</h4>
+                                <p className="text-[10px] text-slate-400 dark:text-white/40 font-mono truncate">{req.nodeId}</p>
+                                <div className="flex flex-wrap gap-2 mt-1 text-[11px] text-slate-400 dark:text-white/35">
+                                  {req.platform && <span>{nd.platform}: {req.platform}</span>}
+                                  {req.remoteIp && <span>{nd.ip}: {req.remoteIp}</span>}
+                                  {req.ts && <span>{nd.requested} {fmtTs(req.ts)}</span>}
+                                </div>
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => handleNodePairApprove(req.requestId, req.displayName || req.nodeId)}
+                                  className="h-8 px-4 bg-mac-green text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">check</span>{nd.approve}
+                                </button>
+                                <button onClick={() => handleNodePairReject(req.requestId, req.displayName || req.nodeId)}
+                                  className="h-8 px-4 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 text-[10px] font-bold rounded-lg hover:bg-mac-red/10 hover:text-mac-red transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">close</span>{nd.reject}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1493,7 +2173,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
 
                               {nodeDetail && (
                                 <>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px]">
+                                  <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-2 gap-y-1.5 text-[10px]">
                                     {nodeDetail.displayName && (<><span className="text-slate-400 dark:text-white/35">{nd.displayName}</span><span className="text-slate-600 dark:text-white/60">{nodeDetail.displayName}</span></>)}
                                     {nodeDetail.coreVersion && (<><span className="text-slate-400 dark:text-white/35">{nd.coreVersion}</span><span className="text-slate-600 dark:text-white/60 font-mono">{nodeDetail.coreVersion}</span></>)}
                                     {nodeDetail.uiVersion && (<><span className="text-slate-400 dark:text-white/35">{nd.uiVersion}</span><span className="text-slate-600 dark:text-white/60 font-mono">{nodeDetail.uiVersion}</span></>)}
@@ -1528,23 +2208,23 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
 
                                   <div>
                                     <div className="text-[11px] font-bold text-slate-400 dark:text-white/35 uppercase tracking-wider mb-1">{nd.capabilities}</div>
-                                    {Array.isArray(nodeDetail.caps) && nodeDetail.caps.length > 0 ? (
+                                    {Array.isArray((nodeDetail.caps?.length ? nodeDetail.caps : node.caps)) && (nodeDetail.caps?.length ? nodeDetail.caps : node.caps)!.length > 0 ? (
                                       <div className="flex flex-wrap gap-1">
-                                        {nodeDetail.caps.map(c => <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-mac-green/10 text-mac-green font-bold">{c}</span>)}
+                                        {(nodeDetail.caps?.length ? nodeDetail.caps : node.caps)!.map(c => <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-mac-green/10 text-mac-green font-bold">{c}</span>)}
                                       </div>
                                     ) : <p className="text-[10px] text-slate-400">-</p>}
                                   </div>
 
                                   <div>
                                     <div className="text-[11px] font-bold text-slate-400 dark:text-white/35 uppercase tracking-wider mb-1">{nd.commands}</div>
-                                    {Array.isArray(nodeDetail.commands) && nodeDetail.commands.length > 0 ? (
+                                    {Array.isArray((nodeDetail.commands?.length ? nodeDetail.commands : node.commands)) && (nodeDetail.commands?.length ? nodeDetail.commands : node.commands)!.length > 0 ? (
                                       <div className="flex flex-wrap gap-1">
-                                        {nodeDetail.commands.map(c => <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 font-bold font-mono">{c}</span>)}
+                                        {(nodeDetail.commands?.length ? nodeDetail.commands : node.commands)!.map(c => <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 font-bold font-mono">{c}</span>)}
                                       </div>
                                     ) : <p className="text-[10px] text-slate-400">{nd.noCommands}</p>}
                                   </div>
 
-                                  {nodeDetail.connected && Array.isArray(nodeDetail.commands) && nodeDetail.commands.length > 0 && (
+                                  {nodeDetail.connected && Array.isArray((nodeDetail.commands?.length ? nodeDetail.commands : node.commands)) && (nodeDetail.commands?.length ? nodeDetail.commands : node.commands)!.length > 0 && (
                                     <div className="p-3 rounded-xl bg-white dark:bg-black/20 border border-slate-200/60 dark:border-white/5 space-y-2">
                                       <div className="text-[11px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider flex items-center gap-1">
                                         <span className="material-symbols-outlined text-[12px] text-primary">terminal</span>
@@ -1552,7 +2232,7 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                                       </div>
                                       <div className="flex flex-col sm:flex-row gap-2">
                                         <CustomSelect value={invokeCmd} onChange={v => setInvokeCmd(v)}
-                                          options={[{ value: '', label: `${nd.invokeCommand}...` }, ...nodeDetail.commands.map(c => ({ value: c, label: c }))]}
+                                          options={[{ value: '', label: `${nd.invokeCommand}...` }, ...(nodeDetail.commands?.length ? nodeDetail.commands : node.commands)!.map(c => ({ value: c, label: c }))]}
                                           className="flex-1 h-7 px-2 bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-lg text-[10px] font-mono text-slate-700 dark:text-white/70" />
                                         <NumberStepper
                                           min={1}
@@ -1642,11 +2322,6 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                     <span className="material-symbols-outlined text-[14px]">help_outline</span>
                     <span className="hidden sm:inline">{nd.pairFlow}</span>
                   </button>
-                  <button onClick={() => setShowNodeWizard(v => !v)}
-                    className={`h-8 px-3 flex items-center gap-1.5 border rounded-lg text-[11px] font-bold transition-all ${showNodeWizard ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/70 hover:bg-slate-200 dark:hover:bg-white/10'}`}>
-                    <span className="material-symbols-outlined text-[14px]">route</span>
-                    <span className="hidden sm:inline">{nd.nodeWizard || 'Node Wizard'}</span>
-                  </button>
                   <button onClick={fetchDevices} disabled={devicesLoading}
                     className="h-8 px-3 flex items-center gap-1.5 theme-field hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold theme-text-secondary disabled:opacity-50">
                     <span className={`material-symbols-outlined text-[14px] ${devicesLoading ? 'animate-spin' : ''}`}>{devicesLoading ? 'progress_activity' : 'refresh'}</span>
@@ -1672,150 +2347,6 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                     <span className="material-symbols-outlined text-[14px]">content_copy</span>
                     <span className="hidden sm:inline">{nd.copy || 'Copy'}</span>
                   </button>
-                </div>
-              )}
-
-              {showNodeWizard && (
-                <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] to-sky-500/[0.04] dark:from-primary/[0.10] dark:to-sky-500/[0.06] p-4 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-primary text-[20px]">hub</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-bold text-slate-800 dark:text-white">{nd.nodeWizard || 'Node Wizard'}</h3>
-                      <p className="text-[11px] text-slate-500 dark:text-white/45 mt-1">{nd.nodeWizardDesc || 'Connect this computer as a node to another OpenClaw gateway, then approve the request below.'}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-1">
-                    {[
-                      { value: 'connect' as NodeWizardPanel, icon: 'outgoing_mail', label: nd.nodeWizardConnectTab || 'Connect as node' },
-                      { value: 'approve' as NodeWizardPanel, icon: 'approval_delegation', label: nd.nodeWizardApproveTab || 'Approve node requests' },
-                    ].map(item => (
-                      <button key={item.value} onClick={() => setNodeWizardPanel(item.value)}
-                        className={`h-9 px-3 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${nodeWizardPanel === item.value ? 'bg-primary text-white shadow-sm' : 'theme-text-secondary hover:bg-slate-100 dark:hover:bg-white/10'}`}>
-                        <span className="material-symbols-outlined text-[14px]">{item.icon}</span>
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {nodeWizardPanel === 'connect' && (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <input value={nodeWizardHost} onChange={e => setNodeWizardHost(e.target.value)} placeholder={nd.nodeWizardHost || nd.host}
-                            className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
-                          <NumberStepper value={nodeWizardPort} onChange={v => setNodeWizardPort(v.replace(/[^0-9]/g, ''))} min={1} max={65535}
-                            className="h-9 bg-white dark:bg-black/20" inputClassName="text-[12px]" />
-                          <input value={nodeWizardNodeId} onChange={e => setNodeWizardNodeId(e.target.value)} placeholder={nd.nodeWizardNodeId || nd.pairNodeId}
-                            className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] font-mono text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
-                          <input value={nodeWizardName} onChange={e => setNodeWizardName(e.target.value)} placeholder={nd.nodeWizardName || nd.pairDisplayName}
-                            className="h-9 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-[12px] text-slate-700 dark:text-white/80 outline-none focus:border-primary/50" />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="h-9 px-3 bg-primary/10 border border-primary/20 rounded-lg text-[12px] font-bold text-primary flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[15px]">verified</span>
-                            {nd.nodeWizardInstallRecommended || 'Recommended: install service'}
-                          </div>
-                          <button onClick={() => setNodeWizardTls(v => !v)}
-                            className={`w-full h-9 px-3 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${nodeWizardTls ? 'bg-sky-500/10 border-sky-500/30 text-sky-500' : 'bg-white dark:bg-black/20 border-slate-200 dark:border-white/10 theme-text-secondary'}`}>
-                            <span className="material-symbols-outlined text-[14px]">{nodeWizardTls ? 'lock' : 'lock_open'}</span>
-                            {nodeWizardTls ? (nd.nodeWizardTlsOn || 'TLS on') : (nd.nodeWizardTlsOff || 'TLS off')}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {[
-                          { icon: 'settings_ethernet', title: nd.nodeWizardStep1 || 'Configure target', text: nd.nodeWizardStep1Desc || 'Enter the target OpenClaw gateway host and port.' },
-                          { icon: 'play_circle', title: nd.nodeWizardStep2 || 'Start local node', text: nd.nodeWizardStep2Desc || 'Install/start the node service on this computer, or run foreground manually.' },
-                        ].map(item => (
-                          <div key={item.title} className="rounded-lg bg-white/50 dark:bg-black/10 border border-white/50 dark:border-white/10 px-3 py-2 flex items-start gap-2">
-                            <span className="material-symbols-outlined text-primary text-[16px] mt-0.5">{item.icon}</span>
-                            <div className="min-w-0">
-                              <p className="text-[11px] font-bold theme-text">{item.title}</p>
-                              <p className="text-[10px] theme-text-muted leading-relaxed">{item.text}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="rounded-xl bg-slate-950 text-slate-100 p-3 font-mono text-[11px] break-all select-all">
-                        {nodeWizardCommand}
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button onClick={handleRunNodeWizard} disabled={nodeWizardRunning}
-                          className="h-9 px-4 bg-primary text-white text-[11px] font-bold rounded-lg disabled:opacity-40 flex items-center gap-1.5">
-                          <span className={`material-symbols-outlined text-[14px] ${nodeWizardRunning ? 'animate-spin' : ''}`}>{nodeWizardRunning ? 'progress_activity' : 'rocket_launch'}</span>
-                          {nodeWizardRunning ? (nd.nodeWizardRunning || 'Running...') : (nd.nodeWizardStartLocal || 'Install local node service')}
-                        </button>
-                        <button onClick={handleCopyNodeWizardCommand}
-                          className="h-9 px-4 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[14px]">content_copy</span>{nd.copyCommand || 'Copy command'}
-                        </button>
-                        <span className="text-[10px] theme-text-muted flex items-center">{nd.nodeWizardManualHint || 'Use the command only when you need to run this setup manually.'}</span>
-                      </div>
-
-                      {nodeWizardResult && (
-                        <div className={`px-3 py-2 rounded-lg text-[11px] ${nodeWizardResult.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-mac-red/10 text-mac-red'}`}>
-                          {nodeWizardResult.text}
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {nodeWizardPanel === 'approve' && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[16px] text-purple-500">hub</span>
-                        <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{nd.nodeWizardApproveTab || 'Approve node requests'}</h3>
-                        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold">{nodePending.length}</span>
-                        <span className="flex-1" />
-                        <button onClick={() => { fetchDevices(); fetchNodes(); }}
-                          className="h-8 px-3 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[14px]">refresh</span>{nd.nodeWizardRefreshPending || nd.refresh}
-                        </button>
-                      </div>
-                      {nodePending.length === 0 ? (
-                        <div className="rounded-xl bg-white/70 dark:bg-black/20 border border-white/60 dark:border-white/10 p-6 text-center">
-                          <span className="material-symbols-outlined text-[28px] text-slate-300 dark:text-white/20">inbox</span>
-                          <p className="text-[12px] font-bold theme-text mt-2">{nd.nodeWizardApproveEmpty || 'No pending node requests'}</p>
-                          <p className="text-[10px] theme-text-muted mt-1">{nd.nodeWizardApproveDesc || 'Requests from other OpenClaw nodes will appear here for approval.'}</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {nodePending.map((req: any) => (
-                            <div key={req.nodeId || req.requestId} className="bg-purple-50 dark:bg-purple-500/[0.04] border border-purple-200/50 dark:border-purple-500/10 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
-                                <span className="material-symbols-outlined text-purple-500 text-[20px]">dns</span>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-bold text-[12px] text-slate-800 dark:text-white truncate">{req.displayName || req.nodeId}</h4>
-                                <p className="text-[10px] text-slate-400 dark:text-white/40 font-mono truncate">{req.nodeId}</p>
-                                <div className="flex flex-wrap gap-2 mt-1 text-[11px] text-slate-400 dark:text-white/35">
-                                  {req.platform && <span>{nd.platform}: {req.platform}</span>}
-                                  {req.remoteIp && <span>{nd.ip}: {req.remoteIp}</span>}
-                                  {req.ts && <span>{nd.requested} {fmtTs(req.ts)}</span>}
-                                </div>
-                              </div>
-                              <div className="flex gap-2 shrink-0">
-                                <button onClick={() => handleNodePairApprove(req.requestId, req.displayName || req.nodeId)}
-                                  className="h-8 px-4 bg-mac-green text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[14px]">check</span>{nd.approve}
-                                </button>
-                                <button onClick={() => handleNodePairReject(req.requestId, req.displayName || req.nodeId)}
-                                  className="h-8 px-4 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 text-[10px] font-bold rounded-lg hover:bg-mac-red/10 hover:text-mac-red transition-colors flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[14px]">close</span>{nd.reject}
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1938,45 +2469,6 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                   </div>
                 )}
               </div>
-
-              {/* 待审批节点配对 */}
-              {nodePending.length > 0 && !showNodeWizard && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="material-symbols-outlined text-[16px] text-purple-500">hub</span>
-                    <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase tracking-wider">{nd.pending} ({nd.nodesSection})</h3>
-                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold">{nodePending.length}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {nodePending.map((req: any) => (
-                      <div key={req.nodeId || req.requestId} className="bg-purple-50 dark:bg-purple-500/[0.04] border border-purple-200/50 dark:border-purple-500/10 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
-                          <span className="material-symbols-outlined text-purple-500 text-[20px]">dns</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-[12px] text-slate-800 dark:text-white truncate">{req.displayName || req.nodeId}</h4>
-                          <p className="text-[10px] text-slate-400 dark:text-white/40 font-mono truncate">{req.nodeId}</p>
-                          <div className="flex flex-wrap gap-2 mt-1 text-[11px] text-slate-400 dark:text-white/35">
-                            {req.platform && <span>{nd.platform}: {req.platform}</span>}
-                            {req.remoteIp && <span>{nd.ip}: {req.remoteIp}</span>}
-                            {req.ts && <span>{nd.requested} {fmtTs(req.ts)}</span>}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => handleNodePairApprove(req.requestId, req.displayName || req.nodeId)}
-                            className="h-8 px-4 bg-mac-green text-white text-[10px] font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">check</span>{nd.approve}
-                          </button>
-                          <button onClick={() => handleNodePairReject(req.requestId, req.displayName || req.nodeId)}
-                            className="h-8 px-4 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 text-[10px] font-bold rounded-lg hover:bg-mac-red/10 hover:text-mac-red transition-colors flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">close</span>{nd.reject}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {devicesError && (
                 <div className="flex items-center gap-2 p-3 bg-mac-red/10 border border-mac-red/20 rounded-xl text-[11px] text-mac-red font-bold">

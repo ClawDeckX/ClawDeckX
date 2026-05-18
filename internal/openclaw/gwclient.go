@@ -370,6 +370,19 @@ func (c *GWClient) IsHealthCheckEnabled() bool {
 	return c.healthEnabled
 }
 
+func (c *GWClient) SuppressHealthRestartFor(duration time.Duration) {
+	if duration <= 0 {
+		return
+	}
+	c.healthMu.Lock()
+	until := time.Now().Add(duration)
+	if until.After(c.healthGraceUntil) {
+		c.healthGraceUntil = until
+	}
+	c.healthFailCount = 0
+	c.healthMu.Unlock()
+}
+
 func (c *GWClient) HealthStatus() map[string]interface{} {
 	c.healthMu.Lock()
 	lastOK := ""

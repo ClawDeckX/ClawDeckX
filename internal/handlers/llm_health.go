@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -94,9 +95,10 @@ type llmProbeResponse struct {
 }
 
 type cliExecRequest struct {
-	Command   string   `json:"command"`
-	Args      []string `json:"args"`
-	TimeoutMs int      `json:"timeoutMs"`
+	Command   string            `json:"command"`
+	Args      []string          `json:"args"`
+	TimeoutMs int               `json:"timeoutMs"`
+	Env       map[string]string `json:"env,omitempty"`
 }
 
 type cliExecResponse struct {
@@ -407,6 +409,18 @@ func (h *LLMHealthHandler) Exec(w http.ResponseWriter, r *http.Request) {
 	h.execLocal(w, r, req)
 }
 
+func isNodeServiceLifecycleCommand(args []string) bool {
+	if len(args) < 2 || args[0] != "node" {
+		return false
+	}
+	switch args[1] {
+	case "install", "start", "restart", "stop", "uninstall":
+		return true
+	default:
+		return false
+	}
+}
+
 // execRemote proxies CLI commands to the remote gateway via GWClient RPC mapping.
 func (h *LLMHealthHandler) execRemote(w http.ResponseWriter, r *http.Request, req cliExecRequest) {
 	if h.gwClient == nil || !h.gwClient.IsConnected() {
@@ -481,10 +495,27 @@ func (h *LLMHealthHandler) execLocal(w http.ResponseWriter, r *http.Request, req
 		web.Fail(w, r, "NOT_INSTALLED", "openclaw command not found", http.StatusBadGateway)
 		return
 	}
+	if h.gwClient != nil && isNodeServiceLifecycleCommand(req.Args) {
+		h.gwClient.SuppressHealthRestartFor(90 * time.Second)
+	}
 
 	start := time.Now()
 	c := exec.CommandContext(ctx, cmdPath, req.Args...)
 	executil.HideWindow(c)
+	// Inject caller-supplied env vars (e.g. OPENCLAW_GATEWAY_TOKEN) and
+	// the insecure-WS flag for node install to non-localhost without --tls.
+	var extraEnv []string
+	for k, v := range req.Env {
+		if isAllowedExecEnvKey(k) {
+			extraEnv = append(extraEnv, k+"="+v)
+		}
+	}
+	if needsInsecurePrivateWS(req.Args) {
+		extraEnv = append(extraEnv, "OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1")
+	}
+	if len(extraEnv) > 0 {
+		c.Env = append(os.Environ(), extraEnv...)
+	}
 	stdout, err := c.Output()
 	durationMs := time.Since(start).Milliseconds()
 
@@ -603,7 +634,7 @@ func validateNodeServiceArgs(args []string) bool {
 		return false
 	}
 	switch args[1] {
-	case "status", "start", "restart":
+	case "status", "start", "restart", "stop", "uninstall":
 		return len(args) == 3 && args[2] == "--json"
 	case "install":
 		return validateFlags(args[2:], map[string]func(string) bool{
@@ -682,6 +713,48 @@ func equalStringSlices(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// isAllowedExecEnvKey returns true for env var keys that callers may inject
+// into CLI exec commands. Only allow specific OPENCLAW_ keys to prevent
+// arbitrary environment manipulation.
+var allowedExecEnvKeys = map[string]struct{}{
+	"OPENCLAW_GATEWAY_TOKEN":             {},
+	"OPENCLAW_ALLOW_INSECURE_PRIVATE_WS": {},
+}
+
+func isAllowedExecEnvKey(key string) bool {
+	_, ok := allowedExecEnvKeys[key]
+	return ok
+}
+
+// needsInsecurePrivateWS returns true when the CLI args represent a node
+// install (or start) targeting a non-localhost host without --tls.  OpenClaw
+// refuses plaintext ws:// connections to remote IPs unless the env var
+// OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1 is present.
+func needsInsecurePrivateWS(args []string) bool {
+	if len(args) < 2 || args[0] != "node" {
+		return false
+	}
+	if args[1] != "install" && args[1] != "start" {
+		return false
+	}
+	hasTLS := false
+	host := ""
+	for i := 2; i < len(args); i++ {
+		if args[i] == "--tls" {
+			hasTLS = true
+		}
+		if args[i] == "--host" && i+1 < len(args) {
+			host = args[i+1]
+		}
+	}
+	if hasTLS || host == "" {
+		return false
+	}
+	// localhost targets don't need the insecure flag
+	h := strings.ToLower(host)
+	return h != "127.0.0.1" && h != "localhost" && h != "::1"
 }
 
 // ---------- parsers ----------

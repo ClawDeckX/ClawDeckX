@@ -282,6 +282,14 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   const [bgExpandedDetail, setBgExpandedDetail] = useState<any>(null);
   const [bgCancelBusy, setBgCancelBusy] = useState<Set<string>>(new Set());
 
+  const mapGatewayTask = useCallback((task: any) => ({
+    ...task,
+    taskId: task.taskId || task.id,
+    runtime: task.runtime || task.kind,
+    status: task.status === 'completed' ? 'succeeded' : task.status,
+    task: task.title || task.progressSummary || task.terminalSummary || task.task,
+    deliveryStatus: task.deliveryStatus,
+  }), []);
 
   const na = s?.na || '-';
 
@@ -337,6 +345,20 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   const loadBgTasks = useCallback(async () => {
     setBgTasksLoading(true);
     try {
+      const gatewayStatus = bgStatusFilter === 'succeeded' ? 'completed' : bgStatusFilter || undefined;
+      const gatewayRes = await gwApi.tasksList({
+        limit: 500,
+        status: gatewayStatus,
+      }).catch(() => null);
+      const gatewayTasks = Array.isArray((gatewayRes as any)?.tasks)
+        ? (gatewayRes as any).tasks.map(mapGatewayTask)
+        : null;
+      if (gatewayTasks) {
+        const filtered = bgRuntimeFilter ? gatewayTasks.filter((task: any) => task.runtime === bgRuntimeFilter || task.kind === bgRuntimeFilter) : gatewayTasks;
+        setBgTasks(filtered);
+        setBgTasksCount(filtered.length);
+        return;
+      }
       const res = await doctorApi.tasksList({
         runtime: bgRuntimeFilter || undefined,
         status: bgStatusFilter || undefined,
@@ -346,8 +368,8 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
         setBgTasksCount(res.count ?? 0);
       }
     } catch { /* ignore */ }
-    setBgTasksLoading(false);
-  }, [bgRuntimeFilter, bgStatusFilter]);
+    finally { setBgTasksLoading(false); }
+  }, [bgRuntimeFilter, bgStatusFilter, mapGatewayTask]);
 
 
   // Cancel a background task
@@ -361,17 +383,35 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
     if (!ok) return;
     setBgCancelBusy(prev => new Set(prev).add(taskId));
     try {
-      const res = await doctorApi.tasksCancel(taskId);
-      if (res?.success) {
-        toast('success', s.bgTaskCancelled || 'Task cancelled');
-        await loadBgTasks();
+      const gatewayRes = await gwApi.tasksCancel(taskId).catch(() => null);
+      const gatewayHandled = gatewayRes && ((gatewayRes as any).cancelled || (gatewayRes as any).found === true);
+      if (!gatewayHandled) {
+        const res = await doctorApi.tasksCancel(taskId);
+        if (res?.success) {
+          toast('success', s.bgTaskCancelled || 'Task cancelled');
+          await loadBgTasks();
+        } else {
+          toast('error', s.bgTaskCancelFailed || 'Failed to cancel task');
+        }
       } else {
-        toast('error', s.bgTaskCancelFailed || 'Failed to cancel task');
+        toast((gatewayRes as any).cancelled ? 'success' : 'warning', (gatewayRes as any).cancelled ? (s.bgTaskCancelled || 'Task cancelled') : ((gatewayRes as any).reason || s.bgTaskCancelFailed || 'Failed to cancel task'));
+        await loadBgTasks();
       }
     } catch {
-      toast('error', s.bgTaskCancelFailed || 'Failed to cancel task');
+      try {
+        const res = await doctorApi.tasksCancel(taskId);
+        if (res?.success) {
+          toast('success', s.bgTaskCancelled || 'Task cancelled');
+          await loadBgTasks();
+        } else {
+          toast('error', s.bgTaskCancelFailed || 'Failed to cancel task');
+        }
+      } catch {
+        toast('error', s.bgTaskCancelFailed || 'Failed to cancel task');
+      }
+    } finally {
+      setBgCancelBusy(prev => { const n = new Set(prev); n.delete(taskId); return n; });
     }
-    setBgCancelBusy(prev => { const n = new Set(prev); n.delete(taskId); return n; });
   }, [confirm, s, toast, loadBgTasks]);
 
   // Expand task detail
@@ -380,10 +420,15 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
     setBgExpandedId(taskId);
     setBgExpandedDetail(null);
     try {
+      const gatewayRes = await gwApi.tasksGet(taskId).catch(() => null);
+      if ((gatewayRes as any)?.task) {
+        setBgExpandedDetail(mapGatewayTask((gatewayRes as any).task));
+        return;
+      }
       const res = await doctorApi.tasksShow(taskId);
       setBgExpandedDetail(res);
     } catch { setBgExpandedDetail({ error: 'Failed to load' }); }
-  }, [bgExpandedId]);
+  }, [bgExpandedId, mapGatewayTask]);
 
   // Auto-load bg tasks when tab switches
   useEffect(() => {

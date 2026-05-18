@@ -1094,8 +1094,8 @@ export const llmApi = {
   authHealth: () => get<LlmAuthHealthSummary>('/api/v1/llm/auth-health'),
   authHealthCached: (ttlMs = 15000, force = false) =>
     getCached<LlmAuthHealthSummary>('/api/v1/llm/auth-health', ttlMs, force),
-  exec: (command: string, args: string[] = [], timeoutMs = 30000) =>
-    post<CliExecResult>('/api/v1/llm/exec', { command, args, timeoutMs }),
+  exec: (command: string, args: string[] = [], timeoutMs = 30000, env?: Record<string, string>) =>
+    post<CliExecResult>('/api/v1/llm/exec', { command, args, timeoutMs, ...(env ? { env } : {}) }),
   execCapability: () => get<ExecCapability>('/api/v1/llm/exec-capability'),
   execCapabilityCached: (ttlMs = 10000, force = false) =>
     getCached<ExecCapability>('/api/v1/llm/exec-capability', ttlMs, force),
@@ -1662,12 +1662,12 @@ export const gwApi = {
   channelsStop: (channel: string) =>
     rpc('channels.stop', { channel }),
   // Tasks (2026.5.7)
-  tasksList: (params?: { limit?: number; offset?: number }) =>
+  tasksList: (params?: { limit?: number; cursor?: string; status?: string | string[]; agentId?: string; sessionKey?: string }) =>
     rpc('tasks.list', params),
   tasksGet: (id: string) =>
-    rpc('tasks.get', { id }),
+    rpc('tasks.get', { taskId: id }),
   tasksCancel: (id: string) =>
-    rpc('tasks.cancel', { id }),
+    rpc('tasks.cancel', { taskId: id }),
   // Sessions (2026.5.7)
   sessionsDescribe: (key: string) =>
     rpc('sessions.describe', { key }),

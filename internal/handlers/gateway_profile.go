@@ -400,15 +400,22 @@ func (h *GatewayProfileHandler) TestConnection(w http.ResponseWriter, r *http.Re
 	wsURL := fmt.Sprintf("ws://%s%s", addr, wsPath)
 	wsDialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
 	wsConn, _, wsErr := wsDialer.Dial(wsURL, nil)
+	var protocolWarning string
 	if wsErr == nil {
 		wsOk = true
+		// Probe remote gateway protocol version via a connect frame
+		protocolWarning = probeGatewayProtocol(wsConn, req.Token)
 		wsConn.Close()
 	} else {
 		logger.Config.Debug().Err(wsErr).Str("url", wsURL).Msg("gateway test: WebSocket dial failed")
 	}
 
 	if httpOk || wsOk {
-		web.OK(w, r, map[string]any{"ok": true, "http": httpOk, "ws": wsOk})
+		result := map[string]any{"ok": true, "http": httpOk, "ws": wsOk}
+		if protocolWarning != "" {
+			result["protocolWarning"] = protocolWarning
+		}
+		web.OK(w, r, result)
 	} else {
 		detail := "TCP reachable but HTTP and WebSocket both failed"
 		if err != nil {
@@ -419,6 +426,64 @@ func (h *GatewayProfileHandler) TestConnection(w http.ResponseWriter, r *http.Re
 		}
 		web.Fail(w, r, "GW_TEST_FAIL", detail, http.StatusBadGateway)
 	}
+}
+
+// probeGatewayProtocol sends a minimal connect frame to detect the remote gateway's
+// protocol version. Returns a warning string if protocol is incompatible, empty if OK.
+func probeGatewayProtocol(conn *websocket.Conn, token string) string {
+	// Current local protocol version (must match OpenClaw src/gateway/protocol/version.ts)
+	const localProtocol = 4
+
+	connectFrame := map[string]any{
+		"id":     "probe-1",
+		"method": "connect",
+		"params": map[string]any{
+			"minProtocol": localProtocol,
+			"maxProtocol": localProtocol,
+			"client": map[string]any{
+				"id":      "clawdeckx-probe",
+				"mode":    "probe",
+				"version": "probe",
+			},
+			"auth": map[string]any{},
+		},
+	}
+	if token != "" {
+		connectFrame["params"].(map[string]any)["auth"] = map[string]any{"token": token}
+	}
+
+	conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+	if err := conn.WriteJSON(connectFrame); err != nil {
+		return ""
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		return ""
+	}
+
+	var resp struct {
+		Error *struct {
+			Message string `json:"message"`
+			Data    *struct {
+				Details *struct {
+					Code             string `json:"code"`
+					ExpectedProtocol int    `json:"expectedProtocol"`
+				} `json:"details"`
+			} `json:"data"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(msg, &resp) != nil || resp.Error == nil {
+		return ""
+	}
+
+	if resp.Error.Data != nil && resp.Error.Data.Details != nil &&
+		resp.Error.Data.Details.Code == "PROTOCOL_MISMATCH" {
+		remoteProto := resp.Error.Data.Details.ExpectedProtocol
+		return fmt.Sprintf("protocol_mismatch:local=%d,remote=%d", localProtocol, remoteProto)
+	}
+	return ""
 }
 
 // applyProfile applies the profile to GWClient and Service, and notifies lifecycle recorder.
