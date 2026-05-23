@@ -69,6 +69,8 @@
   "feishuPermJson": "{\"scopes\":{\"tenant\":[\"aily:file:read\",\"aily:file:write\",\"application:application.app_message_stats.overview:readonly\",\"application:application:self_manage\",\"application:bot.menu:write\",\"cardkit:card:read\",\"cardkit:card:write\",\"contact:user.employee_id:readonly\",\"corehr:file:download\",\"event:ip_list\",\"im:chat.access_event.bot_p2p_chat:read\",\"im:chat.members:bot_access\",\"im:message\",\"im:message.group_at_msg:readonly\",\"im:message.p2p_msg:readonly\",\"im:message:readonly\",\"im:message:send_as_bot\",\"im:resource\"],\"user\":[\"aily:file:read\",\"aily:file:write\",\"im:chat.access_event.bot_p2p_chat:read\"]}}",
   "yuanbao": "Yuanbao Party",
   "pluginRequired": "⚡ このチャンネルにはプラグインのインストールが必要です",
+  "communityPluginRequired": "⚡ このチャンネルはコミュニティプラグインで提供されています。設定前にプラグインをインストールしてください",
+  "dingtalkCommunityPluginNotice": "現在の OpenClaw 上流ソースには DingTalk の内蔵チャンネル実装はありません。先にコミュニティチャンネルプラグインをインストールし、正確な認証情報フィールドはプラグイン README で確認してください。",
   "installPlugin": "プラグインをインストール",
   "installing": "インストール中...",
   "pluginInstallSuccess": "プラグインのインストール成功！",

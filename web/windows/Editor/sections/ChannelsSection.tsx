@@ -124,6 +124,25 @@ const TIP_KEYS: Record<string, string> = {
 // 'when' is an optional predicate: the field is required only when when(cfg) returns true.
 // ============================================================================
 interface RequiredField { field: string; labelKey: string; when?: (cfg: any) => boolean; }
+const CHANNEL_PLUGIN_SPECS: Record<string, { spec: string; community?: boolean }> = {
+  telegram: { spec: '@openclaw/telegram' },
+  whatsapp: { spec: '@openclaw/whatsapp' },
+  discord: { spec: '@openclaw/discord' },
+  slack: { spec: '@openclaw/slack' },
+  googlechat: { spec: '@openclaw/googlechat' },
+  feishu: { spec: '@openclaw/feishu' },
+  dingtalk: { spec: '@openclaw-china/dingtalk', community: true },
+  wecom: { spec: '@wecom/wecom-openclaw-plugin' },
+  wecom_kf: { spec: '@openclaw-china/wecom-app' },
+  'openclaw-weixin': { spec: '@tencent-weixin/openclaw-weixin' },
+  qqbot: { spec: '@openclaw/qqbot' },
+  yuanbao: { spec: 'openclaw-plugin-yuanbao@latest' },
+  msteams: { spec: '@openclaw/msteams' },
+  zalo: { spec: '@openclaw/zalo' },
+  matrix: { spec: '@openclaw/matrix' },
+  voicecall: { spec: '@openclaw/voice-call' },
+};
+
 export const REQUIRED_CREDENTIALS: Record<string, RequiredField[]> = {
   telegram: [{ field: 'botToken', labelKey: 'botToken' }],
   discord: [{ field: 'token', labelKey: 'chToken' }],
@@ -138,7 +157,7 @@ export const REQUIRED_CREDENTIALS: Record<string, RequiredField[]> = {
   ],
   wecom_kf: [{ field: 'corpId', labelKey: 'corpId' }, { field: 'corpSecret', labelKey: 'corpSecret' }, { field: 'token', labelKey: 'chToken' }, { field: 'encodingAESKey', labelKey: 'encodingAESKey' }],
   wechat: [{ field: 'appId', labelKey: 'appId' }, { field: 'appSecret', labelKey: 'appSecret' }, { field: 'token', labelKey: 'chToken' }, { field: 'encodingAesKey', labelKey: 'encodingAESKey' }],
-  dingtalk: [{ field: 'clientId', labelKey: 'clientId' }, { field: 'clientSecret', labelKey: 'clientSecret' }],
+  dingtalk: [{ field: 'appKey', labelKey: 'appKey' }, { field: 'appSecret', labelKey: 'appSecret' }],
   doubao: [{ field: 'appId', labelKey: 'appId' }, { field: 'appSecret', labelKey: 'appSecret' }],
   msteams: [{ field: 'appId', labelKey: 'appId' }, { field: 'appPassword', labelKey: 'appPassword' }],
   matrix: [{ field: 'homeserver', labelKey: 'homeserver' }],
@@ -488,7 +507,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
       else if (chId === 'feishu') { tokenMap.appId = cfg.appId || ''; tokenMap.appSecret = cfg.appSecret || ''; }
       else if (chId === 'wecom') { tokenMap.token = cfg.token || ''; tokenMap.encodingAESKey = cfg.encodingAESKey || ''; }
       else if (chId === 'wecom_kf') { tokenMap.corpId = cfg.corpId || ''; tokenMap.corpSecret = cfg.corpSecret || ''; tokenMap.token = cfg.token || ''; }
-      else if (chId === 'dingtalk') { tokenMap.clientId = cfg.clientId || ''; tokenMap.clientSecret = cfg.clientSecret || ''; }
+      else if (chId === 'dingtalk') { tokenMap.appKey = cfg.appKey || ''; tokenMap.appSecret = cfg.appSecret || ''; }
       else if (chId === 'msteams') { tokenMap.appId = cfg.appId || ''; tokenMap.appPassword = cfg.appPassword || ''; }
       else if (chId === 'matrix') { tokenMap.accessToken = cfg.accessToken || ''; tokenMap.homeserver = cfg.homeserver || ''; }
       else if (chId === 'yuanbao') { tokenMap.appKey = cfg.appKey || ''; tokenMap.appSecret = cfg.appSecret || ''; }
@@ -604,25 +623,11 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     } catch {
       setCanInstallPlugin(false);
     }
-    // Check installed status for all plugin-required channels
-    const pluginSpecs: Record<string, string> = {
-      feishu: '@openclaw/feishu',
-      dingtalk: '@openclaw-china/dingtalk',
-      wecom: '@wecom/wecom-openclaw-plugin',
-      wecom_kf: '@openclaw-china/wecom-app',
-      'openclaw-weixin': '@tencent-weixin/openclaw-weixin',
-      qqbot: '@openclaw/qqbot',
-      yuanbao: 'openclaw-plugin-yuanbao@latest',
-      msteams: '@openclaw/msteams',
-      zalo: '@openclaw/zalo',
-      matrix: '@openclaw/matrix',
-      voicecall: '@openclaw/voice-call',
-    };
     const installed: Record<string, boolean> = {};
     await Promise.all(
-      Object.entries(pluginSpecs).map(async ([ch, spec]) => {
+      Object.entries(CHANNEL_PLUGIN_SPECS).map(async ([ch, meta]) => {
         try {
-          const res = await pluginApi.checkInstalled(spec);
+          const res = await pluginApi.checkInstalled(meta.spec);
           installed[ch] = res.installed;
         } catch {
           installed[ch] = false;
@@ -730,6 +735,17 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     }
   }, [es, reload]);
 
+  const ensureChannelPluginReady = useCallback((chId: string): boolean => {
+    const meta = CHANNEL_PLUGIN_SPECS[chId];
+    if (!meta || pluginInstalled[chId]) return true;
+    const msg = meta.community
+      ? (cw.communityPluginRequired || 'This channel is provided by a community plugin. Install the plugin before configuring it.')
+      : (cw.pluginRequired || 'This channel requires a plugin first');
+    toast('error', `${msg}: ${meta.spec}`);
+    if (!wizardAccount) setWizardStep(1);
+    return false;
+  }, [cw, pluginInstalled, toast, wizardAccount]);
+
   const handleSendTest = useCallback(async (ch: string) => {
     if (!sendTo.trim() || !sendMsg.trim()) return;
     setSendBusy(true);
@@ -828,6 +844,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
   }, [channels, getField]);
 
   const handleFinishWizard = useCallback(async (chId: string) => {
+    if (!ensureChannelPluginReady(chId)) return;
     const acctKey = wizardAccount || 'default';
     const acctCfg = channels[chId]?.accounts?.[acctKey] || {};
     const credErrors = getCredentialErrors(chId, acctCfg, es);
@@ -873,7 +890,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     } else {
       resetWizard();
     }
-  }, [getField, resetWizard, saveWizardChannelConfig, channels, es, toast, wizardAccount, waitGatewayReady, cw, reload]);
+  }, [ensureChannelPluginReady, getField, resetWizard, saveWizardChannelConfig, channels, es, toast, wizardAccount, waitGatewayReady, cw, reload]);
 
   const handleApprovePairing = useCallback(async (chId: string) => {
     if (!pairingCode.trim()) return;
@@ -1882,8 +1899,11 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
         {/* 钉钉 */}
         {ch === 'dingtalk' && (
           <>
-            <TextField label={labelClientId} value={g(['clientId']) || ''} onChange={v => s(['clientId'], v)} tooltip={es.tipDTClientId} />
-            <PasswordField label={labelClientSecret} value={g(['clientSecret']) || ''} onChange={v => s(['clientSecret'], v)} tooltip={es.tipDTClientSecret} />
+            <div className="md:col-span-12 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400">
+              {cw.dingtalkCommunityPluginNotice || 'DingTalk is not present in the current OpenClaw bundled channel sources. Install the community channel plugin first, then verify its README for exact credential fields.'}
+            </div>
+            <TextField label={labelAppKey} value={g(['appKey']) || ''} onChange={v => s(['appKey'], v)} tooltip={es.tipDTAppKey || es.tipDTClientId} />
+            <PasswordField label={labelAppSecret} value={g(['appSecret']) || ''} onChange={v => s(['appSecret'], v)} tooltip={es.tipDTAppSecret || es.tipDTClientSecret} />
             <SwitchField label={es.chEnableAICard} value={g(['enableAICard']) === true} onChange={v => s(['enableAICard'], v)} tooltip={es.tipDTAICard} />
             <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'open'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
             <SelectField label={es.groupPolicy} value={g(['groupPolicy']) || 'open'} onChange={v => s(['groupPolicy'], v)} options={groupPolicy(es)} tooltip={tip('groupPolicy')} />
@@ -2231,18 +2251,8 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
                       </a>
                     )}
                     {/* Plugin install hint for channels that need plugins */}
-                    {chId && ['feishu', 'dingtalk', 'qqbot', 'yuanbao', 'msteams', 'zalo', 'voicecall', 'matrix', 'wecom', 'wecom_kf', 'openclaw-weixin'].includes(chId) && (() => {
-                      const pluginSpec = chId === 'feishu' ? '@openclaw/feishu' :
-                        chId === 'dingtalk' ? '@openclaw-china/dingtalk' :
-                          chId === 'wecom' ? '@wecom/wecom-openclaw-plugin' :
-                            chId === 'wecom_kf' ? '@openclaw-china/wecom-app' :
-                              chId === 'openclaw-weixin' ? '@tencent-weixin/openclaw-weixin' :
-                                chId === 'qqbot' ? '@openclaw/qqbot' :
-                                  chId === 'yuanbao' ? 'openclaw-plugin-yuanbao@latest' :
-                                  chId === 'msteams' ? '@openclaw/msteams' :
-                                    chId === 'zalo' ? '@openclaw/zalo' :
-                                      chId === 'matrix' ? '@openclaw/matrix' :
-                                        chId === 'voicecall' ? '@openclaw/voice-call' : '';
+                    {chId && CHANNEL_PLUGIN_SPECS[chId] && (() => {
+                      const pluginSpec = CHANNEL_PLUGIN_SPECS[chId].spec;
                       const isInstalled = pluginInstalled[chId] === true;
 
                       // Still detecting — show a neutral "checking" pill so users
@@ -2274,7 +2284,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
                           <div className="flex items-start gap-2">
                             <span className="material-symbols-outlined text-[14px] text-violet-500 mt-0.5">extension</span>
                             <div className="min-w-0 flex-1">
-                              <p className="text-[10px] font-bold text-violet-700 dark:text-violet-400">{cw.pluginRequired}</p>
+                              <p className="text-[10px] font-bold text-violet-700 dark:text-violet-400">
+                                {CHANNEL_PLUGIN_SPECS[chId].community ? (cw.communityPluginRequired || cw.pluginRequired) : cw.pluginRequired}
+                              </p>
                               {canInstallPlugin === true ? (
                                 <div className="mt-2 flex flex-col gap-2">
                                   <button
@@ -2411,8 +2423,12 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
                     )}
                   </div>
                   <div className="flex justify-end mt-3 pt-3 border-t border-slate-100 dark:border-white/[0.04]">
-                    <button onClick={() => setWizardStep(2)}
-                      className="px-4 py-1.5 bg-primary hover:bg-primary/90 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1">
+                    <button onClick={() => {
+                      if (!ensureChannelPluginReady(chId)) return;
+                      setWizardStep(2);
+                    }}
+                      disabled={!!chId && !!CHANNEL_PLUGIN_SPECS[chId] && pluginInstalled[chId] !== true}
+                      className="px-4 py-1.5 bg-primary hover:bg-primary/90 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed">
                       {cw.next || es.done} <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                     </button>
                   </div>

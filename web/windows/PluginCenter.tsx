@@ -12,6 +12,11 @@ import { pickLocalizedText } from '../utils/localizedContent';
 // Built-in plugin catalog
 type CatalogEntry = { id: string; spec: string; name: string; nameZh: string; description: string; descriptionZh: string; icon: string; category: 'channel' | 'integration' | 'utility'; relatedChannels?: string[] };
 const PLUGIN_CATALOG: CatalogEntry[] = [
+  { id: 'telegram', spec: '@openclaw/telegram', name: 'Telegram', nameZh: 'Telegram', description: 'Telegram Bot API channel plugin', descriptionZh: 'Telegram Bot API 消息渠道插件', icon: '✈️', category: 'channel', relatedChannels: ['telegram'] },
+  { id: 'whatsapp', spec: '@openclaw/whatsapp', name: 'WhatsApp', nameZh: 'WhatsApp', description: 'WhatsApp Web channel plugin', descriptionZh: 'WhatsApp Web 消息渠道插件', icon: '🟢', category: 'channel', relatedChannels: ['whatsapp'] },
+  { id: 'discord', spec: '@openclaw/discord', name: 'Discord', nameZh: 'Discord', description: 'Discord Bot API channel plugin', descriptionZh: 'Discord Bot API 消息渠道插件', icon: '🎮', category: 'channel', relatedChannels: ['discord'] },
+  { id: 'slack', spec: '@openclaw/slack', name: 'Slack', nameZh: 'Slack', description: 'Slack Socket Mode channel plugin', descriptionZh: 'Slack Socket Mode 消息渠道插件', icon: '#️⃣', category: 'channel', relatedChannels: ['slack'] },
+  { id: 'googlechat', spec: '@openclaw/googlechat', name: 'Google Chat', nameZh: 'Google Chat', description: 'Google Chat channel plugin', descriptionZh: 'Google Chat 消息渠道插件', icon: '💬', category: 'channel', relatedChannels: ['googlechat'] },
   { id: 'feishu', spec: '@openclaw/feishu', name: 'Feishu (Lark)', nameZh: '飞书', description: 'Feishu / Lark messaging channel plugin', descriptionZh: '飞书消息渠道插件', icon: '🪶', category: 'channel', relatedChannels: ['feishu'] },
   { id: 'dingtalk', spec: '@openclaw-china/dingtalk', name: 'DingTalk', nameZh: '钉钉', description: 'DingTalk messaging channel plugin', descriptionZh: '钉钉消息渠道插件', icon: '📌', category: 'channel', relatedChannels: ['dingtalk'] },
   { id: 'wecom-openclaw-plugin', spec: '@wecom/wecom-openclaw-plugin', name: 'WeCom', nameZh: '企业微信', description: 'WeCom (WeChat Work) messaging channel plugin', descriptionZh: '企业微信消息渠道插件', icon: '💼', category: 'channel', relatedChannels: ['wecom'] },

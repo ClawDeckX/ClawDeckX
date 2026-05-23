@@ -69,6 +69,8 @@
   "feishuPermJson": "{\"scopes\":{\"tenant\":[\"aily:file:read\",\"aily:file:write\",\"application:application.app_message_stats.overview:readonly\",\"application:application:self_manage\",\"application:bot.menu:write\",\"cardkit:card:read\",\"cardkit:card:write\",\"contact:user.employee_id:readonly\",\"corehr:file:download\",\"event:ip_list\",\"im:chat.access_event.bot_p2p_chat:read\",\"im:chat.members:bot_access\",\"im:message\",\"im:message.group_at_msg:readonly\",\"im:message.p2p_msg:readonly\",\"im:message:readonly\",\"im:message:send_as_bot\",\"im:resource\"],\"user\":[\"aily:file:read\",\"aily:file:write\",\"im:chat.access_event.bot_p2p_chat:read\"]}}",
   "yuanbao": "Yuanbao Party",
   "pluginRequired": "⚡ 이 채널은 플러그인 설치가 필요합니다",
+  "communityPluginRequired": "⚡ 이 채널은 커뮤니티 플러그인으로 제공됩니다. 채널을 설정하기 전에 플러그인을 설치하세요",
+  "dingtalkCommunityPluginNotice": "현재 OpenClaw 업스트림 소스에는 DingTalk 내장 채널 구현이 없습니다. 먼저 커뮤니티 채널 플러그인을 설치하고, 정확한 인증 필드는 플러그인 README를 확인하세요.",
   "installPlugin": "플러그인 설치",
   "installing": "설치 중...",
   "pluginInstallSuccess": "플러그인 설치 성공!",

@@ -69,6 +69,8 @@
   "feishuPermJson": "{\"scopes\":{\"tenant\":[\"aily:file:read\",\"aily:file:write\",\"application:application.app_message_stats.overview:readonly\",\"application:application:self_manage\",\"application:bot.menu:write\",\"cardkit:card:read\",\"cardkit:card:write\",\"contact:contact.base:readonly\",\"contact:contact.access_as_app\",\"contact:contact:readonly\",\"contact:contact:readonly_as_app\",\"contact:user.employee_id:readonly\",\"corehr:file:download\",\"event:ip_list\",\"im:chat.access_event.bot_p2p_chat:read\",\"im:chat.members:bot_access\",\"im:message\",\"im:message.group_at_msg:readonly\",\"im:message.p2p_msg:readonly\",\"im:message:readonly\",\"im:message:send_as_bot\",\"im:resource\"],\"user\":[\"aily:file:read\",\"aily:file:write\",\"im:chat.access_event.bot_p2p_chat:read\"]}}",
   "yuanbao": "元宝派",
   "pluginRequired": "⚡ 此频道需要先安装插件",
+  "communityPluginRequired": "⚡ 此频道由社区插件提供，请先安装插件再配置频道",
+  "dingtalkCommunityPluginNotice": "当前 OpenClaw 上游源码中没有内置钉钉频道实现。请先安装社区钉钉频道插件，并以插件 README 为准核对凭证字段。",
   "installPlugin": "一键安装插件",
   "installing": "安装中...",
   "pluginInstallSuccess": "插件安装成功！",
