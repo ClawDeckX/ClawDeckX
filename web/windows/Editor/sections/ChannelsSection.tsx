@@ -38,6 +38,7 @@ const CHANNEL_TYPES: ChannelDef[] = [
   { id: 'matrix', icon: 'hub', labelKey: 'chMatrix', category: 'other', descKey: 'chDescMatrix' },
   // China
   { id: 'feishu', icon: 'apartment', labelKey: 'chFeishu', category: 'china', descKey: 'chDescFeishu' },
+  { id: 'openclaw-lark', icon: 'apartment', labelKey: 'chLark', category: 'china', descKey: 'chDescLark' },
   { id: 'wecom', icon: 'business', labelKey: 'chWecom', category: 'china', descKey: 'chDescWecom' },
   { id: 'wecom_kf', icon: 'support_agent', labelKey: 'chWecomKf', category: 'china', descKey: 'chDescWecomKf' },
   { id: 'openclaw-weixin', icon: 'mark_chat_unread', labelKey: 'chWeixin', category: 'china', descKey: 'chDescWeixin' },
@@ -131,6 +132,7 @@ const CHANNEL_PLUGIN_SPECS: Record<string, { spec: string; community?: boolean }
   slack: { spec: '@openclaw/slack' },
   googlechat: { spec: '@openclaw/googlechat' },
   feishu: { spec: '@openclaw/feishu' },
+  'openclaw-lark': { spec: '@larksuite/openclaw-lark' },
   dingtalk: { spec: '@openclaw-china/dingtalk', community: true },
   wecom: { spec: '@wecom/wecom-openclaw-plugin' },
   wecom_kf: { spec: '@openclaw-china/wecom-app' },
@@ -149,6 +151,7 @@ export const REQUIRED_CREDENTIALS: Record<string, RequiredField[]> = {
   slack: [{ field: 'botToken', labelKey: 'botToken' }, { field: 'appToken', labelKey: 'appToken' }],
   signal: [{ field: 'account', labelKey: 'chAccount' }],
   feishu: [{ field: 'appId', labelKey: 'appId' }, { field: 'appSecret', labelKey: 'appSecret' }],
+  'openclaw-lark': [{ field: 'appId', labelKey: 'appId' }, { field: 'appSecret', labelKey: 'appSecret' }],
   wecom: [
     { field: 'botId', labelKey: 'botId' },
     { field: 'secret', labelKey: 'appSecret' },
@@ -410,6 +413,65 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
     setField(['channels', ch, 'defaultAccount'], acct);
   }, [setField]);
 
+  // One-time migration: copy legacy @openclaw/feishu config (channels.feishu) into
+  // the official @larksuite/openclaw-lark channel (channels.openclaw-lark).
+  // The two plugins share a compatible credential schema; only `webhookHost` is
+  // absent from the new plugin and is dropped. The legacy feishu channel is
+  // disabled (not deleted) so the user can roll back. Writes into the editor
+  // snapshot — the user reviews and Saves to apply.
+  const [larkMigrating, setLarkMigrating] = useState(false);
+  const stripUnsupportedLarkFields = (acct: any): any => {
+    if (!acct || typeof acct !== 'object') return acct;
+    const { webhookHost, ...rest } = acct; // eslint-disable-line @typescript-eslint/no-unused-vars
+    return rest;
+  };
+  const handleMigrateFeishuToLark = useCallback(async () => {
+    const legacy = getField(['channels', 'feishu']);
+    if (!legacy || typeof legacy !== 'object') {
+      toast('error', es.larkMigrateNoSource || 'No legacy @openclaw/feishu config found to migrate.');
+      return;
+    }
+    const existing = getField(['channels', 'openclaw-lark']);
+    const ok = await confirm({
+      title: es.larkMigrateTitle || 'Migrate Feishu config?',
+      message: existing
+        ? (es.larkMigrateOverwrite || 'An openclaw-lark config already exists. Migrating will overwrite it with the legacy @openclaw/feishu config (Webhook Host will be dropped). The legacy feishu channel will be disabled. Continue?')
+        : (es.larkMigrateConfirm || 'Copy your @openclaw/feishu config to the official openclaw-lark plugin? Webhook Host is not supported by the new plugin and will be dropped. The legacy feishu channel will be disabled so you can roll back. Continue?'),
+      danger: true,
+      confirmText: es.larkMigrateBtn || 'Migrate',
+    });
+    if (!ok) return;
+    setLarkMigrating(true);
+    try {
+      // Build the migrated channel config, stripping webhookHost at every level.
+      const accounts = legacy.accounts && typeof legacy.accounts === 'object' ? legacy.accounts : null;
+      const migrated: any = {};
+      for (const [k, v] of Object.entries(legacy)) {
+        if (k === 'accounts') continue;
+        if (k === 'webhookHost') continue;
+        migrated[k] = v;
+      }
+      if (accounts) {
+        migrated.accounts = {};
+        for (const [acctKey, acctCfg] of Object.entries(accounts)) {
+          migrated.accounts[acctKey] = stripUnsupportedLarkFields(acctCfg);
+        }
+      } else {
+        // Legacy single-account (top-level) form → normalize into accounts.default
+        migrated.accounts = { default: stripUnsupportedLarkFields(migrated) };
+      }
+      migrated.enabled = true;
+      setField(['channels', 'openclaw-lark'], migrated);
+      // Disable the legacy feishu channel (rollback path) rather than deleting it.
+      setField(['channels', 'feishu', 'enabled'], false);
+      toast('success', es.larkMigrateOk || 'Config migrated to openclaw-lark. Review and Save to apply.');
+    } catch (err: any) {
+      toast('error', `${es.larkMigrateFail || 'Migration failed'}: ${err?.message || ''}`);
+    } finally {
+      setLarkMigrating(false);
+    }
+  }, [getField, setField, confirm, toast, es]);
+
   const [addingChannel, setAddingChannel] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState(0); // 0=select, 1=prep, 2=creds, 3=access, 4=confirm
   const [wizardAccount, setWizardAccount] = useState<string | null>(null); // non-null = adding named account to existing channel
@@ -504,7 +566,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
       else if (chId === 'discord') { tokenMap.token = cfg.token || ''; }
       else if (chId === 'slack') { tokenMap.appToken = cfg.appToken || ''; tokenMap.botToken = cfg.botToken || ''; }
       else if (chId === 'signal') { tokenMap.account = cfg.account || ''; }
-      else if (chId === 'feishu') { tokenMap.appId = cfg.appId || ''; tokenMap.appSecret = cfg.appSecret || ''; }
+      else if (chId === 'feishu' || chId === 'openclaw-lark') { tokenMap.appId = cfg.appId || ''; tokenMap.appSecret = cfg.appSecret || ''; }
       else if (chId === 'wecom') { tokenMap.token = cfg.token || ''; tokenMap.encodingAESKey = cfg.encodingAESKey || ''; }
       else if (chId === 'wecom_kf') { tokenMap.corpId = cfg.corpId || ''; tokenMap.corpSecret = cfg.corpSecret || ''; tokenMap.token = cfg.token || ''; }
       else if (chId === 'dingtalk') { tokenMap.appKey = cfg.appKey || ''; tokenMap.appSecret = cfg.appSecret || ''; }
@@ -1541,9 +1603,24 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
           </>
         )}
 
-        {/* 飞书 */}
-        {ch === 'feishu' && (
+        {/* 飞书 / Lark（@openclaw/feishu 与 @larksuite/openclaw-lark 共用表单，字段 schema 兼容） */}
+        {(ch === 'feishu' || ch === 'openclaw-lark') && (
           <>
+            {ch === 'openclaw-lark' && channels['feishu'] && (
+              <div className="mb-2 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20">
+                <p className="text-[11px] text-blue-700 dark:text-blue-300 mb-2">
+                  {es.larkMigrateHint || 'Detected an existing @openclaw/feishu config. You can copy its credentials and settings into this official plugin.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleMigrateFeishuToLark}
+                  disabled={larkMigrating}
+                  className="h-8 px-3 text-xs font-bold rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-40"
+                >
+                  {larkMigrating ? (es.larkMigrating || 'Migrating…') : (es.larkMigrateBtnLabel || 'Migrate from @openclaw/feishu')}
+                </button>
+              </div>
+            )}
             <TextField label={labelAppId} value={g(['appId']) || ''} onChange={v => s(['appId'], v)} tooltip={es.tipFeishuAppId} />
             <PasswordField label={labelAppSecret} value={g(['appSecret']) || ''} onChange={v => s(['appSecret'], v)} tooltip={es.tipFeishuSecret} />
             <SelectField label={es.chDomain}
@@ -1564,7 +1641,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
             {(g(['connectionMode']) || 'websocket') === 'webhook' && (
               <>
                 <TextField label={es.feishuWebhookPath || 'Webhook Path'} value={g(['webhookPath']) || '/feishu/events'} onChange={v => s(['webhookPath'], v)} tooltip={es.tipFeishuWebhookPath} />
-                <TextField label={es.feishuWebhookHost || 'Webhook Host'} value={g(['webhookHost']) || ''} onChange={v => s(['webhookHost'], v)} placeholder="127.0.0.1" tooltip={es.tipFeishuWebhookHost} />
+                {ch === 'feishu' && (
+                  <TextField label={es.feishuWebhookHost || 'Webhook Host'} value={g(['webhookHost']) || ''} onChange={v => s(['webhookHost'], v)} placeholder="127.0.0.1" tooltip={es.tipFeishuWebhookHost} />
+                )}
                 <NumberField label={es.feishuWebhookPort || 'Webhook Port'} value={g(['webhookPort'])} onChange={v => s(['webhookPort'], v)} placeholder="3000" tooltip={es.tipFeishuWebhookPort} />
               </>
             )}
@@ -1590,7 +1669,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
               </div>
             </ConfigField>
             {showFeishuPairing && (g(['dmPolicy']) || 'pairing') === 'pairing' && (
-              <PairingSection channel="feishu" es={es} cw={cw} toast={toast} />
+              <PairingSection channel={ch} es={es} cw={cw} toast={toast} />
             )}
             <ArrayField label={es.allowFrom || 'Allow From'} value={g(['allowFrom']) || []} onChange={v => s(['allowFrom'], v)} placeholder={es.feishuAllowFromPh || 'ou_xxx'} tooltip={es.tipFeishuAllowFrom} />
             <SelectField label={es.groupPolicy} value={g(['groupPolicy']) || 'allowlist'} onChange={v => s(['groupPolicy'], v)} options={groupPolicy(es)} tooltip={tip('groupPolicy')} />

@@ -1894,5 +1894,17 @@
   "memSearchDocumentInputType": "文檔輸入類型",
   "localContextSize": "本地上下文大小",
   "memSearchModelPath": "向量模型",
-  "memSearchModelPathDesc": "使用 provider/model-id；儲存時會拆分為服務商和模型欄位。"
+  "memSearchModelPathDesc": "使用 provider/model-id；儲存時會拆分為服務商和模型欄位。",
+  "chLark": "飛書 / Lark（官方）",
+  "chDescLark": "飛書官方外掛 — 文件/多維表格/試算表/行事曆/任務/卡片",
+  "larkMigrateHint": "偵測到既有的 @openclaw/feishu 設定。可將其憑證與設定複製到此官方外掛。",
+  "larkMigrateBtnLabel": "從 @openclaw/feishu 遷移",
+  "larkMigrating": "遷移中…",
+  "larkMigrateTitle": "遷移飛書設定？",
+  "larkMigrateConfirm": "將 @openclaw/feishu 設定複製到官方 openclaw-lark 外掛？新外掛不支援 Webhook Host，將被捨棄。原 feishu 頻道會被停用以便回復。是否繼續？",
+  "larkMigrateOverwrite": "已存在 openclaw-lark 設定。遷移將以 @openclaw/feishu 的設定覆寫它（Webhook Host 將被捨棄），並停用原 feishu 頻道。是否繼續？",
+  "larkMigrateBtn": "遷移",
+  "larkMigrateOk": "已遷移到 openclaw-lark。請檢查並儲存以生效。",
+  "larkMigrateFail": "遷移失敗",
+  "larkMigrateNoSource": "找不到可遷移的 @openclaw/feishu 設定。"
 }

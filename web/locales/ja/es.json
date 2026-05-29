@@ -1894,5 +1894,17 @@
   "memSearchDocumentInputType": "ドキュメント入力タイプ",
   "localContextSize": "ローカルコンテキストサイズ",
   "memSearchModelPath": "埋め込みモデル",
-  "memSearchModelPathDesc": "provider/model-id を使用。保存時に provider と model フィールドに分割されます。"
+  "memSearchModelPathDesc": "provider/model-id を使用。保存時に provider と model フィールドに分割されます。",
+  "chLark": "Lark / Feishu（公式）",
+  "chDescLark": "Lark/Feishu公式プラグイン — ドキュメント/Base/シート/カレンダー/タスク/カード",
+  "larkMigrateHint": "既存の @openclaw/feishu 設定を検出しました。その認証情報と設定をこの公式プラグインにコピーできます。",
+  "larkMigrateBtnLabel": "@openclaw/feishu から移行",
+  "larkMigrating": "移行中…",
+  "larkMigrateTitle": "Feishu設定を移行しますか？",
+  "larkMigrateConfirm": "@openclaw/feishu の設定を公式 openclaw-lark プラグインにコピーしますか？新プラグインは Webhook Host に非対応のため削除されます。元の feishu チャネルはロールバック用に無効化されます。続行しますか？",
+  "larkMigrateOverwrite": "openclaw-lark の設定が既に存在します。移行すると @openclaw/feishu の設定で上書きされ（Webhook Host は削除）、元の feishu チャネルは無効化されます。続行しますか？",
+  "larkMigrateBtn": "移行",
+  "larkMigrateOk": "openclaw-lark に移行しました。確認して保存すると反映されます。",
+  "larkMigrateFail": "移行に失敗しました",
+  "larkMigrateNoSource": "移行可能な @openclaw/feishu 設定が見つかりません。"
 }

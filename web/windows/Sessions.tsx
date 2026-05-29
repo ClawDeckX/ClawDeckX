@@ -2026,6 +2026,15 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setStream(null);
   }, []);
 
+  // Supported attachment files: everything except video (matches OpenClaw webchat
+  // CHAT_ATTACHMENT_ACCEPT — images, audio, pdf, text/markdown, office docs, zip, etc).
+  // Non-image files are offloaded by the gateway into the agent workspace (ctx.MediaPaths)
+  // so tools like Read/Bash can open them; only vision models inline images.
+  const isSupportedAttachmentFile = useCallback((f: File): boolean => {
+    if (f.type.startsWith('video/')) return false;
+    return !/\.(?:avi|m4v|mov|mp4|mpeg|mpg|webm)$/i.test(f.name);
+  }, []);
+
   // Read file as data URL (for attachments)
   const readFileAsDataUrl = useCallback((file: File): Promise<{ dataUrl: string; mimeType: string; fileName: string; isImage: boolean; fileSize: number }> => {
     return new Promise((resolve, reject) => {
@@ -2043,7 +2052,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     const pastedFiles: File[] = [];
     for (let i = 0; i < items.length; i++) {
       const file = items[i].getAsFile();
-      if (file && items[i].type.startsWith('image/')) {
+      if (file && isSupportedAttachmentFile(file)) {
         pastedFiles.push(file);
       }
     }
@@ -2052,20 +2061,20 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     const results = await Promise.all(pastedFiles.map(readFileAsDataUrl));
     setPendingAttachments(prev => [...(prev || []), ...results].slice(0, 5));
     if (!modelSupportsImages && results.some(r => r.isImage)) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
-  }, [readFileAsDataUrl, modelSupportsImages, toast]);
+  }, [readFileAsDataUrl, isSupportedAttachmentFile, modelSupportsImages, toast]);
 
   // Handle file input change
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    const validFiles = Array.from(files).filter(f => f.size <= MAX_FILE_SIZE && f.type.startsWith('image/'));
+    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB (matches OpenClaw agents.defaults.mediaMaxMb default)
+    const validFiles = Array.from(files).filter(f => f.size <= MAX_FILE_SIZE && isSupportedAttachmentFile(f));
     if (validFiles.length === 0) { if (fileInputRef.current) fileInputRef.current.value = ''; return; }
     const results = await Promise.all(validFiles.map(readFileAsDataUrl));
     setPendingAttachments(prev => [...(prev || []), ...results].slice(0, 5));
     if (fileInputRef.current) fileInputRef.current.value = '';
-    if (!modelSupportsImages) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
-  }, [readFileAsDataUrl, modelSupportsImages, toast]);
+    if (!modelSupportsImages && results.some(r => r.isImage)) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
+  }, [readFileAsDataUrl, isSupportedAttachmentFile, modelSupportsImages, toast]);
 
   // Handle drag & drop files into the input area
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -2074,13 +2083,13 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setDragOver(false);
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0) return;
-    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-    const validFiles = Array.from(files).filter(f => f.size <= MAX_FILE_SIZE && f.type.startsWith('image/'));
+    const MAX_FILE_SIZE = 20 * 1024 * 1024;
+    const validFiles = Array.from(files).filter(f => f.size <= MAX_FILE_SIZE && isSupportedAttachmentFile(f));
     if (validFiles.length === 0) return;
     const results = await Promise.all(validFiles.map(readFileAsDataUrl));
     setPendingAttachments(prev => [...(prev || []), ...results].slice(0, 5));
-    if (!modelSupportsImages) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
-  }, [readFileAsDataUrl, modelSupportsImages, toast]);
+    if (!modelSupportsImages && results.some(r => r.isImage)) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
+  }, [readFileAsDataUrl, isSupportedAttachmentFile, modelSupportsImages, toast]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -2128,12 +2137,15 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     }
     setMessages(prev => [...prev, { role: 'user', content: contentBlocks.length === 1 && contentBlocks[0].type === 'text' ? contentBlocks : contentBlocks, timestamp: Date.now() }]);
 
-    // Build attachments for API — strip data URL prefix to send raw base64 (matches OpenClaw webchat protocol)
-    const attachments = attachments_.filter(att => att.isImage).map(att => {
+    // Build attachments for API — strip data URL prefix to send raw base64 (matches OpenClaw webchat protocol).
+    // Images go as type 'image' (inlined for vision models); other files as type 'file'
+    // (gateway offloads them into the agent workspace so tools can read them).
+    const attachments = attachments_.map(att => {
       const match = /^data:([^;]+);base64,(.+)$/.exec(att.dataUrl);
       return {
-        type: 'image' as const,
+        type: att.isImage ? ('image' as const) : ('file' as const),
         mimeType: match ? match[1] : att.mimeType,
+        fileName: att.fileName,
         content: match ? match[2] : att.dataUrl,
       };
     });
@@ -4204,10 +4216,10 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 </div>
               )}
               <div className="flex items-end gap-1.5">
-                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
+                <input ref={fileInputRef} type="file" accept="image/*,audio/*,application/pdf,text/*,.csv,.json,.md,.txt,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx" multiple className="hidden" onChange={handleFileSelect} />
                 <button onClick={() => fileInputRef.current?.click()} disabled={!gwReady || (pendingAttachments?.length || 0) >= 5}
                   className="relative w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0 text-slate-400 hover:text-primary hover:bg-primary/5 transition-colors disabled:opacity-30"
-                  title={!modelSupportsImages ? (c.modelNoVision || 'Current model does not support image input') : (c.attachFile || 'Attach File')}>
+                  title={c.attachFile || 'Attach File'}>
                   <span className="material-symbols-outlined text-[18px]">attach_file</span>
                   {!modelSupportsImages && <span className="absolute top-0.5 end-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-[#0d1117]" />}
                 </button>

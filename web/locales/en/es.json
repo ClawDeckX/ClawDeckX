@@ -1894,5 +1894,17 @@
   "memSearchDocumentInputType": "Document Input Type",
   "localContextSize": "Local Context Size",
   "memSearchModelPath": "Embedding Model",
-  "memSearchModelPathDesc": "Use provider/model-id; saved as provider and model fields."
+  "memSearchModelPathDesc": "Use provider/model-id; saved as provider and model fields.",
+  "chLark": "Lark / Feishu (Official)",
+  "chDescLark": "Official Lark/Feishu plugin — docs, base, sheets, calendar, tasks, cards",
+  "larkMigrateHint": "Detected an existing @openclaw/feishu config. You can copy its credentials and settings into this official plugin.",
+  "larkMigrateBtnLabel": "Migrate from @openclaw/feishu",
+  "larkMigrating": "Migrating…",
+  "larkMigrateTitle": "Migrate Feishu config?",
+  "larkMigrateConfirm": "Copy your @openclaw/feishu config to the official openclaw-lark plugin? Webhook Host is not supported by the new plugin and will be dropped. The legacy feishu channel will be disabled so you can roll back. Continue?",
+  "larkMigrateOverwrite": "An openclaw-lark config already exists. Migrating will overwrite it with the legacy @openclaw/feishu config (Webhook Host will be dropped). The legacy feishu channel will be disabled. Continue?",
+  "larkMigrateBtn": "Migrate",
+  "larkMigrateOk": "Config migrated to openclaw-lark. Review and Save to apply.",
+  "larkMigrateFail": "Migration failed",
+  "larkMigrateNoSource": "No legacy @openclaw/feishu config found to migrate."
 }
