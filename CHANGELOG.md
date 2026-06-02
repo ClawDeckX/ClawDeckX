@@ -1,4 +1,21 @@
-﻿# v0.2.19
+﻿# v0.2.20
+
+_2026-06-02_
+
+## What's Changed
+
+### 🐛 Bug Fixes / 修复
+
+- improve model editing and llm direct compatibility
+
+---
+**Full Changelog**: [v0.2.19...v0.2.20](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.19...v0.2.20)
+
+
+
+---
+
+# v0.2.19
 
 _2026-05-29_
 
@@ -1916,6 +1933,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 
