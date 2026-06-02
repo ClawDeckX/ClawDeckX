@@ -191,6 +191,40 @@ func doStream(ctx context.Context, cfg *ProviderConfig, messages []Message, maxT
 		maxTokens = 8192
 	}
 
+	if cfg.API == "anthropic-messages" {
+		return doStreamAnthropic(ctx, cfg, messages, maxTokens, ch)
+	}
+	return doStreamOpenAI(ctx, cfg, messages, maxTokens, tools, ch)
+}
+
+// resolveOpenAIURL builds the chat completions endpoint from the provider's BaseURL.
+// Handles common configurations: baseUrl ending with /v1, /v1/, or already containing
+// the full /chat/completions path.
+func resolveOpenAIURL(base string) string {
+	b := strings.TrimRight(base, "/")
+	if strings.HasSuffix(b, "/chat/completions") {
+		return b
+	}
+	if strings.HasSuffix(b, "/v1") {
+		return b + "/chat/completions"
+	}
+	return b + "/v1/chat/completions"
+}
+
+// resolveAnthropicURL builds the messages endpoint from the provider's BaseURL.
+func resolveAnthropicURL(base string) string {
+	b := strings.TrimRight(base, "/")
+	if strings.HasSuffix(b, "/v1/messages") || strings.HasSuffix(b, "/messages") {
+		return b
+	}
+	if strings.HasSuffix(b, "/v1") {
+		return b + "/messages"
+	}
+	return b + "/v1/messages"
+}
+
+// doStreamOpenAI handles OpenAI-compatible /chat/completions streaming.
+func doStreamOpenAI(ctx context.Context, cfg *ProviderConfig, messages []Message, maxTokens int, tools []ToolDef, ch chan<- StreamChunk) error {
 	body := map[string]interface{}{
 		"model":      cfg.ModelID,
 		"messages":   messages,
@@ -205,7 +239,7 @@ func doStream(ctx context.Context, cfg *ProviderConfig, messages []Message, maxT
 		return fmt.Errorf("llmdirect: marshal request: %w", err)
 	}
 
-	url := cfg.BaseURL + "/chat/completions"
+	url := resolveOpenAIURL(cfg.BaseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("llmdirect: build request: %w", err)
@@ -301,6 +335,132 @@ func doStream(ctx context.Context, cfg *ProviderConfig, messages []Message, maxT
 	return nil
 }
 
+// doStreamAnthropic handles Anthropic Messages API (/v1/messages) streaming.
+func doStreamAnthropic(ctx context.Context, cfg *ProviderConfig, messages []Message, maxTokens int, ch chan<- StreamChunk) error {
+	// Anthropic requires system as a top-level field, not in messages array.
+	var system string
+	var anthropicMsgs []map[string]string
+	for _, m := range messages {
+		if m.Role == "system" {
+			system = m.Content
+			continue
+		}
+		anthropicMsgs = append(anthropicMsgs, map[string]string{
+			"role":    m.Role,
+			"content": m.Content,
+		})
+	}
+	// Anthropic requires at least one user message.
+	if len(anthropicMsgs) == 0 {
+		return fmt.Errorf("llmdirect: anthropic requires at least one user message")
+	}
+
+	body := map[string]interface{}{
+		"model":      cfg.ModelID,
+		"messages":   anthropicMsgs,
+		"max_tokens": maxTokens,
+		"stream":     true,
+	}
+	if system != "" {
+		body["system"] = system
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("llmdirect: marshal request: %w", err)
+	}
+
+	url := resolveAnthropicURL(cfg.BaseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("llmdirect: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", cfg.APIKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("llmdirect: http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		limitedBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("llmdirect: LLM returned HTTP %d: %s", resp.StatusCode, string(limitedBody))
+	}
+
+	// Anthropic SSE format:
+	// event: content_block_delta
+	// data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"..."}}
+	// event: message_stop
+	// data: {"type":"message_stop"}
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 1024*512), 1024*512)
+	var currentEvent string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "event: ") {
+			currentEvent = strings.TrimPrefix(line, "event: ")
+			continue
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		payload := strings.TrimPrefix(line, "data: ")
+
+		switch currentEvent {
+		case "content_block_delta":
+			var delta struct {
+				Delta struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"delta"`
+			}
+			if err := json.Unmarshal([]byte(payload), &delta); err != nil {
+				continue
+			}
+			if delta.Delta.Text != "" {
+				select {
+				case ch <- StreamChunk{Token: delta.Delta.Text}:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+		case "message_stop":
+			ch <- StreamChunk{Done: true}
+			return nil
+		case "message_delta":
+			// message_delta with stop_reason signals end
+			var md struct {
+				Delta struct {
+					StopReason string `json:"stop_reason"`
+				} `json:"delta"`
+			}
+			if err := json.Unmarshal([]byte(payload), &md); err == nil && md.Delta.StopReason != "" {
+				ch <- StreamChunk{Done: true}
+				return nil
+			}
+		case "error":
+			var errEvt struct {
+				Error struct {
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(payload), &errEvt); err == nil && errEvt.Error.Message != "" {
+				return fmt.Errorf("llmdirect: anthropic error: %s", errEvt.Error.Message)
+			}
+		}
+		currentEvent = ""
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("llmdirect: reading stream: %w", err)
+	}
+	// If stream ended without explicit message_stop, signal done.
+	ch <- StreamChunk{Done: true}
+	return nil
+}
+
 // buildToolCalls converts the accumulated tool_call deltas into a slice of ToolCall.
 func buildToolCalls(m map[int]*tcAccum) []ToolCall {
 	if len(m) == 0 {
@@ -362,6 +522,10 @@ func CompleteNonStream(ctx context.Context, cfg *ProviderConfig, messages []Mess
 		}
 	}
 
+	if cfg.API == "anthropic-messages" {
+		return completeNonStreamAnthropic(ctx, cfg, messages, maxTokens)
+	}
+
 	body := map[string]interface{}{
 		"model":      cfg.ModelID,
 		"messages":   messages,
@@ -373,7 +537,7 @@ func CompleteNonStream(ctx context.Context, cfg *ProviderConfig, messages []Mess
 		return "", fmt.Errorf("llmdirect: marshal request: %w", err)
 	}
 
-	url := cfg.BaseURL + "/chat/completions"
+	url := resolveOpenAIURL(cfg.BaseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", fmt.Errorf("llmdirect: build request: %w", err)
@@ -410,6 +574,76 @@ func CompleteNonStream(ctx context.Context, cfg *ProviderConfig, messages []Mess
 	return result.Choices[0].Message.Content, nil
 }
 
+// completeNonStreamAnthropic handles non-streaming Anthropic Messages API call.
+func completeNonStreamAnthropic(ctx context.Context, cfg *ProviderConfig, messages []Message, maxTokens int) (string, error) {
+	var system string
+	var anthropicMsgs []map[string]string
+	for _, m := range messages {
+		if m.Role == "system" {
+			system = m.Content
+			continue
+		}
+		anthropicMsgs = append(anthropicMsgs, map[string]string{
+			"role":    m.Role,
+			"content": m.Content,
+		})
+	}
+	if len(anthropicMsgs) == 0 {
+		return "", fmt.Errorf("llmdirect: anthropic requires at least one user message")
+	}
+
+	body := map[string]interface{}{
+		"model":      cfg.ModelID,
+		"messages":   anthropicMsgs,
+		"max_tokens": maxTokens,
+	}
+	if system != "" {
+		body["system"] = system
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("llmdirect: marshal request: %w", err)
+	}
+
+	url := resolveAnthropicURL(cfg.BaseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("llmdirect: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", cfg.APIKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("llmdirect: http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		limitedBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("llmdirect: LLM returned HTTP %d: %s", resp.StatusCode, string(limitedBody))
+	}
+
+	var result struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("llmdirect: decode response: %w", err)
+	}
+	var sb strings.Builder
+	for _, c := range result.Content {
+		if c.Type == "text" {
+			sb.WriteString(c.Text)
+		}
+	}
+	return sb.String(), nil
+}
+
 // CompleteWithTools performs a non-streaming chat completion that may return tool_calls.
 // Returns content text and any tool_calls the model wants to invoke.
 func CompleteWithTools(ctx context.Context, cfg *ProviderConfig, messages []Message, tools []ToolDef, maxTokens int) (string, []ToolCall, error) {
@@ -419,6 +653,24 @@ func CompleteWithTools(ctx context.Context, cfg *ProviderConfig, messages []Mess
 		} else {
 			maxTokens = 4096
 		}
+	}
+
+	// Anthropic tool calling uses a different wire format; fall back to streaming
+	// which accumulates tool_calls via the standard StreamCompletion path.
+	if cfg.API == "anthropic-messages" {
+		var sb strings.Builder
+		var tcs []ToolCall
+		for chunk := range StreamCompletion(ctx, cfg, messages, maxTokens, tools) {
+			if chunk.Error != nil {
+				return sb.String(), nil, chunk.Error
+			}
+			if chunk.Done {
+				tcs = chunk.ToolCalls
+				break
+			}
+			sb.WriteString(chunk.Token)
+		}
+		return sb.String(), tcs, nil
 	}
 
 	body := map[string]interface{}{
@@ -435,7 +687,7 @@ func CompleteWithTools(ctx context.Context, cfg *ProviderConfig, messages []Mess
 		return "", nil, fmt.Errorf("llmdirect: marshal request: %w", err)
 	}
 
-	url := cfg.BaseURL + "/chat/completions"
+	url := resolveOpenAIURL(cfg.BaseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", nil, fmt.Errorf("llmdirect: build request: %w", err)

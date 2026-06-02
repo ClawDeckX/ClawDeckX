@@ -6,6 +6,7 @@ import NumberStepper from '../../../components/NumberStepper';
 import { post } from '../../../services/request';
 import { getTranslation } from '../../../locales';
 import { useToast } from '../../../components/Toast';
+import { useConfirm } from '../../../components/ConfirmDialog';
 import { RequestOverridePanel } from './RequestOverridePanel';
 import { schemaTooltip, schemaDefault } from '../schemaTooltip';
 
@@ -458,6 +459,7 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, schema, setField
   const tip = (key: string) => schemaTooltip(key, language, schema);
   const def = (key: string) => schemaDefault(key, schema);
   const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   const API_OPTIONS = useMemo(() => [
     { value: 'openai-completions', label: 'OpenAI' },
@@ -494,6 +496,50 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, schema, setField
     }
     return paths;
   }, [providers]);
+
+  // 内联编辑模型
+  const [editingModelKey, setEditingModelKey] = useState<string | null>(null); // "providerName:index"
+  const [editingModelData, setEditingModelData] = useState<{
+    contextWindow: string; reasoning: boolean;
+    inputCapability: 'text' | 'text+image';
+    cost: { input: string; output: string; cacheRead: string; cacheWrite: string };
+  }>({ contextWindow: '', reasoning: false, inputCapability: 'text+image', cost: { input: '', output: '', cacheRead: '', cacheWrite: '' } });
+
+  const startEditModel = useCallback((providerName: string, mi: number, m: any) => {
+    const key = `${providerName}:${mi}`;
+    if (editingModelKey === key) { setEditingModelKey(null); return; }
+    setEditingModelKey(key);
+    setEditingModelData({
+      contextWindow: m.contextWindow ? String(m.contextWindow) : '',
+      reasoning: !!m.reasoning,
+      inputCapability: (Array.isArray(m.input) && !m.input.includes('image')) ? 'text' : 'text+image',
+      cost: {
+        input: m.cost?.input != null ? String(m.cost.input) : '',
+        output: m.cost?.output != null ? String(m.cost.output) : '',
+        cacheRead: m.cost?.cacheRead != null ? String(m.cost.cacheRead) : '',
+        cacheWrite: m.cost?.cacheWrite != null ? String(m.cost.cacheWrite) : '',
+      },
+    });
+  }, [editingModelKey]);
+
+  const saveEditModel = useCallback((providerName: string, mi: number) => {
+    const rawModels = getField(['models', 'providers', providerName, 'models']);
+    const models = Array.isArray(rawModels) ? [...rawModels] : [];
+    if (!models[mi]) return;
+    const updated = { ...models[mi] };
+    updated.contextWindow = editingModelData.contextWindow ? Number(editingModelData.contextWindow) : undefined;
+    updated.reasoning = editingModelData.reasoning || undefined;
+    updated.input = editingModelData.inputCapability === 'text' ? ['text'] : ['text', 'image'];
+    const cost: any = {};
+    if (editingModelData.cost.input) cost.input = Number(editingModelData.cost.input);
+    if (editingModelData.cost.output) cost.output = Number(editingModelData.cost.output);
+    if (editingModelData.cost.cacheRead) cost.cacheRead = Number(editingModelData.cost.cacheRead);
+    if (editingModelData.cost.cacheWrite) cost.cacheWrite = Number(editingModelData.cost.cacheWrite);
+    updated.cost = Object.keys(cost).length > 0 ? cost : undefined;
+    models[mi] = updated;
+    setField(['models', 'providers', providerName, 'models'], models);
+    setEditingModelKey(null);
+  }, [editingModelData, getField, setField]);
 
   // 添加模型弹窗
   const [showAddModel, setShowAddModel] = useState<string | null>(null);
@@ -999,31 +1045,106 @@ export const ModelsSection: React.FC<SectionProps> = ({ config, schema, setField
                     const path = `${name}/${m.id}`;
                     const isPrimary = primaryModel === path;
                     const isFallback = fallbacks.includes(path);
+                    const isEditing = editingModelKey === `${name}:${mi}`;
                     return (
-                      <div key={mi} className={`flex items-center gap-2 px-2 py-1.5 rounded-md mb-1 ${isPrimary ? 'bg-primary/5 border border-primary/20' : 'theme-panel'}`}>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-[var(--color-text)] dark:text-slate-300 truncate">{m.name || m.id}</span>
-                            {m.reasoning && <span className="text-[10px] px-1 py-0.5 bg-purple-500/10 text-purple-500 rounded font-bold">R</span>}
-                            {Array.isArray(m.input) && m.input.includes('image') && <span className="text-[10px] px-1 py-0.5 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 rounded font-bold" title={es.capTextImage}>V</span>}
-                            {m.contextWindow && <span className="text-[10px] theme-text-muted">{Math.round(m.contextWindow / 1000)}K</span>}
+                      <div key={mi} className="mb-1">
+                        <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md ${isPrimary ? 'bg-primary/5 border border-primary/20' : 'theme-panel'} ${isEditing ? 'border-primary/40' : ''}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-bold text-[var(--color-text)] dark:text-slate-300 truncate">{m.name || m.id}</span>
+                              {m.reasoning && <span className="text-[10px] px-1 py-0.5 bg-purple-500/10 text-purple-500 rounded font-bold">R</span>}
+                              {Array.isArray(m.input) && m.input.includes('image') && <span className="text-[10px] px-1 py-0.5 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 rounded font-bold" title={es.capTextImage}>V</span>}
+                              {m.contextWindow && <span className="text-[10px] theme-text-muted">{Math.round(m.contextWindow / 1000)}K</span>}
+                            </div>
+                            <span className="text-[11px] theme-text-secondary font-mono">{m.id}</span>
                           </div>
-                          <span className="text-[11px] theme-text-secondary font-mono">{m.id}</span>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button onClick={() => startEditModel(name, mi, m)} title={es.editModel} aria-label={es.editModel} className={`w-6 h-6 flex items-center justify-center rounded ${isEditing ? 'text-primary' : 'text-slate-400 hover:text-primary'}`}>
+                              <span className="material-symbols-outlined text-[14px]">edit</span>
+                            </button>
+                            <button onClick={() => setPrimary(path)} title={es.setPrimary} aria-label={es.setPrimary} className={`w-6 h-6 flex items-center justify-center rounded ${isPrimary ? 'text-primary' : 'text-slate-400 hover:text-primary'}`}>
+                              <span className="material-symbols-outlined text-[14px]">{isPrimary ? 'star' : 'star_outline'}</span>
+                            </button>
+                            <button onClick={() => toggleFallback(path)} title={es.fallback} aria-label={es.fallback} className={`w-6 h-6 flex items-center justify-center rounded text-[11px] font-bold ${isFallback ? 'text-amber-500' : 'text-slate-400 hover:text-amber-500'}`}>
+                              FB
+                            </button>
+                            <button onClick={async () => {
+                              const ok = await confirm({ title: es.removeModel, message: `${es.removeModel}: ${m.name || m.id}?`, danger: true });
+                              if (!ok) return;
+                              const newModels = models.filter((_: any, j: number) => j !== mi);
+                              setField(['models', 'providers', name, 'models'], newModels);
+                              if (editingModelKey === `${name}:${mi}`) setEditingModelKey(null);
+                            }} title={es.removeModel} aria-label={es.removeModel} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-500">
+                              <span className="material-symbols-outlined text-[13px]">close</span>
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button onClick={() => setPrimary(path)} title={es.setPrimary} aria-label={es.setPrimary} className={`w-6 h-6 flex items-center justify-center rounded ${isPrimary ? 'text-primary' : 'text-slate-400 hover:text-primary'}`}>
-                            <span className="material-symbols-outlined text-[14px]">{isPrimary ? 'star' : 'star_outline'}</span>
-                          </button>
-                          <button onClick={() => toggleFallback(path)} title={es.fallback} aria-label={es.fallback} className={`w-6 h-6 flex items-center justify-center rounded text-[11px] font-bold ${isFallback ? 'text-amber-500' : 'text-slate-400 hover:text-amber-500'}`}>
-                            FB
-                          </button>
-                          <button onClick={() => {
-                            const newModels = models.filter((_: any, j: number) => j !== mi);
-                            setField(['models', 'providers', name, 'models'], newModels);
-                          }} title={es.removeModel} aria-label={es.removeModel} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-500">
-                            <span className="material-symbols-outlined text-[13px]">close</span>
-                          </button>
-                        </div>
+                        {isEditing && (
+                          <div className="mt-1 p-3 rounded-lg border border-primary/20 bg-black/20 space-y-3">
+                            <div className="flex gap-4">
+                              <div className="flex-1">
+                                <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.contextWindow}</label>
+                                <NumberStepper
+                                  min={1} step={1000}
+                                  value={editingModelData.contextWindow}
+                                  onChange={v => setEditingModelData(d => ({ ...d, contextWindow: String(v) }))}
+                                  placeholder={es.phContextWindow}
+                                  className="w-full h-8"
+                                  inputClassName="font-mono text-xs"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-0.5">{es.contextWindowDesc}</p>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.reasoning}</label>
+                                <button onClick={() => setEditingModelData(d => ({ ...d, reasoning: !d.reasoning }))} className={`w-9 h-5 rounded-full relative transition-colors mt-1.5 ${editingModelData.reasoning ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${editingModelData.reasoning ? 'translate-x-[18px] rtl:-translate-x-[18px]' : 'translate-x-0.5 rtl:-translate-x-0.5'}`} />
+                                </button>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{es.reasoningDesc}</p>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 mb-1 block">{es.modelCapability}</label>
+                              <div className="flex gap-1.5">
+                                {CAPABILITY_OPTIONS.map(o => (
+                                  <button key={o.value} onClick={() => setEditingModelData(d => ({ ...d, inputCapability: o.value as 'text' | 'text+image' }))}
+                                    className={`flex-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium border-2 transition-all ${editingModelData.inputCapability === o.value ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 dark:border-white/10 text-slate-500'}`}>
+                                    {o.value === 'text+image' && <span className="material-symbols-outlined text-[12px] align-middle me-0.5">image</span>}
+                                    {o.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <span className="material-symbols-outlined text-[14px] text-primary/60">paid</span>
+                                <span className="text-[10px] font-bold text-slate-500">{es.modelCost} ({es.perMillionTokens})</span>
+                              </div>
+                              <div className="grid grid-cols-4 gap-2">
+                                <div>
+                                  <label className="text-[9px] text-slate-400 block mb-0.5">{es.inputCost}</label>
+                                  <NumberStepper min={0} step={0.1} value={editingModelData.cost.input} onChange={v => setEditingModelData(d => ({ ...d, cost: { ...d.cost, input: String(v) } }))} placeholder={es.phInputCost} className="w-full h-7" inputClassName="font-mono text-[10px]" />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-slate-400 block mb-0.5">{es.outputCost}</label>
+                                  <NumberStepper min={0} step={0.1} value={editingModelData.cost.output} onChange={v => setEditingModelData(d => ({ ...d, cost: { ...d.cost, output: String(v) } }))} placeholder={es.phOutputCost} className="w-full h-7" inputClassName="font-mono text-[10px]" />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-slate-400 block mb-0.5">{es.cacheReadCost}</label>
+                                  <NumberStepper min={0} step={0.1} value={editingModelData.cost.cacheRead} onChange={v => setEditingModelData(d => ({ ...d, cost: { ...d.cost, cacheRead: String(v) } }))} placeholder={es.phCacheReadCost} className="w-full h-7" inputClassName="font-mono text-[10px]" />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-slate-400 block mb-0.5">{es.cacheWriteCost}</label>
+                                  <NumberStepper min={0} step={0.1} value={editingModelData.cost.cacheWrite} onChange={v => setEditingModelData(d => ({ ...d, cost: { ...d.cost, cacheWrite: String(v) } }))} placeholder={es.phCacheWriteCost} className="w-full h-7" inputClassName="font-mono text-[10px]" />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex justify-end pt-1">
+                              <button onClick={() => saveEditModel(name, mi)} className="px-3 py-1 text-[11px] font-bold bg-primary text-white rounded-md hover:bg-primary/90 transition-colors">
+                                {es.save}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

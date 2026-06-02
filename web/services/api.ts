@@ -1388,6 +1388,8 @@ function _flushPatches() {
   withConfigWriteQueue(async () => {
     const raw = JSON.stringify(patch);
     await rpc('config.patch', { raw });
+    // Allow gateway time to persist and reload before fetching updated config
+    await new Promise(r => setTimeout(r, 300));
     return rpc('config.get');
   }).then(
     res => resolvers.forEach(r => r.resolve(res)),

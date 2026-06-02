@@ -1243,11 +1243,11 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
               <span className="font-mono font-bold text-slate-700 dark:text-white/70">{selfUpdateVersion.openclawCompat}</span>
               {ocUpdateInfo?.currentVersion && (
                 <span className={`ms-auto px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  ocUpdateInfo.currentVersion >= selfUpdateVersion.openclawCompat.replace('>=', '')
+                  compareSemverLoose(ocUpdateInfo.currentVersion, selfUpdateVersion.openclawCompat.replace('>=', '')) >= 0
                     ? 'bg-mac-green/10 text-mac-green'
                     : 'bg-red-500/10 text-red-500'
                 }`}>
-                  {ocUpdateInfo.currentVersion >= selfUpdateVersion.openclawCompat.replace('>=', '') ? '✓ ' + (s.aboutCompat || 'Compatible') : '✗ ' + (s.updateIncompat || 'Incompatible')}
+                  {compareSemverLoose(ocUpdateInfo.currentVersion, selfUpdateVersion.openclawCompat.replace('>=', '')) >= 0 ? '✓ ' + (s.aboutCompat || 'Compatible') : '✗ ' + (s.updateIncompat || 'Incompatible')}
                 </span>
               )}
             </div>

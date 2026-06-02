@@ -290,12 +290,10 @@ export function useConfigEditor(): UseConfigEditorReturn {
         const previousConfig = savedRawRef.current ? JSON.parse(savedRawRef.current) : null;
         const mergePatch = previousConfig ? buildMergePatch(previousConfig, config) : null;
         const res: any = mergePatch ? await gwApi.configSafePatch(mergePatch) : await gwApi.configSafeApply(raw);
-        if (res?.config) {
-          setConfig(res.config);
-          savedRawRef.current = stableConfigJSON(res.config);
-        } else {
-          savedRawRef.current = raw;
-        }
+        // After a successful patch, trust the local config state (which is what
+        // was sent to the gateway) rather than the immediate config.get response,
+        // because the gateway may not have finished hot-reloading yet.
+        savedRawRef.current = raw;
         // Refresh hash after gateway reload settles
         await refreshHash(1000);
       } else {
