@@ -169,6 +169,18 @@
   ],
   "feishuPitfall": "⚠️ よくある落とし穴: 1) 「イベントとコールバック」で im.message.receive_v1 を購読しないと Bot は送信はできても受信できません; 2) イベント購読は connectionMode と一致させる必要があります (長連接 → websocket 推奨 / Request URL → webhook); 3) 権限/設定を変更するたびにバージョンを再公開する必要があります; 4) Bot には自分の Drive ルートフォルダがないため、フォルダを共有する必要があります; 5) OpenClaw ホストは >= 2026.4.10 が必要 (@openclaw/feishu >= 2026.4.19-beta.1 の要件); 6) ワンクリックインストールが失敗した場合は、ターミナルで直接 `openclaw plugins install @openclaw/feishu` を実行してください。",
   "feishuHelpUrl": "https://open.feishu.cn/app",
+  "openclaw-larkPrep": [
+    "プラグインをインストール: openclaw plugins install @larksuite/openclaw-lark（OpenClaw ホスト ≥ 2026.4.10 が必要）",
+    "Feishu 開放プラットフォーム open.feishu.cn/app → カスタムアプリを作成",
+    "「認証情報と基本情報」ページで App ID と App Secret をコピー",
+    "「アプリ機能」で Bot 機能を追加し、Bot 名を設定",
+    "「権限管理」ページで必要な権限を追加: im:message, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly, im:message:send_as_bot, im:resource, contact:user.base:readonly（「権限 JSON をコピー」で一括インポート可能）",
+    "「イベントとコールバック」で「長連接でイベントを受信」（WebSocket 推奨）を選択し、以下を購読: im.message.receive_v1, im.message.message_read_v1, im.chat.member.bot.added_v1, im.chat.member.bot.deleted_v1",
+    "「バージョン管理とリリース」でバージョンを作成して公開（権限/設定変更ごとに再公開が必要）",
+    "⚠️ 公開後にのみ Feishu 内で Bot を検索可能"
+  ],
+  "openclaw-larkPitfall": "⚠️ よくある落とし穴: 1) 「イベントとコールバック」で im.message.receive_v1 を購読しないと Bot は送信はできても受信できません; 2) イベント購読は connectionMode と一致させる必要があります (長連接 → websocket 推奨 / Request URL → webhook); 3) 権限/設定を変更するたびにバージョンを再公開する必要があります; 4) Bot には自分の Drive ルートフォルダがないため、フォルダを共有する必要があります; 5) OpenClaw ホストは >= 2026.4.10 が必要 (@larksuite/openclaw-lark >= 2026.4.19-beta.1 の要件); 6) ワンクリックインストールが失敗した場合は、ターミナルで直接 `openclaw plugins install @larksuite/openclaw-lark` を実行してください。",
+  "openclaw-larkHelpUrl": "https://open.feishu.cn/app",
   "dingtalkPrep": [
     "DingTalkプラグインをインストール：openclaw plugins install @openclaw-china/dingtalk",
     "DingTalkで\"組織を作成または参加\" → 作成（書類不要、5分）",

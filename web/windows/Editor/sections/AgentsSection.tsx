@@ -152,9 +152,9 @@ export const AgentsSection: React.FC<SectionProps> = ({ config, schema, setField
             <TextField label={es.model} value={agent.model?.primary || ''} onChange={v => setField(['agents', 'list', String(i), 'model', 'primary'], v)} placeholder={es.phProviderModelId} />
 
             {/* Overrides */}
-            <SelectField label={es.thinkingDefault} tooltip={tip('agents.list.thinking')} value={agent.thinking || ''} onChange={v => setField(['agents', 'list', String(i), 'thinking'], v)} options={[{ value: '', label: es.default }, ...THINKING_OPTIONS]} />
-            <SelectField label={es.verboseDefault} tooltip={tip('agents.list.verbose')} value={agent.verbose || ''} onChange={v => setField(['agents', 'list', String(i), 'verbose'], v)} options={[{ value: '', label: es.default }, ...VERBOSE_OPTIONS]} />
-            <SwitchField label={es.fastMode || 'Fast Mode'} tooltip={tip('agents.list.fastMode')} value={agent.fastMode === true} onChange={v => setField(['agents', 'list', String(i), 'fastMode'], v || undefined)} />
+            <SelectField label={es.thinkingDefault} tooltip={tip('agents.list.thinkingDefault')} value={agent.thinkingDefault || ''} onChange={v => setField(['agents', 'list', String(i), 'thinkingDefault'], v)} options={[{ value: '', label: es.default }, ...THINKING_OPTIONS]} />
+            <SelectField label={es.verboseDefault} tooltip={tip('agents.list.verboseDefault')} value={agent.verboseDefault || ''} onChange={v => setField(['agents', 'list', String(i), 'verboseDefault'], v)} options={[{ value: '', label: es.default }, ...VERBOSE_OPTIONS]} />
+            <SwitchField label={es.fastMode || 'Fast Mode'} tooltip={tip('agents.list.fastModeDefault')} value={agent.fastModeDefault === true} onChange={v => setField(['agents', 'list', String(i), 'fastModeDefault'], v || undefined)} />
             <TextField label={es.subagentModel} tooltip={tip('agents.list.subagentModel')} value={agent.subagents?.model || ''} onChange={v => setField(['agents', 'list', String(i), 'subagents', 'model'], v)} placeholder={es.phUseDefault} />
             {/* Per-agent TTS override (OpenClaw 2026.4.25+). Falls back to messages.tts when unset. */}
             <TextField label={es.agentTtsProvider || 'TTS Provider Override'} tooltip={tip('agents.list.tts.provider')} value={agent.tts?.provider || ''} onChange={v => setField(['agents', 'list', String(i), 'tts', 'provider'], v || undefined)} placeholder={es.phUseDefault} />

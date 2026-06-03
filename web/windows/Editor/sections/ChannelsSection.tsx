@@ -145,6 +145,15 @@ const CHANNEL_PLUGIN_SPECS: Record<string, { spec: string; community?: boolean }
   voicecall: { spec: '@openclaw/voice-call' },
 };
 
+// Some plugins register a channel ID that differs from their UI identifier.
+// This maps the UI id → actual config key under `channels.*`.
+// Example: "openclaw-lark" plugin registers channel "feishu" (shared with @openclaw/feishu).
+const CONFIG_CHANNEL_KEY: Record<string, string> = {
+  'openclaw-lark': 'feishu',
+};
+/** Resolve the actual config channel key for a given UI channel id */
+function cfgKey(uiId: string): string { return CONFIG_CHANNEL_KEY[uiId] || uiId; }
+
 export const REQUIRED_CREDENTIALS: Record<string, RequiredField[]> = {
   telegram: [{ field: 'botToken', labelKey: 'botToken' }],
   discord: [{ field: 'token', labelKey: 'chToken' }],
@@ -348,9 +357,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
   const [newAccountName, setNewAccountName] = useState('');
   const [deleteAccountConfirm, setDeleteAccountConfirm] = useState<{ ch: string; acct: string } | null>(null);
 
-  // Get the list of account IDs for a channel (reads from channels.{ch}.accounts)
+  // Get the list of account IDs for a channel (reads from channels.{cfgKey(ch)}.accounts)
   const getAccountIds = useCallback((ch: string): string[] => {
-    const chCfg = channels[ch] || {};
+    const chCfg = channels[cfgKey(ch)] || {};
     const accounts = chCfg.accounts;
     if (!accounts || typeof accounts !== 'object') return ['default'];
     const keys = Object.keys(accounts).filter(Boolean);
@@ -364,7 +373,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
 
   // Build the config path prefix for a given channel + account
   const accountPath = useCallback((ch: string, acct: string): string[] => {
-    return ['channels', ch, 'accounts', acct];
+    return ['channels', cfgKey(ch), 'accounts', acct];
   }, []);
 
   const handleAddAccount = useCallback((ch: string) => {
@@ -378,7 +387,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
       toast('error', es.acctNameExists);
       return;
     }
-    setField(['channels', ch, 'accounts', name], { enabled: true });
+    setField(['channels', cfgKey(ch), 'accounts', name], { enabled: true });
     setActiveAccounts(prev => ({ ...prev, [ch]: name }));
     setAddAccountChannel(null);
     setNewAccountName('');
@@ -391,7 +400,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
   const handleDeleteAccount = useCallback((ch: string, acct: string) => {
     const acctIds = getAccountIds(ch);
     if (acctIds.length <= 1) return;
-    deleteField(['channels', ch, 'accounts', acct]);
+    deleteField(['channels', cfgKey(ch), 'accounts', acct]);
     // If this was the active tab, switch to another account
     setActiveAccounts(prev => {
       const next = { ...prev };
@@ -402,15 +411,15 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
       return next;
     });
     // If default account was this one, clear it
-    const defaultAcct = getField(['channels', ch, 'defaultAccount']);
+    const defaultAcct = getField(['channels', cfgKey(ch), 'defaultAccount']);
     if (defaultAcct === acct) {
-      deleteField(['channels', ch, 'defaultAccount']);
+      deleteField(['channels', cfgKey(ch), 'defaultAccount']);
     }
     setDeleteAccountConfirm(null);
   }, [deleteField, getField]);
 
   const handleSetDefaultAccount = useCallback((ch: string, acct: string) => {
-    setField(['channels', ch, 'defaultAccount'], acct);
+    setField(['channels', cfgKey(ch), 'defaultAccount'], acct);
   }, [setField]);
 
   // One-time migration: copy legacy @openclaw/feishu config (channels.feishu) into
@@ -840,14 +849,14 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
   }, [es]);
 
   const addChannel = useCallback((type: string) => {
-    if (channelKeys.includes(type)) {
+    if (channelKeys.includes(cfgKey(type))) {
       // Channel already exists — open the card and show the add-account inline form
-      setAddAccountChannel(type);
+      setAddAccountChannel(cfgKey(type));
       setNewAccountName('');
       return;
     }
     // First account: save directly under accounts.default
-    setField(['channels', type, 'accounts', 'default'], { enabled: true });
+    setField(['channels', cfgKey(type), 'accounts', 'default'], { enabled: true });
     setAddingChannel(type);
     setWizardStep(1);
   }, [setField, channelKeys]);
@@ -886,20 +895,22 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
   }, []);
 
   const saveWizardChannelConfig = useCallback(async (chId: string, acctKey: string): Promise<boolean> => {
-    const chCfg = channels[chId] || {};
+    const ck = cfgKey(chId);
+    const chCfg = channels[ck] || {};
     const acctCfg = chCfg?.accounts?.[acctKey] || {};
-    const patch: Record<string, any> = {
-      channels: {
-        [chId]: {
-          accounts: {
-            [acctKey]: acctCfg,
-          },
-        },
-      },
-    };
-    const defaultAccount = getField(['channels', chId, 'defaultAccount']);
+    let patch: Record<string, any>;
+    if (acctKey === 'default') {
+      // Default account credentials go at the channel top level (not inside accounts.default).
+      // Plugins like openclaw-lark read default credentials from the channel root
+      // and use mergeAccountConfig(base, override) for named accounts.
+      const { enabled, ...creds } = acctCfg;
+      patch = { channels: { [ck]: { ...creds } } };
+    } else {
+      patch = { channels: { [ck]: { accounts: { [acctKey]: acctCfg } } } };
+    }
+    const defaultAccount = getField(['channels', ck, 'defaultAccount']);
     if (defaultAccount) {
-      patch.channels[chId].defaultAccount = defaultAccount;
+      patch.channels[ck].defaultAccount = defaultAccount;
     }
     await gwApi.configSafePatch(patch);
     return true;
@@ -907,15 +918,16 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
 
   const handleFinishWizard = useCallback(async (chId: string) => {
     if (!ensureChannelPluginReady(chId)) return;
+    const ck = cfgKey(chId);
     const acctKey = wizardAccount || 'default';
-    const acctCfg = channels[chId]?.accounts?.[acctKey] || {};
+    const acctCfg = channels[ck]?.accounts?.[acctKey] || {};
     const credErrors = getCredentialErrors(chId, acctCfg, es);
     if (credErrors.length > 0) {
       toast('error', (es.wizCredentialRequired || 'Required fields missing') + ': ' + credErrors.join(', '));
       setWizardStep(2);
       return;
     }
-    const dmPolicy = getField(['channels', chId, 'accounts', acctKey, 'dmPolicy']) || 'pairing';
+    const dmPolicy = getField(['channels', ck, 'accounts', acctKey, 'dmPolicy']) || 'pairing';
     const requiresPairing = chId !== 'yuanbao' && dmPolicy === 'pairing';
     setRestarting(true);
     let completed = false;
@@ -982,7 +994,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
   const renderAccountTabBar = (ch: string) => {
     const acctIds = getAccountIds(ch);
     const activeAcct = getActiveAccount(ch);
-    const defaultAcct = getField(['channels', ch, 'defaultAccount']) || '';
+    const defaultAcct = getField(['channels', cfgKey(ch), 'defaultAccount']) || '';
     if (acctIds.length <= 1 && addAccountChannel !== ch) return null;
     return (
       <div className="mb-3 pb-2 border-b border-slate-100 dark:border-white/[0.06]">
@@ -1066,12 +1078,12 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
   };
 
   const renderChannelFields = (ch: string, cfg: any, basePath?: string[]) => {
-    const base = basePath || ['channels', ch];
+    const base = basePath || ['channels', cfgKey(ch)];
     const p = (f: string[]) => [...base, ...f];
     const g = (f: string[]) => getField(p(f));
     const s = (f: string[], v: any) => setField(p(f), v);
     const d = (f: string[]) => deleteField(p(f));
-    const isAccountScoped = base[0] === 'channels' && base[1] === ch && base[2] === 'accounts';
+    const isAccountScoped = base[0] === 'channels' && base[1] === cfgKey(ch) && base[2] === 'accounts';
     const labelToken = es.chToken;
     const labelBotToken = es.botToken;
     const labelAppToken = es.appToken;
@@ -2217,10 +2229,11 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
       ) : (() => {
         const chId = addingChannel !== 'selecting' ? addingChannel : '';
         const chInfo = CHANNEL_TYPES.find(c => c.id === chId);
-        const chCfg = chId ? (channels[chId] || {}) : {};
+        const chCfgKey = chId ? cfgKey(chId) : '';
+        const chCfg = chCfgKey ? (channels[chCfgKey] || {}) : {};
         const wizAcctKey = wizardAccount || 'default';
-        const cfg = chId ? (chCfg?.accounts?.[wizAcctKey] || {}) : {};
-        const wizBasePath = chId ? ['channels', chId, 'accounts', wizAcctKey] : undefined;
+        const cfg = chCfgKey ? (chCfg?.accounts?.[wizAcctKey] || {}) : {};
+        const wizBasePath = chCfgKey ? ['channels', chCfgKey, 'accounts', wizAcctKey] : undefined;
         const prepSteps: string[] = chId ? ((cw as any)[`${chId}Prep`] || []) : [];
         const pitfall: string = chId ? ((cw as any)[`${chId}Pitfall`] || '') : '';
 
@@ -2244,10 +2257,10 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
                 {wizardAccount ? `${es.acctAddAccount || 'Add Account'}: ${wizardAccount}` : es.addChannel}
               </h3>
               <button onClick={() => {
-                if (wizardAccount && chId) {
-                  deleteField(['channels', chId, 'accounts', wizardAccount]);
-                } else if (chId) {
-                  deleteField(['channels', chId]);
+                if (wizardAccount && chCfgKey) {
+                  deleteField(['channels', chCfgKey, 'accounts', wizardAccount]);
+                } else if (chCfgKey) {
+                  deleteField(['channels', chCfgKey]);
                 }
                 resetWizard();
               }} className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white/60">
@@ -2289,7 +2302,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
                                 <div className="min-w-0 flex-1">
                                   <div className="text-[11px] font-bold text-slate-700 dark:text-white/80 group-hover:text-primary transition-colors truncate flex items-center gap-1">
                                     {(es as any)[c.labelKey]}
-                                    {channelKeys.includes(c.id) && <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold shrink-0">+ {es.acctAddAccount}</span>}
+                                    {channelKeys.includes(cfgKey(c.id)) && <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold shrink-0">+ {es.acctAddAccount}</span>}
                                   </div>
                                   <div className="text-[11px] text-slate-400 dark:text-white/40 truncate">{(es as any)[c.descKey]}</div>
                                 </div>
@@ -2725,7 +2738,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, schema, setFie
                           </div>
                           <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.03]">
                             <div className="text-[11px] text-slate-400 dark:text-white/40">{es.dmPolicy}</div>
-                            <div className="text-[11px] font-bold text-slate-800 dark:text-white/90 mt-0.5">{dmPolicyText(getField(['channels', chId, 'dmPolicy']) || 'pairing')}</div>
+                            <div className="text-[11px] font-bold text-slate-800 dark:text-white/90 mt-0.5">{dmPolicyText(getField(['channels', chCfgKey, 'dmPolicy']) || 'pairing')}</div>
                           </div>
                           <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.03]">
                             <div className="text-[11px] text-slate-400 dark:text-white/40">{es.enabled}</div>

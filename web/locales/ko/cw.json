@@ -169,6 +169,18 @@
   ],
   "feishuPitfall": "⚠️ 일반적인 함정: 1) \"이벤트 및 콜백\"에서 im.message.receive_v1 를 구독해야 하며, 그렇지 않으면 봇이 메시지를 보낼 수는 있지만 받을 수 없습니다; 2) 이벤트 구독은 connectionMode 와 일치해야 합니다 (장기 연결 → websocket 권장, 요청 URL → webhook); 3) 권한/설정을 변경할 때마다 버전을 재배포해야 적용됩니다; 4) 봇은 자체 Drive 루트 폴더가 없으므로 수동으로 폴더를 공유해야 합니다; 5) OpenClaw 호스트는 >= 2026.4.10 이어야 합니다 (@openclaw/feishu >= 2026.4.19-beta.1 요구사항); 6) 원클릭 설치가 실패하면 터미널에서 직접 `openclaw plugins install @openclaw/feishu` 을 실행하세요.",
   "feishuHelpUrl": "https://open.feishu.cn/app",
+  "openclaw-larkPrep": [
+    "플러그인 설치: openclaw plugins install @larksuite/openclaw-lark (OpenClaw 호스트 ≥ 2026.4.10 필요)",
+    "Feishu 오픈 플랫폼 open.feishu.cn/app → 기업 자체 개발 앱 생성",
+    "\"자격 증명 및 기본 정보\" 페이지에서 App ID 및 App Secret 복사",
+    "\"앱 기능\"에서 Bot 기능 추가 및 Bot 이름 설정",
+    "\"권한 관리\" 페이지에서 필수 권한 추가: im:message, im:message.p2p_msg:readonly, im:message.group_at_msg:readonly, im:message:send_as_bot, im:resource, contact:user.base:readonly",
+    "\"이벤트 및 콜백\"에서 \"장기 연결로 이벤트 수신\" (WebSocket 권장) 선택 후 구독: im.message.receive_v1, im.message.message_read_v1, im.chat.member.bot.added_v1, im.chat.member.bot.deleted_v1",
+    "\"버전 관리 및 배포\"에서 버전 생성 후 배포 (권한/설정 변경 시 매번 재배포 필요)",
+    "⚠️ 배포 후에만 Feishu 에서 Bot 검색 가능"
+  ],
+  "openclaw-larkPitfall": "⚠️ 일반적인 함정: 1) \"이벤트 및 콜백\"에서 im.message.receive_v1 를 구독해야 하며, 그렇지 않으면 봇이 메시지를 보낼 수는 있지만 받을 수 없습니다; 2) 이벤트 구독은 connectionMode 와 일치해야 합니다 (장기 연결 → websocket 권장, 요청 URL → webhook); 3) 권한/설정을 변경할 때마다 버전을 재배포해야 적용됩니다; 4) 봇은 자체 Drive 루트 폴더가 없으므로 수동으로 폴더를 공유해야 합니다; 5) OpenClaw 호스트는 >= 2026.4.10 이어야 합니다 (@larksuite/openclaw-lark >= 2026.4.19-beta.1 요구사항); 6) 원클릭 설치가 실패하면 터미널에서 직접 `openclaw plugins install @larksuite/openclaw-lark` 을 실행하세요.",
+  "openclaw-larkHelpUrl": "https://open.feishu.cn/app",
   "dingtalkPrep": [
     "DingTalk 플러그인 설치: openclaw plugins install @openclaw-china/dingtalk",
     "DingTalk에서 '조직 만들기 또는 참여' → 하나 생성하세요 (서류 불필요, 5분 소요)",

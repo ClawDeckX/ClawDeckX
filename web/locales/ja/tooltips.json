@@ -265,7 +265,6 @@
   "web.reconnect.factor": "再接続間隔の指数バックオフ乗数。例: 2 = リトライごとに待機時間が2倍",
   "web.reconnect.jitter": "再接続間隔に加えるランダムジッター（0-1）。複数クライアントの同時再接続を防止",
   "web.reconnect.maxAttempts": "現在の障害シーケンスで諦めるまでに許可される最大再接続回数。0 = 再試行しない",
-  "gateway.webchat.chatHistoryMaxChars": "chat.history レスポンス内の各テキストフィールドで、切り詰め前に許可される最大文字数。デフォルト: 12000",
   "gateway.channelStaleEventThresholdMinutes": "接続済みチャネルが一定時間イベントを受信しない場合、ヘルスモニタが stale socket と見なして再起動するまでの分数。デフォルト: 30",
   "gateway.channelMaxRestartsPerHour": "1時間のローリングウィンドウ内で、ヘルスモニタが実行できるチャネル再起動の最大回数。デフォルト: 10",
   "gateway.reload.deferralTimeoutMs": "ゲートウェイがビジー状態（リクエスト処理中など）の間、保留中のリロードを遅延させる最大時間（ミリ秒）。タイムアウト後に強制リロード",

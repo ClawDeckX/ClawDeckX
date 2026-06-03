@@ -1,7 +1,6 @@
 {
   "acp.dispatch.enabled": "true",
   "acp.stream.hiddenBoundarySeparator": "paragraph",
-  "agents.defaults.agentRuntime.fallback": "pi",
   "agents.defaults.blockStreamingChunk.breakPreference": "paragraph",
   "agents.defaults.blockStreamingChunk.maxChars": "1200",
   "agents.defaults.blockStreamingChunk.minChars": "800",
@@ -60,7 +59,6 @@
   "agents.defaults.subagents.maxSpawnDepth": "3",
   "agents.defaults.timeoutSeconds": "300",
   "agents.defaults.typingIntervalSeconds": "3",
-  "agents.list.*.agentRuntime.fallback": "pi",
   "approvals.exec.enabled": "false",
   "approvals.plugin.enabled": "false",
   "audio.transcription.timeoutSeconds": "30",
@@ -123,7 +121,6 @@
   "gateway.reload.debounceMs": "300",
   "gateway.reload.deferralTimeoutMs": "0",
   "gateway.timeout": "300000",
-  "gateway.webchat.chatHistoryMaxChars": "12000",
   "hooks.maxBodyBytes": "1000000",
   "logging.level": "info",
   "logging.maxFileBytes": "10000000",

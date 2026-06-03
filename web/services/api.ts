@@ -1302,8 +1302,34 @@ export const wallpaperApi = {
 // Retry-aware RPC: automatically retries on gateway connectivity errors (502 / GW_PROXY_FAILED)
 // caused by transient WebSocket disconnections during gateway reload.
 // Only gateway-unavailable errors are retried; business logic errors propagate immediately.
+// Gateway config.get redacts sensitive fields with this sentinel.
+// Patches must strip these to avoid "not valid as real data" errors.
+const REDACTED_SENTINEL = '__OPENCLAW_REDACTED__';
+
+/** Recursively remove keys whose value is the redaction sentinel. */
+function stripRedactedSentinels(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(stripRedactedSentinels);
+  if (typeof obj !== 'object') return obj;
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === REDACTED_SENTINEL) continue;
+    if (typeof v === 'object' && v !== null && !Array.isArray(v)
+        && typeof (v as any).id === 'string' && (v as any).id === REDACTED_SENTINEL) continue;
+    const cleaned = stripRedactedSentinels(v);
+    // Skip empty objects left after stripping (avoid sending {} patches)
+    if (typeof cleaned === 'object' && cleaned !== null && !Array.isArray(cleaned) && Object.keys(cleaned).length === 0) continue;
+    out[k] = cleaned;
+  }
+  return out;
+}
+
 const GW_RETRY_COUNT = 3;
 const GW_RETRY_DELAY_MS = 1500;
+// Config writes get longer retry window — gateway restarts (triggered by
+// plugin install or prior config change) commonly take 5-15s.
+const GW_CONFIG_WRITE_RETRY_COUNT = 6;
+const GW_CONFIG_WRITE_RETRY_DELAY_MS = 2000;
 
 const isGatewayTransientError = (e: any): boolean => {
   if (e?.code === 'GW_RPC_ERROR' || e?.status === 422) return false;
@@ -1370,7 +1396,7 @@ async function applyRawViaPatch(raw: string): Promise<any> {
   const prev = current?.parsed || current?.config || current;
   const patch = buildMergePatch(prev, next);
   if (!patch) return current;
-  await rpc('config.patch', { raw: JSON.stringify(patch) });
+  await rpcConfigWrite('config.patch', { raw: JSON.stringify(patch) });
   return rpc('config.get');
 }
 
@@ -1385,9 +1411,14 @@ function _flushPatches() {
   _pendingPatch = null;
   _patchResolvers = [];
   if (!patch || resolvers.length === 0) return;
+  const cleaned = stripRedactedSentinels(patch);
+  if (!cleaned || Object.keys(cleaned).length === 0) {
+    resolvers.forEach(r => r.resolve(undefined));
+    return;
+  }
   withConfigWriteQueue(async () => {
-    const raw = JSON.stringify(patch);
-    await rpc('config.patch', { raw });
+    const raw = JSON.stringify(cleaned);
+    await rpcConfigWrite('config.patch', { raw });
     // Allow gateway time to persist and reload before fetching updated config
     await new Promise(r => setTimeout(r, 300));
     return rpc('config.get');
@@ -1421,6 +1452,21 @@ const rpc = async <T = any>(method: string, params?: any): Promise<T> => {
   throw lastErr;
 };
 
+/** Config-write variant with extended retry window (covers gateway restarts). */
+const rpcConfigWrite = async <T = any>(method: string, params?: any): Promise<T> => {
+  let lastErr: any;
+  for (let attempt = 0; attempt <= GW_CONFIG_WRITE_RETRY_COUNT; attempt++) {
+    try {
+      return await post<T>('/api/v1/gw/proxy', { method, params: params ?? {} });
+    } catch (e: any) {
+      lastErr = e;
+      if (!isGatewayTransientError(e) || attempt === GW_CONFIG_WRITE_RETRY_COUNT) break;
+      await new Promise(r => setTimeout(r, GW_CONFIG_WRITE_RETRY_DELAY_MS));
+    }
+  }
+  throw lastErr;
+};
+
 export const gwApi = {
   // --- 保留 REST（Go 层有额外逻辑） ---
   status: () => get('/api/v1/gw/status'),
@@ -1432,7 +1478,7 @@ export const gwApi = {
     if (params?.limit) qs.set('limit', String(params.limit));
     if (params?.key) qs.set('key', params.key);
     const q = qs.toString();
-    return getCached(`/api/v1/gw/sessions/usage${q ? '?' + q : ''}`, 15_000);
+    return getCached(`/api/v1/gw/sessions/usage${q ? '?' + q : ''}`, 60_000);
   },
   usageCost: (params?: { startDate?: string; endDate?: string; days?: number }) => {
     const qs = new URLSearchParams();
@@ -1525,13 +1571,13 @@ export const gwApi = {
   },
   configSetAll: async (config: Record<string, any>): Promise<any> => withConfigWriteQueue(async () => {
     const raw = JSON.stringify(config, null, 2);
-    return rpc('config.set', { raw });
+    return rpcConfigWrite('config.set', { raw });
   }),
   configReload: () => Promise.resolve({ ok: true }),
   configApply: (raw: string, baseHash: string) =>
-    rpc('config.apply', { raw, baseHash }),
+    rpcConfigWrite('config.apply', { raw, baseHash }),
   configPatch: (raw: string, baseHash: string) =>
-    rpc('config.patch', { raw, baseHash }),
+    rpcConfigWrite('config.patch', { raw, baseHash }),
   /**
    * Safe config patch with 150ms coalescing window.
    * Rapid successive patches are merged into one config.patch write.

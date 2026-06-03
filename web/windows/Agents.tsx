@@ -127,6 +127,12 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [bindingSaving, setBindingSaving] = useState(false);
   const [a2aSaving, setA2aSaving] = useState(false);
   const [a2aExpanded, setA2aExpanded] = useState(false);
+  // Peer binding add form state
+  const [peerBindKind, setPeerBindKind] = useState<string>('group');
+  const [peerBindId, setPeerBindId] = useState<string>('');
+  const [peerBindAgent, setPeerBindAgent] = useState<string>('');
+  const [knownPeers, setKnownPeers] = useState<Array<{ kind: string; id: string; label?: string; channel: string }>>([]);
+  const [knownPeersLoaded, setKnownPeersLoaded] = useState(false);
   const [toolDraft, setToolDraft] = useState<Record<string, any> | null>(null);
   const [toolSaving, setToolSaving] = useState(false);
   const [customToolInput, setCustomToolInput] = useState('');
@@ -2590,7 +2596,37 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                               {/* Collapsed header — always visible */}
                               <div
                                 className="flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none hover:bg-slate-50/50 dark:hover:bg-white/[0.02] rounded-xl transition-colors"
-                                onClick={() => setExpandedChannel(isExpanded ? null : id)}
+                                onClick={() => {
+                                  const next = isExpanded ? null : id;
+                                  setExpandedChannel(next);
+                                  setPeerBindKind('group');
+                                  setPeerBindId('');
+                                  setPeerBindAgent('');
+                                  if (next && !knownPeersLoaded) {
+                                    gwApi.sessions().then((rows: any[]) => {
+                                      const peers: Array<{ kind: string; id: string; label?: string; channel: string }> = [];
+                                      const seen = new Set<string>();
+                                      for (const s of rows) {
+                                        const key: string = s.key || '';
+                                        const parts = key.split(':').filter(Boolean);
+                                        if (parts.length < 5 || parts[0] !== 'agent') continue;
+                                        const lcParts = parts.map(p => p.toLowerCase());
+                                        const kindIdx = lcParts.findIndex((p, i) => i >= 3 && ['group', 'channel', 'direct'].includes(p));
+                                        if (kindIdx < 3) continue;
+                                        const ch = lcParts[kindIdx - 1];
+                                        const kind = lcParts[kindIdx];
+                                        const peerId = parts.slice(kindIdx + 1).join(':');
+                                        if (!peerId) continue;
+                                        const dedupKey = `${ch}:${kind}:${peerId.toLowerCase()}`;
+                                        if (seen.has(dedupKey)) continue;
+                                        seen.add(dedupKey);
+                                        peers.push({ kind, id: peerId, label: s.label || undefined, channel: ch });
+                                      }
+                                      setKnownPeers(peers);
+                                      setKnownPeersLoaded(true);
+                                    }).catch(() => {});
+                                  }
+                                }}
                               >
                                 <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
                                   chevron_right
@@ -2688,45 +2724,132 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                                     <p className="text-[10px] text-slate-400 dark:text-white/20 py-2 text-center italic">{a.noAccounts || 'No accounts'}</p>
                                   )}
 
-                                  {/* Peer-level bindings (read-only + delete) */}
+                                  {/* Peer-level bindings (list + add) */}
                                   {(() => {
                                     const peerBindings = getChannelPeerBindings(id);
-                                    if (peerBindings.length === 0) return null;
+                                    // Filter known peers for this channel
+                                    const channelPeers = knownPeers.filter(p => p.channel === id.toLowerCase());
+                                    // Build peer ID options for dropdown based on selected kind
+                                    const peerIdOptions = (() => {
+                                      const filtered = channelPeers.filter(p => p.kind === peerBindKind);
+                                      const opts: Array<{ value: string; label: string }> = [
+                                        { value: '', label: a.peerSelectPlaceholder || '— Select —' },
+                                        { value: '*', label: a.peerWildcardAll || '* (All)' },
+                                      ];
+                                      for (const p of filtered) {
+                                        const lbl = p.label ? `${p.label} (${p.id})` : p.id;
+                                        opts.push({ value: p.id, label: lbl });
+                                      }
+                                      return opts;
+                                    })();
+                                    const kindOptions = [
+                                      { value: 'group', label: a.peerKindGroup || 'Group' },
+                                      { value: 'channel', label: a.peerKindChannel || 'Channel' },
+                                      { value: 'direct', label: a.peerKindDirect || 'DM / Direct' },
+                                    ];
+                                    const addPeerBinding = () => {
+                                      if (!peerBindId || !peerBindAgent) return;
+                                      // Remove existing binding for same peer
+                                      let updated = allBindings.filter((b: any) => !(
+                                        b.match?.channel?.toLowerCase() === id.toLowerCase() &&
+                                        b.match?.peer?.id?.toLowerCase() === peerBindId.toLowerCase() &&
+                                        b.match?.peer?.kind?.toLowerCase() === peerBindKind.toLowerCase()
+                                      ));
+                                      updated.push({
+                                        agentId: peerBindAgent,
+                                        match: { channel: id, peer: { kind: peerBindKind, id: peerBindId } }
+                                      });
+                                      saveBindings(updated);
+                                      setPeerBindId('');
+                                      setPeerBindAgent('');
+                                    };
                                     return (
-                                      <>
-                                        <div className="border-t border-dashed border-slate-200/40 dark:border-white/[0.06] mt-2 pt-2">
-                                          <p className="text-[9px] font-bold text-slate-400 dark:text-white/25 uppercase tracking-wider mb-1.5 px-1">
-                                            {a.bindingPeerRules || 'Peer Rules'}
-                                          </p>
-                                          {peerBindings.map((b: any, bi: number) => {
-                                            const pk = b.match?.peer?.kind || 'group';
-                                            const pid = b.match?.peer?.id || '';
-                                            const agent = b.agentId || '';
-                                            const isThisAgent = agent === selectedId;
-                                            return (
-                                              <div key={`peer-${bi}`} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors ${
-                                                isThisAgent ? 'bg-primary/[0.04]' : 'hover:bg-slate-50/50 dark:hover:bg-white/[0.02]'
-                                              }`}>
-                                                <span className="material-symbols-outlined text-[13px] text-violet-400 dark:text-violet-400/70">
-                                                  {pk === 'group' ? 'group' : pk === 'direct' ? 'person' : 'tag'}
-                                                </span>
-                                                <span className="text-[10px] font-mono text-slate-500 dark:text-white/40 truncate flex-1" title={pid}>{pid}</span>
-                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                                  isThisAgent ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-white/40'
-                                                }`}>{agent}</span>
-                                                <button
-                                                  onClick={() => removePeerBinding(id, pk, pid)}
-                                                  disabled={bindingSaving}
-                                                  className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-300 hover:text-red-500 dark:text-white/15 dark:hover:text-red-400 transition-colors"
-                                                  title={a.bindingRemove || 'Remove'}
-                                                >
-                                                  <span className="material-symbols-outlined text-[12px]">close</span>
-                                                </button>
-                                              </div>
-                                            );
-                                          })}
+                                      <div className="border-t border-dashed border-slate-200/40 dark:border-white/[0.06] mt-2 pt-2">
+                                        <p className="text-[9px] font-bold text-slate-400 dark:text-white/25 uppercase tracking-wider mb-1.5 px-1">
+                                          {a.bindingPeerRules || 'Peer Rules'}
+                                        </p>
+                                        {/* Existing peer bindings */}
+                                        {peerBindings.map((b: any, bi: number) => {
+                                          const pk = b.match?.peer?.kind || 'group';
+                                          const pid = b.match?.peer?.id || '';
+                                          const agent = b.agentId || '';
+                                          const isThisAgent = agent === selectedId;
+                                          const kindLabel = pk === 'group' ? (a.peerKindGroup || 'Group') : pk === 'direct' ? (a.peerKindDirect || 'DM') : (a.peerKindChannel || 'Channel');
+                                          return (
+                                            <div key={`peer-${bi}`} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors ${
+                                              isThisAgent ? 'bg-primary/[0.04]' : 'hover:bg-slate-50/50 dark:hover:bg-white/[0.02]'
+                                            }`}>
+                                              <span className="material-symbols-outlined text-[13px] text-violet-400 dark:text-violet-400/70">
+                                                {pk === 'group' ? 'group' : pk === 'direct' ? 'person' : 'tag'}
+                                              </span>
+                                              <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-white/35 font-bold shrink-0">{kindLabel}</span>
+                                              <span className="text-[10px] font-mono text-slate-500 dark:text-white/40 truncate flex-1" title={pid}>{pid === '*' ? (a.peerWildcardAll || '* (All)') : pid}</span>
+                                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                isThisAgent ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-white/40'
+                                              }`}>{agent}</span>
+                                              <button
+                                                onClick={() => removePeerBinding(id, pk, pid)}
+                                                disabled={bindingSaving}
+                                                className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-300 hover:text-red-500 dark:text-white/15 dark:hover:text-red-400 transition-colors"
+                                                title={a.bindingRemove || 'Remove'}
+                                              >
+                                                <span className="material-symbols-outlined text-[12px]">close</span>
+                                              </button>
+                                            </div>
+                                          );
+                                        })}
+                                        {peerBindings.length === 0 && (
+                                          <p className="text-[10px] text-slate-400 dark:text-white/20 py-1 px-1 italic">{a.noPeerBindings || 'No peer-level bindings'}</p>
+                                        )}
+                                        {/* Add peer binding form */}
+                                        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                                          <CustomSelect
+                                            value={peerBindKind}
+                                            disabled={bindingSaving}
+                                            onChange={v => { setPeerBindKind(v); setPeerBindId(''); }}
+                                            options={kindOptions}
+                                            className="text-[10px] border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 text-slate-600 dark:text-white/60 min-w-[90px] h-7"
+                                          />
+                                          <CustomSelect
+                                            value={peerBindId}
+                                            disabled={bindingSaving}
+                                            onChange={setPeerBindId}
+                                            options={peerIdOptions}
+                                            placeholder={a.peerSelectPlaceholder || '— Select —'}
+                                            className="text-[10px] border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 text-slate-600 dark:text-white/60 min-w-[140px] h-7 flex-1"
+                                          />
+                                          <CustomSelect
+                                            value={peerBindAgent}
+                                            disabled={bindingSaving}
+                                            onChange={setPeerBindAgent}
+                                            options={[
+                                              { value: '', label: a.peerSelectAgent || '— Agent —' },
+                                              ...agentOpts.map(aid => ({ value: aid, label: aid === selectedId ? `${aid} ◀` : aid }))
+                                            ]}
+                                            placeholder={a.peerSelectAgent || '— Agent —'}
+                                            className="text-[10px] border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 text-slate-600 dark:text-white/60 min-w-[110px] h-7"
+                                          />
+                                          <button
+                                            onClick={addPeerBinding}
+                                            disabled={bindingSaving || !peerBindId || !peerBindAgent}
+                                            className="h-7 px-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-[10px] font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-0.5 shrink-0"
+                                          >
+                                            <span className="material-symbols-outlined text-[12px]">add</span>
+                                            {a.peerBindAdd || 'Add'}
+                                          </button>
                                         </div>
-                                      </>
+                                        {/* Hint: dmScope warning for direct wildcard */}
+                                        {peerBindKind === 'direct' && (
+                                          <p className="text-[9px] text-amber-600/80 dark:text-amber-400/60 mt-1 px-1">
+                                            <span className="material-symbols-outlined text-[10px] align-middle me-0.5">info</span>
+                                            {a.peerDmScopeHint || 'DM bindings route messages to the target agent. For full session isolation, set session.dmScope to per-channel-peer.'}
+                                          </p>
+                                        )}
+                                        {/* Priority legend */}
+                                        <p className="text-[9px] text-slate-400/60 dark:text-white/15 mt-1.5 px-1">
+                                          {a.peerPriorityHint || 'Priority: Exact Peer > Wildcard(*) > Account > Channel(*)'}
+                                        </p>
+                                      </div>
                                     );
                                   })()}
 

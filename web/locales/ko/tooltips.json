@@ -265,7 +265,6 @@
   "gateway.push.apns.relay.timeoutMs": "Timeout in milliseconds for relay send requests from the gateway to the APNs relay (default: 10000). Increase for slower relays or networks, or lower to fail wake attempts faster",
   "web.reconnect.factor": "재연결 간격의 지수 백오프 배수. 예: 2 = 재시도마다 대기 시간 2배",
   "web.reconnect.jitter": "재연결 간격에 추가되는 랜덤 지터(0-1). 여러 클라이언트의 동시 재연결 방지",
-  "gateway.webchat.chatHistoryMaxChars": "chat.history 응답의 각 텍스트 필드가 잘리기 전 허용되는 최대 문자 수. 기본값: 12000",
   "gateway.channelStaleEventThresholdMinutes": "연결된 채널이 일정 시간 이벤트를 받지 못하면 상태 모니터가 오래된 socket 으로 간주하고 재시작하기까지의 분 수. 기본값: 30",
   "gateway.channelMaxRestartsPerHour": "롤링 1시간 창에서 상태 모니터가 실행할 수 있는 채널 재시작 최대 횟수. 기본값: 10",
   "gateway.reload.deferralTimeoutMs": "게이트웨이가 사용 중(예: 요청 처리 중)일 때 대기 중인 리로드를 지연하는 최대 시간(ms). 타임아웃 후 강제 리로드",

@@ -752,7 +752,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     { cmd: '/acp', desc: c.cmdAcp, icon: 'swap_horiz', cat: 'management' },
     { cmd: '/subagents', desc: c.catManagement, icon: 'group', cat: 'management' },
     { cmd: '/agents', desc: c.cmdAgents, icon: 'smart_toy', cat: 'management' },
-    { cmd: '/kill', desc: c.cmdKill, icon: 'dangerous', cat: 'management' },
+    { cmd: '/goal', desc: c.cmdGoal || 'Show or control the current goal', icon: 'flag', cat: 'status' },
+    { cmd: '/workboard', desc: c.cmdWorkboard || 'List, create, inspect, and dispatch Workboard cards', icon: 'view_kanban', cat: 'management' },
     { cmd: '/steer', desc: c.cmdSteer, icon: 'assistant_direction', cat: 'management' },
     { cmd: '/focus', desc: c.cmdFocus, icon: 'center_focus_strong', cat: 'management' },
     { cmd: '/unfocus', desc: c.cmdUnfocus, icon: 'center_focus_weak', cat: 'management' },
@@ -2553,9 +2554,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setBindPeerIdOriginal('');
     setRenameOpen(true);
     setSessionMenuKey(null);
-    // For group/channel sessions, fetch agents + current binding
+    // For group/channel/direct sessions, fetch agents + current binding
     const peer = parseSessionKeyPeer(key);
-    if (peer && (peer.peerKind === 'group' || peer.peerKind === 'channel')) {
+    if (peer && (peer.peerKind === 'group' || peer.peerKind === 'channel' || peer.peerKind === 'direct')) {
       // Extract original-case peer ID from session's lastTo (preserves casing from channel plugin)
       const sessionData = sessionsRef.current.find(s => s.key === key);
       const originalPeerId = extractPeerIdFromSessionRoute(sessionData, peer);
@@ -2573,7 +2574,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         const existing = bindings.find((b: any) =>
           b.match?.channel?.toLowerCase() === peer.channel &&
           b.match?.peer?.id?.toLowerCase() === peer.peerId.toLowerCase() &&
-          ['group', 'channel'].includes(b.match?.peer?.kind?.toLowerCase() || '')
+          ['group', 'channel', 'direct'].includes(b.match?.peer?.kind?.toLowerCase() || '')
         );
         const boundId = existing?.agentId || '';
         setBindAgentId(boundId);
@@ -2593,7 +2594,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setSessions(prev => prev.map(s => s.key === renameKey ? { ...s, label: renameLabel.trim() || s.key } : s));
       // Save peer binding if changed
       const peer = parseSessionKeyPeer(renameKey);
-      if (peer && (peer.peerKind === 'group' || peer.peerKind === 'channel') && bindAgentId !== bindAgentOriginal) {
+      if (peer && (peer.peerKind === 'group' || peer.peerKind === 'channel' || peer.peerKind === 'direct') && bindAgentId !== bindAgentOriginal) {
         try {
           const cfg = await gwApi.configGet() as any;
           const parsed = cfg?.parsed || cfg?.config || cfg || {};
@@ -2602,7 +2603,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
           let updated = allBindings.filter((b: any) => !(
             b.match?.channel?.toLowerCase() === peer.channel &&
             b.match?.peer?.id?.toLowerCase() === peer.peerId.toLowerCase() &&
-            ['group', 'channel'].includes(b.match?.peer?.kind?.toLowerCase() || '')
+            ['group', 'channel', 'direct'].includes(b.match?.peer?.kind?.toLowerCase() || '')
           ));
           // Add new binding if agent selected
           // Use original-case peer ID from session's lastTo when available,
@@ -4433,7 +4434,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               </p>
               {(() => {
                 const peer = parseSessionKeyPeer(renameKey);
-                if (!peer || (peer.peerKind !== 'group' && peer.peerKind !== 'channel')) return null;
+                if (!peer || (peer.peerKind !== 'group' && peer.peerKind !== 'channel' && peer.peerKind !== 'direct')) return null;
                 const realPeerId = bindPeerIdOriginal || '';
                 const normalizedPeerId = peer.peerId;
                 const hasRealPeerId = Boolean(realPeerId);
@@ -4465,7 +4466,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               })()}
             </div>
 
-            {/* Bind Agent — only for group/channel sessions */}
+            {/* Bind Agent — for group/channel/direct sessions */}
             {bindAgentsList.length > 0 && parseSessionKeyPeer(renameKey) && (
               <div className="mt-4">
                 <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase block mb-1">

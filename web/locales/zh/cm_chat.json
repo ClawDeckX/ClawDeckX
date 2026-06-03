@@ -237,5 +237,7 @@
     "cmdPair": "设备配对审批",
     "cmdCard": "发送 LINE 卡片",
     "cmdPhone": "开关手机节点命令"
-  }
+  },
+  "cmdGoal": "显示或控制当前目标",
+  "cmdWorkboard": "工作看板卡片"
 }

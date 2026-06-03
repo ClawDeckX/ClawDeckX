@@ -169,6 +169,18 @@
   ],
   "feishuPitfall": "⚠️ 常见踩坑：1) 必须在「事件与回调」订阅 im.message.receive_v1，否则机器人能发消息但收不到；2) 事件订阅方式必须与 connectionMode 匹配：长连接 → websocket（推荐），请求地址 → webhook；3) 每次修改权限/配置后必须重新「创建版本并发布」才能生效；4) 机器人没有自己的云空间根目录，需手动分享文件夹给机器人才能使用云空间工具；5) OpenClaw 主机需 ≥ 2026.4.10（@openclaw/feishu ≥ 2026.4.19-beta.1 的硬性要求）；6) 如果一键安装失败，可在终端直接执行 `openclaw plugins install @openclaw/feishu`。",
   "feishuHelpUrl": "https://open.feishu.cn/app",
+  "openclaw-larkPrep": [
+    "安装飞书插件：openclaw plugins install @larksuite/openclaw-lark（需 OpenClaw 主机 ≥ 2026.4.10）",
+    "登录飞书开放平台 open.feishu.cn/app → 创建企业自建应用",
+    "在「凭证与基础信息」页复制 App ID 和 App Secret",
+    "在「应用能力」中添加「机器人」能力，设置机器人名称",
+    "在「权限管理」页添加必需权限：im:message、im:message.p2p_msg:readonly、im:message.group_at_msg:readonly、im:message:send_as_bot、im:resource、contact:user.base:readonly（可点击下方「复制权限 JSON」批量导入）",
+    "在「事件与回调」中选择「使用长连接接收事件」（推荐 WebSocket，无需公网 IP），订阅事件：im.message.receive_v1、im.message.message_read_v1、im.chat.member.bot.added_v1、im.chat.member.bot.deleted_v1",
+    "在「版本管理与发布」中创建版本并发布（每次改权限/配置后都需重新发布）",
+    "⚠️ 发布后才能在飞书中搜索到机器人"
+  ],
+  "openclaw-larkPitfall": "⚠️ 常见踩坑：1) 必须在「事件与回调」订阅 im.message.receive_v1，否则机器人能发消息但收不到；2) 事件订阅方式必须与 connectionMode 匹配：长连接 → websocket（推荐），请求地址 → webhook；3) 每次修改权限/配置后必须重新「创建版本并发布」才能生效；4) 机器人没有自己的云空间根目录，需手动分享文件夹给机器人才能使用云空间工具；5) OpenClaw 主机需 ≥ 2026.4.10（@larksuite/openclaw-lark ≥ 2026.4.19-beta.1 的硬性要求）；6) 如果一键安装失败，可在终端直接执行 `openclaw plugins install @larksuite/openclaw-lark`。",
+  "openclaw-larkHelpUrl": "https://open.feishu.cn/app",
   "dingtalkPrep": [
     "安装钉钉插件：openclaw plugins install @openclaw-china/dingtalk",
     "在钉钉右上角「创建或加入企业」→ 创建企业（无需任何材料，5 分钟完成）",

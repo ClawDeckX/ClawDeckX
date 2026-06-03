@@ -265,7 +265,6 @@
   "web.reconnect.factor": "重連間隔的指數退避乘數。如 2 = 每次重試等待時間翻倍",
   "web.reconnect.jitter": "重連間隔的隨機抖動係數（0-1）。防止多個客戶端同時重連",
   "web.reconnect.maxAttempts": "當前故障序列中放棄前允許的最大重連次數。0 = 不重試",
-  "gateway.webchat.chatHistoryMaxChars": "chat.history 回應中每個文字欄位在截斷前允許的最大字元數。預設：12000",
   "gateway.channelStaleEventThresholdMinutes": "已連線通道在多少分鐘內未收到任何事件後，會被健康監測視為陳舊 socket 並觸發重啟。預設：30",
   "gateway.channelMaxRestartsPerHour": "滾動一小時視窗內，健康監測允許觸發的通道重啟最大次數。預設：10",
   "gateway.reload.deferralTimeoutMs": "閘道繁忙時（如正在處理請求）延遲重載的最大等待時間（毫秒）。逾時後強制執行重載",

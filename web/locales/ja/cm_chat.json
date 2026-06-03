@@ -237,5 +237,7 @@
     "cmdPair": "デバイスペアリング承認",
     "cmdCard": "LINE カード送信",
     "cmdPhone": "電話ノード指令を有効化"
-  }
+  },
+  "cmdGoal": "現在の目標を表示/制御",
+  "cmdWorkboard": "ワークボードカード"
 }

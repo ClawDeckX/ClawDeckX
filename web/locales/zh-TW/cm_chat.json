@@ -237,5 +237,7 @@
     "cmdPair": "裝置配對審批",
     "cmdCard": "傳送 LINE 卡片",
     "cmdPhone": "啟用手機節點指令"
-  }
+  },
+  "cmdGoal": "顯示或控制當前目標",
+  "cmdWorkboard": "工作看板卡片"
 }

@@ -1063,12 +1063,21 @@ func (h *PluginInstallHandler) ensurePluginAllowed(pluginId string) error {
 
 	// Read current allow list
 	var allowList []string
-	if rawAllow, ok := pluginsObj["allow"].([]interface{}); ok {
+	rawAllow, hasAllow := pluginsObj["allow"].([]interface{})
+	if hasAllow {
 		for _, item := range rawAllow {
 			if s, ok := item.(string); ok {
 				allowList = append(allowList, s)
 			}
 		}
+	}
+
+	// If no restrictive allowlist exists (missing or empty), do nothing.
+	// An absent/empty allow list means "all plugins allowed" — creating one
+	// with only the new plugin would disable all other plugins.
+	// This matches OpenClaw CLI's addInstalledPluginToAllowlist behavior.
+	if !hasAllow || len(allowList) == 0 {
+		return nil
 	}
 
 	// Check if already allowed (exact match or wildcard)

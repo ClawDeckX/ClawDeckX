@@ -169,6 +169,18 @@
   ],
   "feishuPitfall": "⚠️ 常見踩坑：1) 必須在「事件與回呼」訂閱 im.message.receive_v1，否則機器人能發訊息但收不到；2) 事件訂閱方式必須與 connectionMode 一致：長連線 → websocket（推薦），請求網址 → webhook；3) 每次修改權限/設定後必須重新「建立版本並發布」才會生效；4) 機器人沒有自己的雲空間根目錄，需手動分享資料夾給機器人才能使用雲空間工具；5) OpenClaw 主機需 ≥ 2026.4.10（@openclaw/feishu ≥ 2026.4.19-beta.1 的硬性要求）；6) 若一鍵安裝失敗，可在終端直接執行 `openclaw plugins install @openclaw/feishu`。",
   "feishuHelpUrl": "https://open.feishu.cn/app",
+  "openclaw-larkPrep": [
+    "安裝飛書外掛：openclaw plugins install @larksuite/openclaw-lark（需 OpenClaw 主機 ≥ 2026.4.10）",
+    "登入飛書開放平台 open.feishu.cn/app → 建立企業自建應用",
+    "在「憑證與基礎資訊」頁複製 App ID 和 App Secret",
+    "在「應用能力」中加入「機器人」能力，設定機器人名稱",
+    "在「權限管理」頁加入必要權限：im:message、im:message.p2p_msg:readonly、im:message.group_at_msg:readonly、im:message:send_as_bot、im:resource、contact:user.base:readonly（可點擊「複製權限 JSON」批次匯入）",
+    "在「事件與回呼」中選擇「使用長連線接收事件」（推薦 WebSocket），訂閱：im.message.receive_v1、im.message.message_read_v1、im.chat.member.bot.added_v1、im.chat.member.bot.deleted_v1",
+    "在「版本管理與發布」中建立版本並發布（每次修改權限/設定後都需重新發布）",
+    "⚠️ 發布後才能在飛書中搜尋到機器人"
+  ],
+  "openclaw-larkPitfall": "⚠️ 常見踩坑：1) 必須在「事件與回呼」訂閱 im.message.receive_v1，否則機器人能發訊息但收不到；2) 事件訂閱方式必須與 connectionMode 一致：長連線 → websocket（推薦），請求網址 → webhook；3) 每次修改權限/設定後必須重新「建立版本並發布」才會生效；4) 機器人沒有自己的雲空間根目錄，需手動分享資料夾給機器人才能使用雲空間工具；5) OpenClaw 主機需 ≥ 2026.4.10（@larksuite/openclaw-lark ≥ 2026.4.19-beta.1 的硬性要求）；6) 若一鍵安裝失敗，可在終端直接執行 `openclaw plugins install @larksuite/openclaw-lark`。",
+  "openclaw-larkHelpUrl": "https://open.feishu.cn/app",
   "dingtalkPrep": [
     "安装钉钉插件：openclaw plugins install @openclaw-china/dingtalk",
     "在钉钉右上角「创建或加入企业」→ 创建企业（无需任何材料，5 分钟完成）",

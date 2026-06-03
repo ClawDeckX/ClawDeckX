@@ -4,7 +4,7 @@ import { SecurityPolicyBadges } from './SecurityPolicyBadges';
 import type { ExecAsk, ExecHost, ExecSecurity, AskFallback } from '../utils/exec-policy';
 
 /* ── In-memory cache for usage data (avoids re-fetch on session switch) ── */
-const CACHE_TTL = 30_000;
+const CACHE_TTL = 120_000;
 const CACHE_MAX = 50;
 interface CacheEntry { usage: any; timeseries: any; ts: number; }
 const usageCache = new Map<string, CacheEntry>();
@@ -118,10 +118,11 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loa
 
   const loadData = useCallback(async (force = false) => {
     if (!gwReady || !sessionKey) return;
-    if (!force) {
-      const cached = cacheGet(sessionKey);
-      if (cached) { setUsage(cached.usage); setTimeseries(cached.timeseries); return; }
-    }
+    // Stale-while-revalidate: show cached data immediately, fetch in background
+    const cached = cacheGet(sessionKey);
+    if (cached && !force) { setUsage(cached.usage); setTimeseries(cached.timeseries); return; }
+    // Show stale data while loading fresh (avoid white flash)
+    if (cached) { setUsage(cached.usage); setTimeseries(cached.timeseries); }
     setLoading(true);
     setError(null);
     try {
@@ -133,7 +134,8 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loa
       if (ts) setTimeseries(ts);
       cacheSet(sessionKey, data, ts);
     } catch (e: any) {
-      setError(e?.message || 'Failed to load');
+      // Only show error if we have no stale data to display
+      if (!cached) setError(e?.message || 'Failed to load');
     }
     setLoading(false);
   }, [gwReady, sessionKey, loadUsage, loadTimeseries]);
@@ -159,7 +161,14 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loa
     return () => document.removeEventListener('mousedown', handler);
   }, [modelPickerOpen]);
 
-  useEffect(() => { setModelPickerOpen(false); setModelOptions([]); setTimeseries(null); }, [sessionKey]);
+  useEffect(() => {
+    setModelPickerOpen(false);
+    setModelOptions([]);
+    // On session switch: show cached data for new session immediately (avoid white flash)
+    const cached = cacheGet(sessionKey);
+    if (cached) { setUsage(cached.usage); setTimeseries(cached.timeseries); }
+    else { setUsage(null); setTimeseries(null); }
+  }, [sessionKey]);
 
   const toggle = () => {
     setCollapsed(v => {

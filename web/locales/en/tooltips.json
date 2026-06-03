@@ -265,7 +265,6 @@
   "web.reconnect.maxAttempts": "Maximum reconnect attempts before giving up for the current failure sequence. 0 = no retries",
   "web.reconnect.factor": "Exponential backoff multiplier for reconnect intervals. e.g. 2 = double the wait each retry",
   "web.reconnect.jitter": "Random jitter added to reconnect intervals (0-1). Prevents multiple clients from reconnecting simultaneously",
-  "gateway.webchat.chatHistoryMaxChars": "Maximum characters per text field in chat.history responses before truncation. Default: 12000",
   "gateway.channelStaleEventThresholdMinutes": "How many minutes a connected channel can go without receiving any event before the health monitor treats it as a stale socket and restarts it. Default: 30",
   "gateway.channelMaxRestartsPerHour": "Maximum number of health-monitor-initiated channel restarts allowed within a rolling one-hour window. Default: 10",
   "gateway.reload.deferralTimeoutMs": "Maximum time (ms) to defer a pending reload while the gateway is busy (e.g. mid-request). After this timeout the reload proceeds regardless",

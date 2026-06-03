@@ -237,5 +237,7 @@
     "cmdPair": "기기 페어링 승인",
     "cmdCard": "LINE 카드 전송",
     "cmdPhone": "전화 노드 명령 활성화"
-  }
+  },
+  "cmdGoal": "현재 목표 표시/제어",
+  "cmdWorkboard": "워크보드 카드"
 }

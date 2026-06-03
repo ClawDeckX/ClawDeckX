@@ -237,5 +237,7 @@
     "cmdPair": "Approve device pairing",
     "cmdCard": "Send LINE rich card",
     "cmdPhone": "Arm phone node commands"
-  }
+  },
+  "cmdGoal": "Show or control the current goal",
+  "cmdWorkboard": "Workboard cards"
 }
