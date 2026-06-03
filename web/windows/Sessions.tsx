@@ -947,14 +947,33 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
             }));
           }
           loadSessionsRef.current?.({ silent: true });
+        } else if (msg.type === 'session.operation') {
+          // Structured session operation event (openclaw >=2026.6.2)
+          // payload: { operationId, operation, phase, sessionKey?, ts }
+          const d = msg.data;
+          if (!d?.sessionKey || d.sessionKey === sessionKeyRef.current) {
+            if (d.operation === 'compact') {
+              if (d.phase === 'started') {
+                setCompacting(true);
+              } else if (d.phase === 'completed' || d.phase === 'failed') {
+                setCompacting(false);
+                loadSessionsRef.current?.({ silent: true });
+                loadHistoryRef.current?.({ silent: true });
+              }
+            } else if (d.operation === 'restore' || d.operation === 'cleanup') {
+              if (d.phase === 'completed') {
+                loadSessionsRef.current?.({ silent: true });
+                loadHistoryRef.current?.({ silent: true });
+              }
+            }
+          }
         } else if (msg.type === 'context_compaction.started') {
-          // Gateway event: context compaction has begun for this session (openclaw >=2026.3.24)
+          // Legacy event fallback (openclaw <2026.6.2)
           const d = msg.data;
           if (!d?.sessionKey || d.sessionKey === sessionKeyRef.current) {
             setCompacting(true);
           }
         } else if (msg.type === 'context_compaction.completed') {
-          // Gateway event: context compaction finished
           const d = msg.data;
           if (!d?.sessionKey || d.sessionKey === sessionKeyRef.current) {
             setCompacting(false);
