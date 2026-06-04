@@ -1702,10 +1702,23 @@ export const gwApi = {
   // Talk mode
   talkMode: (enabled: boolean, phase?: string) =>
     rpc('talk.mode', { enabled, ...(phase ? { phase } : {}) }),
-  talkConfig: () =>
-    rpc<{ enabled?: boolean; provider?: string; voice?: string; speed?: number; language?: string }>('talk.config'),
+  talkConfig: (includeSecrets?: boolean) =>
+    rpc<any>('talk.config', { includeSecrets: includeSecrets ?? false }),
   talkSpeak: (text: string, params?: { voice?: string; provider?: string; sessionKey?: string }) =>
     rpc('talk.speak', { text, ...params }),
+  talkCatalog: () =>
+    rpc<{
+      modes: string[];
+      transports: string[];
+      brains: string[];
+      speech: { activeProvider?: string; providers: Array<{ id: string; label: string; configured: boolean; modes?: string[]; models?: string[]; voices?: string[] }> };
+      transcription: { activeProvider?: string; providers: Array<{ id: string; label: string; configured: boolean; defaultModel?: string }> };
+      realtime: { activeProvider?: string; providers: Array<{ id: string; label: string; configured: boolean; defaultModel?: string; transports?: string[]; supportsBargeIn?: boolean; supportsToolCalls?: boolean }> };
+    }>('talk.catalog'),
+  ttsPersonas: () =>
+    rpc<{ active: string | null; personas: Array<{ id: string; label?: string; description?: string; provider?: string; fallbackPolicy?: string; providers?: string[] }> }>('tts.personas'),
+  ttsSetPersona: (persona: string | null) =>
+    rpc<{ persona: string | null }>('tts.setPersona', { persona }),
   // Channels (2026.5.7)
   channelsStop: (channel: string) =>
     rpc('channels.stop', { channel }),

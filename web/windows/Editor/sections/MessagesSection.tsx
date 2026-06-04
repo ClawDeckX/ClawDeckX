@@ -80,17 +80,20 @@ export const MessagesSection: React.FC<SectionProps> = ({ config, schema, setFie
       </ConfigSection>
 
       <ConfigSection title={es.ttsConfig} icon="record_voice_over" iconColor="text-fuchsia-500" defaultOpen={false}>
-        <SelectField label={es.ttsProvider} tooltip={tip('messages.tts.provider')} value={g(['tts', 'provider']) || ''} onChange={v => s(['tts', 'provider'], v)}
+        <TextField label={es.ttsProvider} tooltip={tip('messages.tts.provider')} value={g(['tts', 'provider']) || ''} onChange={v => s(['tts', 'provider'], v || undefined)} placeholder="elevenlabs" />
+        <SelectField label={es.autoTts} tooltip={tip('messages.tts.auto')} value={g(['tts', 'auto']) || 'off'} onChange={v => s(['tts', 'auto'], v === 'off' ? undefined : v)}
           options={[
-            { value: '', label: '—' },
-            { value: 'elevenlabs', label: es.ttsProviderElevenLabs },
-            { value: 'openai', label: es.ttsProviderOpenAI },
-            { value: 'edge', label: es.ttsProviderEdge }
+            { value: 'off', label: 'Off' },
+            { value: 'always', label: 'Always' },
+            { value: 'inbound', label: 'Inbound Only' },
+            { value: 'tagged', label: 'Tagged Only' }
           ]} />
-        <SwitchField label={es.autoTts} tooltip={tip('messages.tts.auto')} value={g(['tts', 'auto']) === true} onChange={v => s(['tts', 'auto'], v)} />
-        <TextField label={es.mode} tooltip={tip('messages.tts.mode')} value={g(['tts', 'mode']) || ''} onChange={v => s(['tts', 'mode'], v)} placeholder={es.phReplyInline} />
-        <PasswordField label={es.audioApiKey} value={g(['tts', 'apiKey']) || ''} onChange={v => s(['tts', 'apiKey'], v)} />
-        <TextField label={es.voiceId} value={g(['tts', 'voiceId']) || ''} onChange={v => s(['tts', 'voiceId'], v)} />
+        <SelectField label={es.mode} tooltip={tip('messages.tts.mode')} value={g(['tts', 'mode']) || 'final'} onChange={v => s(['tts', 'mode'], v === 'final' ? undefined : v)}
+          options={[
+            { value: 'final', label: 'Final' },
+            { value: 'all', label: 'All' }
+          ]} />
+        <TextField label={es.ttsPersona || 'Persona'} tooltip={tip('messages.tts.persona')} value={g(['tts', 'persona']) || ''} onChange={v => s(['tts', 'persona'], v || undefined)} placeholder="default" />
       </ConfigSection>
 
       <ConfigSection title={es.messageTools} icon="send" iconColor="text-cyan-500" defaultOpen={false}>

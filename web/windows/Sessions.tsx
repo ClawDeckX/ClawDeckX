@@ -1464,7 +1464,12 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     if (/:run-\d+$/.test(key)) return null;
     // Skip for local-only sessions not yet known to the gateway
     if (localOnlyKeysRef.current.has(key)) return null;
-    return await gwApi.sessionsUsageTimeseries(key) as any;
+    try {
+      return await gwApi.sessionsUsageTimeseries(key) as any;
+    } catch {
+      // Sessions without transcripts (new/empty) return INVALID_REQUEST — expected
+      return null;
+    }
   }, []);
 
   // Helper: map raw gateway messages to ChatMsg
@@ -2590,10 +2595,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         // Find existing peer binding (case-insensitive match to handle mixed sources)
         const parsed = (cfg as any)?.parsed || (cfg as any)?.config || cfg || {};
         const bindings: any[] = Array.isArray(parsed.bindings) ? parsed.bindings : [];
+        const normKind = (k?: string) => { const v = (k || '').toLowerCase(); return v === 'dm' ? 'direct' : v; };
         const existing = bindings.find((b: any) =>
           b.match?.channel?.toLowerCase() === peer.channel &&
           b.match?.peer?.id?.toLowerCase() === peer.peerId.toLowerCase() &&
-          ['group', 'channel', 'direct'].includes(b.match?.peer?.kind?.toLowerCase() || '')
+          normKind(b.match?.peer?.kind) === peer.peerKind
         );
         const boundId = existing?.agentId || '';
         setBindAgentId(boundId);
@@ -2619,10 +2625,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
           const parsed = cfg?.parsed || cfg?.config || cfg || {};
           const allBindings: any[] = Array.isArray(parsed.bindings) ? parsed.bindings : [];
           // Remove existing peer binding for this channel+peer (case-insensitive match)
+          const normKind2 = (k?: string) => { const v = (k || '').toLowerCase(); return v === 'dm' ? 'direct' : v; };
           let updated = allBindings.filter((b: any) => !(
             b.match?.channel?.toLowerCase() === peer.channel &&
             b.match?.peer?.id?.toLowerCase() === peer.peerId.toLowerCase() &&
-            ['group', 'channel', 'direct'].includes(b.match?.peer?.kind?.toLowerCase() || '')
+            normKind2(b.match?.peer?.kind) === peer.peerKind
           ));
           // Add new binding if agent selected
           // Use original-case peer ID from session's lastTo when available,
