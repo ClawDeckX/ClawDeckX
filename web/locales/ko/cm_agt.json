@@ -276,6 +276,13 @@
     "toolExecAskFallback": "승인 폴백",
     "execFallbackDeny": "거부",
     "execFallbackAllowlist": "허용 목록",
-    "policyPreview": "정책 미리보기"
+    "policyPreview": "정책 미리보기",
+    "grpNewGroup": "새 그룹",
+    "grpGroupName": "그룹 이름",
+    "grpRename": "그룹 이름 변경",
+    "grpDeleteTitle": "그룹 삭제",
+    "grpDeleteMsg": "그룹 \"{name}\"을(를) 삭제하시겠습니까? 에이전트는 미분류 상태가 됩니다.",
+    "grpUngroup": "그룹 해제",
+    "grpMoveToGroup": "그룹으로 이동"
   }
 }

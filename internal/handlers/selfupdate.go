@@ -257,8 +257,14 @@ func (h *SelfUpdateHandler) TranslateNotes(w http.ResponseWriter, r *http.Reques
 
 	// Check SQLite cache — version + hash must both match
 	if cached, err := h.notesTransRepo.Get(req.Product, req.Version, req.Lang, hash); err == nil && cached != nil {
-		web.OK(w, r, map[string]string{"translated": cached.Translated, "status": "cached"})
-		return
+		// Validate cached result isn't garbage (e.g. from a previously broken translation API)
+		if !isGarbageNotesTranslation(req.Text, cached.Translated) {
+			web.OK(w, r, map[string]string{"translated": cached.Translated, "status": "cached"})
+			return
+		}
+		// Cached translation is garbage — delete it and re-translate below
+		logger.Log.Warn().Str("product", req.Product).Str("version", req.Version).Msg("cached release notes translation contains garbage, re-translating")
+		_ = h.notesTransRepo.Delete(req.Product, req.Version, req.Lang)
 	}
 
 	// Split long text into chunks by double-newline (paragraph boundaries)
@@ -276,6 +282,11 @@ func (h *SelfUpdateHandler) TranslateNotes(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			logger.Log.Warn().Err(err).Int("chunk", i).Msg("translate release notes chunk failed")
 			translated = chunk // fallback to original
+		}
+		// Guard against garbage translations (e.g. free APIs returning spam URLs)
+		if isGarbageNotesTranslation(chunk, translated) {
+			logger.Log.Warn().Int("chunk", i).Str("got", truncateStr(translated, 120)).Msg("translate notes returned garbage, using original")
+			translated = chunk
 		}
 		if i > 0 {
 			sb.WriteString("\n\n")
@@ -396,4 +407,37 @@ func restartWithBinary(exe string) {
 			os.Exit(0)
 		}
 	}
+}
+
+// isGarbageNotesTranslation detects when a free translation API returns garbage
+// (e.g. spam URLs like linux.do links) instead of a real translation.
+func isGarbageNotesTranslation(source, translated string) bool {
+	t := strings.TrimSpace(translated)
+	if t == "" {
+		return true
+	}
+	// If the translation is just a URL (or mostly URLs) but the source isn't, it's garbage.
+	sourceHasURL := strings.Contains(source, "http://") || strings.Contains(source, "https://")
+	if !sourceHasURL && (strings.HasPrefix(t, "http://") || strings.HasPrefix(t, "https://")) {
+		return true
+	}
+	// Detect repeated URL spam patterns: if translated contains URLs that aren't in source
+	if !sourceHasURL && strings.Count(t, "https://") > 2 {
+		return true
+	}
+	// Known garbage domains injected by misbehaving free translation services
+	garbageDomains := []string{"linux.do", "linuxdo.co", "discourse.org/t/"}
+	for _, domain := range garbageDomains {
+		if !strings.Contains(source, domain) && strings.Contains(t, domain) {
+			return true
+		}
+	}
+	return false
+}
+
+func truncateStr(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }

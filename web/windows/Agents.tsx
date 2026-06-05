@@ -11,7 +11,9 @@ import { subscribeManagerWS } from '../services/manager-ws';
 import { templateSystem, WorkspaceTemplate, resolveTemplatePrompt, MultiAgentTemplate } from '../services/template-system';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import { usePromptDialog } from '../components/PromptDialog';
 import CustomSelect from '../components/CustomSelect';
+import { useAgentGroups } from '../hooks/useAgentGroups';
 import { MultiAgentCollaborationV2 } from '../components/multiagent';
 import ScenarioLibraryV2 from '../components/scenarios/ScenarioLibraryV2';
 
@@ -70,6 +72,98 @@ function extractRunText(content: unknown): string {
   return '';
 }
 
+/** Hover menu on each agent row — allows moving to a group */
+function AgentGroupMenu({ agentId, groups, onMoveToGroup, labels }: {
+  agentId: string;
+  groups: Array<{ name: string; agentIds: string[] }>;
+  onMoveToGroup: (groupName: string) => void;
+  labels: { newGroup: string; ungroup: string; moveToGroup: string };
+}) {
+  const [open, setOpen] = useState(false);
+  const isGrouped = groups.some(g => g.agentIds.includes(agentId));
+  return (
+    <div className="absolute top-1 end-1 opacity-0 group-hover/agrow:opacity-100 transition-opacity z-10">
+      <div className="relative">
+        <button onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+          className="w-6 h-6 flex items-center justify-center rounded-md bg-white/80 dark:bg-white/[0.08] backdrop-blur-sm hover:bg-primary/10 dark:hover:bg-primary/20 text-slate-500 dark:text-white/50 hover:text-primary transition-all shadow-sm border border-slate-200/60 dark:border-white/[0.06]">
+          <span className="material-symbols-outlined text-[13px]">folder_open</span>
+        </button>
+        {open && (
+          <div className="absolute top-7 end-0 w-40 bg-white/95 dark:bg-[#1e2028]/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] rounded-xl shadow-xl shadow-black/10 dark:shadow-black/40 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+            onMouseLeave={() => setOpen(false)}>
+            {groups.length > 0 && (
+              <>
+                <p className="px-3 py-1 text-[10px] font-medium text-slate-400 dark:text-white/30 uppercase tracking-wider">{labels.moveToGroup}</p>
+                {groups.map(g => {
+                  const isCurrent = g.agentIds.includes(agentId);
+                  return (
+                    <button key={g.name} onClick={(e) => { e.stopPropagation(); onMoveToGroup(g.name); setOpen(false); }}
+                      className={`w-full text-start px-3 py-1.5 text-[11px] hover:bg-slate-100 dark:hover:bg-white/[0.04] flex items-center gap-2 transition-colors ${isCurrent ? 'text-primary font-medium' : 'text-slate-600 dark:text-white/60'}`}>
+                      <span className="material-symbols-outlined text-[13px]">{isCurrent ? 'folder' : 'folder_open'}</span>
+                      <span className="truncate">{g.name}</span>
+                      {isCurrent && <span className="material-symbols-outlined text-[11px] ml-auto">check</span>}
+                    </button>
+                  );
+                })}
+                <div className="mx-2.5 my-1 border-t border-slate-200/60 dark:border-white/[0.06]" />
+              </>
+            )}
+            <button onClick={(e) => { e.stopPropagation(); onMoveToGroup('__new__'); setOpen(false); }}
+              className="w-full text-start px-3 py-1.5 text-[11px] text-primary font-medium hover:bg-primary/5 dark:hover:bg-primary/10 flex items-center gap-2 transition-colors">
+              <span className="material-symbols-outlined text-[13px]">create_new_folder</span>
+              <span>{labels.newGroup}</span>
+            </button>
+            {isGrouped && (
+              <>
+                <div className="mx-2.5 my-1 border-t border-slate-200/60 dark:border-white/[0.06]" />
+                <button onClick={(e) => { e.stopPropagation(); onMoveToGroup('__ungroup__'); setOpen(false); }}
+                  className="w-full text-start px-3 py-1.5 text-[11px] text-orange-500 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/[0.06] flex items-center gap-2 transition-colors">
+                  <span className="material-symbols-outlined text-[13px]">folder_off</span>
+                  <span>{labels.ungroup}</span>
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Header menu for a group — rename / delete */
+function GroupHeaderMenu({ groupName, onRename, onDelete, labels }: {
+  groupName: string;
+  onRename: () => void;
+  onDelete: () => void;
+  labels: { rename: string; delete: string };
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative opacity-0 group-hover/grphdr:opacity-100 transition-opacity">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-5 h-5 flex items-center justify-center rounded-md text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white/60 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors">
+        <span className="material-symbols-outlined text-[13px]">more_horiz</span>
+      </button>
+      {open && (
+        <div className="absolute top-6 end-0 w-32 bg-white/95 dark:bg-[#1e2028]/95 backdrop-blur-xl border border-slate-200/80 dark:border-white/[0.08] rounded-xl shadow-xl shadow-black/10 dark:shadow-black/40 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+          onMouseLeave={() => setOpen(false)}>
+          <button onClick={() => { onRename(); setOpen(false); }}
+            className="w-full text-start px-3 py-1.5 text-[11px] text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/[0.04] flex items-center gap-2 transition-colors">
+            <span className="material-symbols-outlined text-[13px]">edit</span>
+            <span>{labels.rename}</span>
+          </button>
+          <div className="mx-2.5 my-1 border-t border-slate-200/60 dark:border-white/[0.06]" />
+          <button onClick={() => { onDelete(); setOpen(false); }}
+            className="w-full text-start px-3 py-1.5 text-[11px] text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/[0.06] flex items-center gap-2 transition-colors">
+            <span className="material-symbols-outlined text-[13px]">delete</span>
+            <span>{labels.delete}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 const Agents: React.FC<AgentsProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
@@ -79,6 +173,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const menuAgentsLabel = typeof (t as any).menu?.agents === 'string' ? (t as any).menu.agents : 'Agents';
   const { toast } = useToast();
   const { confirm } = useConfirm();
+  const { prompt } = usePromptDialog();
+  const agentGroups = useAgentGroups();
 
   // Gateway connectivity (shared singleton hook)
   const { ready: gwReady } = useGatewayStatus();
@@ -995,28 +1091,91 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
         <div className="flex-1 overflow-y-auto custom-scrollbar neon-scrollbar p-1.5 space-y-0.5">
           {agents.length === 0 ? (
             <p className="text-[10px] text-slate-400 dark:text-white/20 text-center py-8">{a.noAgents}</p>
-          ) : agents.map((ag: any) => {
-            const emoji = resolveEmoji(ag);
-            const label = resolveLabel(ag);
-            const isDefault = ag.id === defaultId;
-            const isSelected = ag.id === selectedId;
-            return (
-              <button key={ag.id} onClick={() => selectAgent(ag.id)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-start transition-all ${isSelected ? 'bg-primary/10 border border-primary/20 glow-border' : 'hover:bg-slate-100 dark:hover:bg-white/[0.03] border border-transparent'}`}>
-                <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${isSelected ? 'bg-primary/20 text-primary' : 'theme-field theme-text-muted'}`}>
-                  {emoji || label.slice(0, 1).toUpperCase()}
-                  {lastHeartbeat && (Date.now() - lastHeartbeat.ts < 120000) && (
-                    <span className="absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full bg-mac-green border-2 border-white dark:border-[#1a1c22]" />
+          ) : (() => {
+            const hasGroups = agentGroups.groups.length > 0;
+            // Build sections: named groups + ungrouped
+            const groupedIds = new Set(agentGroups.groups.flatMap(g => g.agentIds));
+            const ungrouped = agents.filter((ag: any) => !groupedIds.has(ag.id));
+            const sections: Array<{ name: string | null; agentIds: string[]; collapsed: boolean }> = [
+              ...agentGroups.groups.map(g => ({ name: g.name, agentIds: g.agentIds, collapsed: !!g.collapsed })),
+              ...(ungrouped.length > 0 ? [{ name: null, agentIds: ungrouped.map((ag: any) => ag.id), collapsed: false }] : []),
+            ];
+
+            const renderAgentBtn = (ag: any) => {
+              const emoji = resolveEmoji(ag);
+              const label = resolveLabel(ag);
+              const isDefault = ag.id === defaultId;
+              const isSelected = ag.id === selectedId;
+              return (
+                <div key={ag.id} className="relative group/agrow">
+                  <button onClick={() => selectAgent(ag.id)}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-start transition-all ${isSelected ? 'bg-primary/10 border border-primary/20 glow-border' : 'hover:bg-slate-100 dark:hover:bg-white/[0.03] border border-transparent'}`}>
+                    <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${isSelected ? 'bg-primary/20 text-primary' : 'theme-field theme-text-muted'}`}>
+                      {emoji || label.slice(0, 1).toUpperCase()}
+                      {lastHeartbeat && (Date.now() - lastHeartbeat.ts < 120000) && (
+                        <span className="absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full bg-mac-green border-2 border-white dark:border-[#1a1c22]" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[11px] font-semibold truncate ${isSelected ? 'text-primary' : 'text-slate-700 dark:text-white/70'}`}>{label}</p>
+                      <p className="text-[11px] text-slate-400 dark:text-white/35 font-mono truncate">{ag.id}</p>
+                    </div>
+                    {isDefault && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold shrink-0">default</span>}
+                  </button>
+                  {/* Group context menu — only shows on hover */}
+                  <AgentGroupMenu
+                    agentId={ag.id}
+                    groups={agentGroups.groups}
+                    labels={{ newGroup: a.grpNewGroup, ungroup: a.grpUngroup, moveToGroup: a.grpMoveToGroup }}
+                    onMoveToGroup={async (gName) => {
+                      if (gName === '__new__') {
+                        const name = await prompt({ title: a.grpNewGroup, placeholder: a.grpGroupName });
+                        if (name?.trim()) agentGroups.moveToGroup(ag.id, name.trim());
+                      } else if (gName === '__ungroup__') {
+                        agentGroups.ungroup(ag.id);
+                      } else {
+                        agentGroups.moveToGroup(ag.id, gName);
+                      }
+                    }}
+                  />
+                </div>
+              );
+            };
+
+            return sections.map(sec => {
+              const sectionAgents = agents.filter((ag: any) => sec.agentIds.includes(ag.id));
+              if (sectionAgents.length === 0 && sec.name !== null) {
+                // Empty named group — still show header so user can rename/delete
+              }
+              return (
+                <div key={sec.name ?? '__ungrouped__'}>
+                  {(hasGroups && sec.name !== null) && (
+                    <div className="flex items-center gap-1 px-1.5 pt-2 pb-0.5 group/grphdr">
+                      <button onClick={() => agentGroups.toggleCollapse(sec.name!)}
+                        className="flex-1 flex items-center gap-1 text-start">
+                        <span className={`material-symbols-outlined text-[12px] text-slate-400 dark:text-white/30 transition-transform ${sec.collapsed ? '' : 'rotate-90'}`}>chevron_right</span>
+                        <span className="text-[10px] font-semibold text-slate-500 dark:text-white/40 uppercase tracking-wide truncate">{sec.name}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-white/25 ml-0.5">({sectionAgents.length})</span>
+                      </button>
+                      <GroupHeaderMenu
+                        groupName={sec.name!}
+                        labels={{ rename: a.grpRename, delete: a.grpDeleteTitle }}
+                        onRename={async () => {
+                          const name = await prompt({ title: a.grpRename, defaultValue: sec.name!, placeholder: a.grpGroupName });
+                          if (name?.trim() && name.trim() !== sec.name) agentGroups.renameGroup(sec.name!, name.trim());
+                        }}
+                        onDelete={async () => {
+                          const ok = await confirm({ title: a.grpDeleteTitle, message: (a.grpDeleteMsg || '').replace('{name}', sec.name!), danger: true });
+                          if (ok) agentGroups.deleteGroup(sec.name!);
+                        }}
+                      />
+                    </div>
                   )}
+                  {!sec.collapsed && sectionAgents.map(renderAgentBtn)}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-[11px] font-semibold truncate ${isSelected ? 'text-primary' : 'text-slate-700 dark:text-white/70'}`}>{label}</p>
-                  <p className="text-[11px] text-slate-400 dark:text-white/35 font-mono truncate">{ag.id}</p>
-                </div>
-                {isDefault && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold shrink-0">default</span>}
-              </button>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
 
         {/* Agent-to-Agent Communication — global setting (hidden if ≤1 agent) */}

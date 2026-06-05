@@ -276,6 +276,13 @@
     "toolExecAskFallback": "Ask Fallback",
     "execFallbackDeny": "Deny",
     "execFallbackAllowlist": "Allowlist",
-    "policyPreview": "Policy Preview"
+    "policyPreview": "Policy Preview",
+    "grpNewGroup": "New Group",
+    "grpGroupName": "Group name",
+    "grpRename": "Rename Group",
+    "grpDeleteTitle": "Delete Group",
+    "grpDeleteMsg": "Delete group \"{name}\"? Agents will become ungrouped.",
+    "grpUngroup": "Ungroup",
+    "grpMoveToGroup": "Move to Group"
   }
 }

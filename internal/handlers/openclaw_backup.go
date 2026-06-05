@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -103,30 +104,50 @@ func (h *OpenClawBackupHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Download streams a backup archive file for download.
 func (h *OpenClawBackupHandler) Download(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Path string `json:"path"`
+	// Support both GET (query param) and POST (JSON body) for backward compatibility.
+	var archivePath string
+	if r.Method == http.MethodGet {
+		archivePath = r.URL.Query().Get("path")
+	} else {
+		var req struct {
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			web.FailErr(w, r, web.ErrInvalidBody)
+			return
+		}
+		archivePath = req.Path
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		web.FailErr(w, r, web.ErrInvalidBody)
+
+	if archivePath == "" {
+		web.FailErr(w, r, web.ErrInvalidParam, "missing path")
 		return
 	}
 
 	backupDir := h.backupDir()
-	if !h.isValidArchivePath(backupDir, req.Path) {
+	if !h.isValidArchivePath(backupDir, archivePath) {
 		web.FailErr(w, r, web.ErrInvalidParam, "invalid archive path")
 		return
 	}
 
-	data, err := os.ReadFile(req.Path)
+	f, err := os.Open(archivePath)
 	if err != nil {
 		web.FailErr(w, r, web.ErrInvalidParam, fmt.Sprintf("cannot read file: %v", err))
 		return
 	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		web.FailErr(w, r, web.ErrInvalidParam, fmt.Sprintf("cannot stat file: %v", err))
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/gzip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(req.Path)))
-	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(archivePath)))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
+	w.Header().Set("X-No-Gzip", "1")
+	io.Copy(w, f)
 }
 
 // Delete removes a backup archive file.

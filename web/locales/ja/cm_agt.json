@@ -276,6 +276,13 @@
     "toolExecAskFallback": "承認フォールバック",
     "execFallbackDeny": "拒否",
     "execFallbackAllowlist": "許可リスト",
-    "policyPreview": "ポリシープレビュー"
+    "policyPreview": "ポリシープレビュー",
+    "grpNewGroup": "新規グループ",
+    "grpGroupName": "グループ名",
+    "grpRename": "グループ名変更",
+    "grpDeleteTitle": "グループ削除",
+    "grpDeleteMsg": "グループ「{name}」を削除しますか？エージェントは未分類になります。",
+    "grpUngroup": "グループ解除",
+    "grpMoveToGroup": "グループに移動"
   }
 }

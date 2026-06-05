@@ -536,8 +536,15 @@ func BackupCreate(opts BackupCreateOptions) (*BackupCreateResult, error) {
 		return nil, err
 	}
 
+	// The CLI may emit non-JSON warnings before the JSON object (e.g. version
+	// mismatch notices). Extract the JSON portion starting from the first '{'.
+	jsonStr := out
+	if idx := strings.Index(out, "{"); idx > 0 {
+		jsonStr = out[idx:]
+	}
+
 	var result BackupCreateResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
 		return nil, fmt.Errorf("parse backup create json: %w\nraw output: %s", err, out)
 	}
 	return &result, nil

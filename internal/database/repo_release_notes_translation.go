@@ -32,3 +32,9 @@ func (r *ReleaseNotesTranslationRepo) Upsert(t *ReleaseNotesTranslation) error {
 		DoUpdates: clause.AssignmentColumns([]string{"source_hash", "translated", "updated_at"}),
 	}).Create(t).Error
 }
+
+// Delete removes a cached translation entry for the given product, version, and language.
+func (r *ReleaseNotesTranslationRepo) Delete(product, version, lang string) error {
+	return r.db.Where("product = ? AND version = ? AND lang = ?", product, version, lang).
+		Delete(&ReleaseNotesTranslation{}).Error
+}

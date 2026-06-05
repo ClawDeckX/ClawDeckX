@@ -828,7 +828,7 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
                         <p className="text-[11px] font-mono text-slate-700 dark:text-white/70 truncate">{ar.name}</p>
                         <p className="text-[10px] text-slate-400 dark:text-white/30">{ar.size < 1048576 ? `${(ar.size / 1024).toFixed(1)} KB` : `${(ar.size / 1048576).toFixed(1)} MB`} &middot; {new Date(ar.modTime).toLocaleString()}</p>
                       </div>
-                      <button onClick={() => ocBackupApi.download(ar.path)} title={s.ocBackupDownload || 'Download'} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors">
+                      <button onClick={async () => { try { await ocBackupApi.download(ar.path); } catch (err: any) { toast('error', err?.message || s.ocBackupDownloadFail || 'Download failed'); } }} title={s.ocBackupDownload || 'Download'} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors">
                         <span className="material-symbols-outlined text-[14px]">download</span>
                       </button>
                       <button onClick={() => handleDeleteOcArchive(ar.path)} title={s.delete || 'Delete'} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-red-400 transition-colors">

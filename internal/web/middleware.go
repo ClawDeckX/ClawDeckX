@@ -450,8 +450,97 @@ var gzipWriterPool = sync.Pool{
 	},
 }
 
+// lazyGzipWriter defers the decision to gzip until Write or WriteHeader is called,
+// allowing handlers to opt out by setting X-No-Gzip or using a binary Content-Type.
+type lazyGzipWriter struct {
+	http.ResponseWriter
+	gz          *gzip.Writer
+	decided     bool
+	useGzip     bool
+	wroteHeader bool
+}
+
+// shouldCompress returns true if the response should be gzip-compressed.
+func (l *lazyGzipWriter) shouldCompress() bool {
+	if l.Header().Get("X-No-Gzip") != "" {
+		return false
+	}
+	ct := l.Header().Get("Content-Type")
+	if ct == "" {
+		return true // will be sniffed as text/html by net/http
+	}
+	// Skip already-compressed formats
+	switch {
+	case strings.HasPrefix(ct, "application/gzip"),
+		strings.HasPrefix(ct, "application/x-gzip"),
+		strings.HasPrefix(ct, "application/zip"),
+		strings.HasPrefix(ct, "application/x-tar"),
+		strings.HasPrefix(ct, "application/octet-stream"),
+		strings.HasPrefix(ct, "image/"),
+		strings.HasPrefix(ct, "video/"),
+		strings.HasPrefix(ct, "audio/"):
+		return false
+	}
+	return true
+}
+
+func (l *lazyGzipWriter) decide() {
+	if l.decided {
+		return
+	}
+	l.decided = true
+	l.useGzip = l.shouldCompress()
+	if l.useGzip {
+		l.gz = gzipWriterPool.Get().(*gzip.Writer)
+		l.gz.Reset(l.ResponseWriter)
+		l.Header().Set("Content-Encoding", "gzip")
+		l.Header().Set("Vary", "Accept-Encoding")
+		l.Header().Del("Content-Length")
+	}
+	// Remove internal header before sending to client
+	l.Header().Del("X-No-Gzip")
+}
+
+func (l *lazyGzipWriter) WriteHeader(code int) {
+	l.decide()
+	l.wroteHeader = true
+	l.ResponseWriter.WriteHeader(code)
+}
+
+func (l *lazyGzipWriter) Write(b []byte) (int, error) {
+	if !l.decided {
+		l.decide()
+	}
+	if !l.wroteHeader {
+		l.wroteHeader = true
+		l.ResponseWriter.WriteHeader(http.StatusOK)
+	}
+	if l.useGzip {
+		return l.gz.Write(b)
+	}
+	return l.ResponseWriter.Write(b)
+}
+
+func (l *lazyGzipWriter) Flush() {
+	if l.useGzip && l.gz != nil {
+		l.gz.Flush()
+	}
+	if f, ok := l.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (l *lazyGzipWriter) finish() {
+	if l.useGzip && l.gz != nil {
+		l.gz.Close()
+		gzipWriterPool.Put(l.gz)
+	}
+}
+
 // GzipMiddleware compresses responses with gzip when the client accepts it
 // and the response Content-Type is compressible (JSON, HTML, JS, CSS, text).
+// Handlers can set the response header "X-No-Gzip" to any value to bypass compression
+// (useful for already-compressed binary downloads like .tar.gz).
 func GzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
@@ -464,18 +553,11 @@ func GzipMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		gz := gzipWriterPool.Get().(*gzip.Writer)
-		defer gzipWriterPool.Put(gz)
-
-		gz.Reset(w)
-
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Set("Vary", "Accept-Encoding")
-		w.Header().Del("Content-Length")
-
-		grw := &gzipResponseWriter{ResponseWriter: w, gz: gz}
-		next.ServeHTTP(grw, r)
-		gz.Close()
+		// Use a buffered writer that defers the gzip decision until WriteHeader/Write,
+		// so handlers can opt out via X-No-Gzip header.
+		gzw := &lazyGzipWriter{ResponseWriter: w}
+		next.ServeHTTP(gzw, r)
+		gzw.finish()
 	})
 }
 

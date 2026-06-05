@@ -652,8 +652,14 @@ export const snapshotApi = {
     const filename = fnMatch?.[1] || `openclaw-backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   },
   verify: (id: string, password: string) => post<VerifyIntegrityResult>(`/api/v1/snapshots/${id}/verify`, { password }),
   previewFile: (id: string, previewToken: string, logicalPath: string) =>
@@ -698,21 +704,14 @@ export const ocBackupApi = {
     post<OcBackupCreateResult>('/api/v1/openclaw-backup/create', data),
   list: () => get<{ backupDir: string; archives: OcBackupArchive[]; installed: boolean }>('/api/v1/openclaw-backup/list'),
   download: async (path: string): Promise<void> => {
-    const res = await fetch('/api/v1/openclaw-backup/download', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', body: JSON.stringify({ path }),
-    });
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      throw new ApiError(json.error_code || 'DOWNLOAD_FAILED', json.message || 'Download failed', res.status);
-    }
-    const disp = res.headers.get('content-disposition') || '';
-    const fnMatch = disp.match(/filename="?([^";\s]+)"?/);
-    const filename = fnMatch?.[1] || 'openclaw-backup.tar.gz';
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    // Use native browser download via GET URL to avoid fetch blob memory limits on large files.
+    const url = '/api/v1/openclaw-backup/download?path=' + encodeURIComponent(path);
+    const a = document.createElement('a');
+    a.href = url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   },
   remove: (path: string) => post<{ deleted: boolean }>('/api/v1/openclaw-backup/delete', { path }),
 };

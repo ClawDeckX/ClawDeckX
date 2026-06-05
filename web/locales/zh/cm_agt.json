@@ -276,6 +276,13 @@
     "toolExecAskFallback": "审批回退",
     "execFallbackDeny": "拒绝",
     "execFallbackAllowlist": "白名单",
-    "policyPreview": "策略预览"
+    "policyPreview": "策略预览",
+    "grpNewGroup": "新建分组",
+    "grpGroupName": "分组名称",
+    "grpRename": "重命名分组",
+    "grpDeleteTitle": "删除分组",
+    "grpDeleteMsg": "删除分组「{name}」？代理将变为未分组。",
+    "grpUngroup": "取消分组",
+    "grpMoveToGroup": "移动到分组"
   }
 }
