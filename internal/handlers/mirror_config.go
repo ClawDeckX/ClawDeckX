@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"ClawDeckX/internal/database"
+	"ClawDeckX/internal/netutil"
 	"ClawDeckX/internal/web"
 	"ClawDeckX/internal/webconfig"
 )
@@ -95,6 +96,8 @@ func (h *MirrorConfigHandler) Set(w http.ResponseWriter, r *http.Request) {
 		web.FailErr(w, r, web.ErrSettingsUpdateFail)
 		return
 	}
+	// Invalidate mirror caches so new settings take effect immediately
+	netutil.InvalidateAllCaches()
 	web.OK(w, r, map[string]string{"message": "ok"})
 }
 

@@ -26,6 +26,7 @@ import (
 	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/monitor"
+	"ClawDeckX/internal/netutil"
 	"ClawDeckX/internal/notify"
 	"ClawDeckX/internal/notify/digest"
 	"ClawDeckX/internal/openclaw"
@@ -103,6 +104,16 @@ func RunServe(args []string) int {
 		return 1
 	}
 	defer database.Close()
+
+	mirrorSettingRepo := database.NewSettingRepo()
+	netutil.SetGitHubProxyProvider(func() string {
+		v, _ := mirrorSettingRepo.Get("mirror_github_proxy")
+		return v
+	})
+	netutil.SetNPMRegistryProvider(func() string {
+		v, _ := mirrorSettingRepo.Get("mirror_npm_registry")
+		return v
+	})
 
 	if initUser != "" && initPass != "" {
 		userRepo := database.NewUserRepo()

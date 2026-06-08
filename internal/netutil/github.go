@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,6 +30,11 @@ var (
 	githubAPISelector     *MirrorSelector
 	githubReleaseSelector *MirrorSelector
 	npmRegistrySelector   *MirrorSelector
+
+	// User-configured GitHub proxy provider (injected at startup from DB settings).
+	ghProxyMu       sync.RWMutex
+	ghProxyProvider func() string // returns mirror_github_proxy value, e.g. "https://ghproxy.clawdeckx.com"
+	npmRegProvider  func() string // returns mirror_npm_registry value
 )
 
 func init() {
@@ -56,14 +62,71 @@ func init() {
 	)
 }
 
-// GetGitHubAPIURL returns the best GitHub API base URL
+// SetGitHubProxyProvider injects a function that returns the user-configured
+// GitHub proxy URL from the acceleration settings (mirror_github_proxy).
+// Called once at startup from serve.go after DB is ready.
+func SetGitHubProxyProvider(fn func() string) {
+	ghProxyMu.Lock()
+	ghProxyProvider = fn
+	ghProxyMu.Unlock()
+}
+
+// SetNPMRegistryProvider injects a function that returns the user-configured
+// npm registry URL from the acceleration settings (mirror_npm_registry).
+func SetNPMRegistryProvider(fn func() string) {
+	ghProxyMu.Lock()
+	npmRegProvider = fn
+	ghProxyMu.Unlock()
+}
+
+// getUserGitHubProxy returns the user-configured GitHub proxy or "".
+func getUserGitHubProxy() string {
+	ghProxyMu.RLock()
+	fn := ghProxyProvider
+	ghProxyMu.RUnlock()
+	if fn == nil {
+		return ""
+	}
+	return strings.TrimRight(fn(), "/")
+}
+
+// getUserNPMRegistry returns the user-configured npm registry or "".
+func getUserNPMRegistry() string {
+	ghProxyMu.RLock()
+	fn := npmRegProvider
+	ghProxyMu.RUnlock()
+	if fn == nil {
+		return ""
+	}
+	return strings.TrimRight(fn(), "/")
+}
+
+// GetGitHubAPIURL returns the best GitHub API base URL.
+// If the user configured a GitHub proxy (ghproxy-style), it proxies the API
+// request through that proxy. Otherwise falls back to the mirror selector.
 func GetGitHubAPIURL(ctx context.Context) string {
+	if proxy := getUserGitHubProxy(); proxy != "" {
+		// ghproxy-style proxies forward the full URL, so the "API base" becomes
+		// proxy + "/https://api.github.com" — the caller appends /repos/... after.
+		// However many ghproxy services only proxy github.com (web), not api.github.com.
+		// Use the proxy for release URLs; for API, still try official first.
+		// Some proxies (e.g. ghproxy.clawdeckx.com) support API proxying via:
+		//   https://proxy/https://api.github.com/repos/...
+		// We return the proxy-prefixed form so the constructed URL becomes valid.
+		return proxy + "/https://api.github.com"
+	}
 	best := githubAPISelector.GetBest(ctx)
 	return best.URL
 }
 
-// GetGitHubReleaseURL transforms a GitHub release URL to use the best mirror
+// GetGitHubReleaseURL transforms a GitHub release URL to use the best mirror.
+// Prefers user-configured proxy; falls back to mirror selector.
 func GetGitHubReleaseURL(ctx context.Context, originalURL string) string {
+	// User-configured proxy takes priority
+	if proxy := getUserGitHubProxy(); proxy != "" && strings.HasPrefix(originalURL, "https://github.com") {
+		return proxy + "/" + originalURL
+	}
+
 	best := githubReleaseSelector.GetBest(ctx)
 
 	// If using official, return as-is
@@ -81,8 +144,12 @@ func GetGitHubReleaseURL(ctx context.Context, originalURL string) string {
 	return originalURL
 }
 
-// GetNPMRegistryURL returns the best npm registry URL
+// GetNPMRegistryURL returns the best npm registry URL.
+// Prefers user-configured registry; falls back to mirror selector.
 func GetNPMRegistryURL(ctx context.Context) string {
+	if reg := getUserNPMRegistry(); reg != "" {
+		return reg
+	}
 	best := npmRegistrySelector.GetBest(ctx)
 	return best.URL
 }
