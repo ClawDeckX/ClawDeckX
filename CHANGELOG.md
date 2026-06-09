@@ -1,4 +1,22 @@
-﻿# v0.2.21
+﻿# v0.2.22
+
+_2026-06-09_
+
+## What's Changed
+
+### 🐛 Bug Fixes / 修复
+
+- handle mention-all fanout
+- wire acceleration settings into update network requests
+
+---
+**Full Changelog**: [v0.2.21...v0.2.22](https://github.com/ClawDeckX/ClawDeckX/compare/v0.2.21...v0.2.22)
+
+
+
+---
+
+# v0.2.21
 
 _2026-06-05_
 
@@ -1956,6 +1974,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 
