@@ -619,7 +619,58 @@ func (o *Orchestrator) triggerRound(ctx context.Context, trigger *database.Agent
 	// v1.0：与 roundRobin / bidding 对齐——一次触发 → 循环 Pick+Run，
 	// 直到 maxTurns 或无人可说。每轮 re-pick 让 scheduler 根据最新上下文选人，
 	// 支持 ActiveInterjection 抢麦覆盖。结束后发提示，避免 UI 静默停住。
+	//
+	// v1.1 修复 @ 多人场景：当 Pick 返回多个 MemberIDs（rationale="mention"），
+	// 逐个执行一轮后结束——每位被 @ 的 agent 只说一次。避免循环 re-pick 时
+	// 永远取 [0] 导致同一 agent 被反复触发、其余 agent 永远轮不到。
 	turnsRan := 0
+
+	// 首次 Pick：检测是否为 mention 多人场景
+	{
+		latest, _ := o.repo.ListMessages(o.roomID, 0, 40)
+		if len(latest) > 40 {
+			latest = latest[len(latest)-40:]
+		}
+		firstPick := Pick(PickContext{
+			Room:          o.room,
+			Members:       o.members,
+			Recent:        latest,
+			TriggerMsg:    trigger,
+			ForcedNextID:  forcedID,
+			RoundRobinIdx: o.roundRobinIdx,
+		})
+		if firstPick.Rationale == "mention" && len(firstPick.MemberIDs) > 1 {
+			// @ 多人：逐个执行，每人一轮，不 re-pick
+			remaining := maxTurns - consecutive
+			for i, mid := range firstPick.MemberIDs {
+				if i >= remaining || ctx.Err() != nil {
+					break
+				}
+				if o.overBudget() {
+					o.transitionToPaused("budget exceeded mid-turn")
+					return
+				}
+				_ = o.refresh()
+				if o.room.State != StateActive {
+					return
+				}
+				curLatest, _ := o.repo.ListMessages(o.roomID, 0, 40)
+				if len(curLatest) > 40 {
+					curLatest = curLatest[len(curLatest)-40:]
+				}
+				if err := o.runAgentTurn(ctx, mid, curLatest, trigger); err != nil {
+					logger.Log.Warn().Err(err).Str("room", o.roomID).Msg("agentroom: mention turn failed, stopping")
+					break
+				}
+				turnsRan++
+			}
+			if turnsRan > 0 {
+				o.appendSystemNotice(fmt.Sprintf("💬 本轮 @指定发言结束（%d 条）。点 ▶ 继续会议 再来一轮，或输入新消息推动方向。", turnsRan))
+			}
+			return
+		}
+	}
+
 	for round := 0; consecutive+round < maxTurns; round++ {
 		if ctx.Err() != nil {
 			return
@@ -659,6 +710,15 @@ func (o *Orchestrator) triggerRound(ctx context.Context, trigger *database.Agent
 		// forcedID 只在第一轮生效；后续轮次清空，让 scheduler 自由选人
 		if round > 0 {
 			forcedID = ""
+		}
+		// mention 单人场景（@ 了一个人）：只跑一轮后退出，避免该 agent 被循环选中多次
+		if round == 0 && pick.Rationale == "mention" && len(pick.MemberIDs) == 1 {
+			if err := o.runAgentTurn(ctx, memberID, latest, trigger); err != nil {
+				logger.Log.Warn().Err(err).Str("room", o.roomID).Msg("agentroom: mention-single turn failed")
+			} else {
+				turnsRan++
+			}
+			break
 		}
 		// 主动抢麦（ActiveInterjection）
 		if forcedID == "" {

@@ -341,9 +341,13 @@ const Composer: React.FC<Props> = ({
     const token = before.slice(tokenStart);
     if (token.startsWith('@') && token.length >= 1) {
       const q = token.slice(1).toLowerCase();
-      const items = agents.filter(m =>
+      // 虚拟"所有人"条目：匹配 "所有人"、"all"、"everyone"
+      const ALL_MEMBER: Member = { id: '__all__', name: '所有人', kind: 'agent', role: '全体成员', emoji: '📢' } as any;
+      const allMatch = !q || '所有人'.includes(q) || 'all'.includes(q) || 'everyone'.includes(q);
+      const matched = agents.filter(m =>
         m.name.toLowerCase().includes(q) || (m.role || '').toLowerCase().includes(q)
       ).slice(0, 6);
+      const items = allMatch ? [ALL_MEMBER, ...matched].slice(0, 7) : matched;
       return { kind: 'mention' as const, items, tokenStart, tokenLen: token.length };
     }
     // slash 只在整行开头
@@ -384,6 +388,12 @@ const Composer: React.FC<Props> = ({
   };
 
   const acceptMention = (m: Member) => {
+    if (m.id === '__all__') {
+      // @所有人：把全部 agent ID 加入 mentionIds
+      setMentionIds(agents.map(a => a.id));
+      insertAtToken('@所有人 ', 5);
+      return;
+    }
     setMentionIds(p => p.includes(m.id) ? p : [...p, m.id]);
     insertAtToken(`@${m.name} `, m.name.length + 2);
   };
