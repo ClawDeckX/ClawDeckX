@@ -353,7 +353,7 @@ docker logs clawdeckx
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ClawDeckX/ClawDeckX&type=Date)](https://star-history.com/#ClawDeckX/ClawDeckX&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=ClawDeckX/ClawDeckX&type=Date)](https://star-history.dera.page/#ClawDeckX/ClawDeckX&Date)
 
 <div align="center">
   <sub>Designed with ❤️ by ClawDeckX</sub>

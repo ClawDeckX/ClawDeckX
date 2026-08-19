@@ -382,7 +382,7 @@ This project is licensed under the [MIT License](LICENSE) — free to use, modif
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ClawDeckX/ClawDeckX&type=Date)](https://star-history.com/#ClawDeckX/ClawDeckX&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=ClawDeckX/ClawDeckX&type=Date)](https://star-history.dera.page/#ClawDeckX/ClawDeckX&Date)
 
 <br>
 
